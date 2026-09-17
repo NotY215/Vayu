@@ -41,6 +41,8 @@ namespace vayu {
             const std::vector<Value>& args);
         Value nextGenerator(const std::shared_ptr<GeneratorValue>& gen,
             SourceLocation loc);
+        bool  tryNextGenerator(const std::shared_ptr<GeneratorValue>& gen,
+            Value& out, SourceLocation loc);
 
         Value vmGetAttr(const Value& base, const std::string& name, SourceLocation loc);
         void  vmSetAttr(const Value& base, const std::string& name,
@@ -89,9 +91,6 @@ namespace vayu {
         void  execYield(const YieldStmt* y);
         void  execImport(const ImportStmt* n);
         void  execFromImport(const FromImportStmt* n);
-        // Thrown inside a generator worker thread when the generator is
-        // cancelled by the owner (i.e. its shared_ptr died mid-suspension).
-        struct GeneratorCancelled {};
         VMFunctionRunner vmRunner_;
 
         Value loadModule(const std::string& name, SourceLocation loc);

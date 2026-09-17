@@ -2,7 +2,11 @@
 #include "interp/Interpreter.hpp"
 #include <algorithm>
 #include <cmath>
+#include <condition_variable>
+#include <exception>
 #include <iostream>
+#include <mutex>
+#include <thread>
 
 namespace vayu {
 
@@ -47,6 +51,7 @@ namespace vayu {
         stack_.clear();
         handlers_.clear();
         activeExceptions_.clear();
+        generatorContext_.reset();
 
         if (Interpreter::current_) {
             Interpreter::current_->setVMFunctionRunner(
@@ -228,6 +233,11 @@ namespace vayu {
                                          // ---------- Iteration ----------
                 case OpCode::ITER_NEW: {
                     Value v = std::move(stack_.back()); stack_.pop_back();
+                    if (v.isGenerator()) {
+                        stack_.push_back(std::move(v));
+                        stack_.emplace_back(0LL);
+                        break;
+                    }
                     if (v.isList()) {
                         stack_.push_back(std::move(v));
                         stack_.emplace_back(0LL);
@@ -258,6 +268,19 @@ namespace vayu {
                     size_t idxPos = stack_.size() - 1;
                     size_t iterPos = stack_.size() - 2;
                     Value iterable = stack_[iterPos];
+                    if (iterable.isGenerator()) {
+                        if (!Interpreter::current_)
+                            runtimeError("VM: no interpreter context for generator");
+                        Value v;
+                        bool ok = Interpreter::current_->tryNextGenerator(
+                            iterable.asGenerator(), v, SourceLocation{});
+                        if (!ok) {
+                            ip = (size_t)((int)ip + off);
+                            break;
+                        }
+                        stack_.push_back(std::move(v));
+                        break;
+                    }
                     long long idx = stack_[idxPos].asInt();
                     if (!iterable.isList()) runtimeError("iterator state corrupted");
                     auto lst = iterable.asList();
@@ -286,15 +309,17 @@ namespace vayu {
                 }
 
                                      // ---------- Functions ----------
-                case OpCode::MAKE_FN: {
+                case OpCode::MAKE_FN:
+                case OpCode::MAKE_GENERATOR: {
                     int idx = (int(code[ip]) << 8) | int(code[ip + 1]); ip += 2;
                     auto& fnChunk = chunk->functions[(size_t)idx];
                     auto c = std::make_shared<Callable>();
                     c->kind = Callable::Kind::VMFunction;
-                    c->name = "<fn>";
+                    c->name = (op == OpCode::MAKE_GENERATOR) ? "<gen>" : "<fn>";
                     c->chunk = fnChunk;
                     c->vmParams = fnChunk->paramNames;
                     c->closure = frame->env;
+                    c->isGenerator = (op == OpCode::MAKE_GENERATOR);
                     stack_.emplace_back(std::move(c));
                     break;
                 }
@@ -313,9 +338,15 @@ namespace vayu {
 
                     auto fn = callee.asCallable();
                     if (fn->kind == Callable::Kind::VMFunction) {
-                        frame->ip = ip;
-                        callVMFunction(fn, args);
-                        reload();
+                        if (fn->isGenerator) {
+                            Value gen = createVMGenerator(fn, args);
+                            stack_.push_back(std::move(gen));
+                        }
+                        else {
+                            frame->ip = ip;
+                            callVMFunction(fn, args);
+                            reload();
+                        }
                     }
                     else {
                         if (!Interpreter::current_)
@@ -324,6 +355,22 @@ namespace vayu {
                             callee, args, SourceLocation{});
                         stack_.push_back(std::move(r));
                     }
+                    break;
+                }
+
+                case OpCode::YIELD_V: {
+                    Value v = std::move(stack_.back()); stack_.pop_back();
+                    auto gen = generatorContext_;
+                    if (!gen) runtimeError("'yield' outside a generator");
+
+                    std::unique_lock<std::mutex> lk(gen->mtx);
+                    gen->yielded = std::move(v);
+                    gen->state = GenState::Suspended;
+                    gen->cv.notify_all();
+                    gen->cv.wait(lk, [&] { return gen->resume || gen->cancel; });
+                    if (gen->cancel) throw GeneratorCancelled{};
+                    gen->resume = false;
+                    gen->state = GenState::Running;
                     break;
                 }
 
@@ -587,6 +634,20 @@ namespace vayu {
                 if (frames_.size() <= stopAtFrameCount) throw;
                 reload();
             }
+            catch (const RuntimeError& e) {
+                if (!frames_.empty() && &frames_.back() == frame)
+                    frame->ip = ip;
+                Value exc;
+                if (Interpreter::current_)
+                    exc = Interpreter::current_->vmMakeException(
+                        "RuntimeError", e.what());
+                else
+                    exc = Value(e.what());
+                unwindToHandler(exc);
+                if (frames_.size() <= stopAtFrameCount)
+                    throw VayuException{ exc, e.loc };
+                reload();
+            }
         }
     }
 
@@ -628,6 +689,68 @@ namespace vayu {
         frames_.push_back({ fn->chunk, 0, callEnv,
                            stack_.size(),
                            handlers_.size(), activeExceptions_.size() });
+    }
+
+    // ===========================================================================
+// Generators — spawn a fresh VM per generator.
+//
+// Each generator runs on its own thread with its own VM instance, so the
+// owner's frames_/stack_/handlers_ and the generator's never collide.
+// The owner blocks while the generator runs; the generator blocks at
+// YIELD_V while the owner runs.  Sequential access, no locks on VM state.
+// ===========================================================================
+    Value VM::createVMGenerator(const std::shared_ptr<Callable>& fn,
+        const std::vector<Value>& args) {
+        auto gen = std::make_shared<GeneratorValue>();
+        auto globals = globals_;
+        auto fnChunk = fn->chunk;
+        auto fnParams = fn->vmParams;
+        auto closure = fn->closure;
+        Interpreter* interp = Interpreter::current_;
+
+        gen->worker = std::thread([gen, fnChunk, fnParams, closure,
+            globals, args, interp]() {
+                Interpreter::current_ = interp;
+
+                VM vm(globals);
+
+                // Wait for the first resume.
+                {
+                    std::unique_lock<std::mutex> lk(gen->mtx);
+                    gen->cv.wait(lk, [&] { return gen->resume || gen->cancel; });
+                    if (gen->cancel) {
+                        gen->state = GenState::Done;
+                        gen->cv.notify_all();
+                        return;
+                    }
+                    gen->resume = false;
+                }
+
+                auto callEnv = std::make_shared<Environment>(
+                    closure ? closure : globals);
+                for (size_t i = 0; i < args.size(); ++i)
+                    callEnv->define(fnParams[i], args[i]);
+
+                vm.generatorContext_ = gen;
+                vm.frames_.push_back({ fnChunk, 0, callEnv, 0, 0, 0 });
+
+                try {
+                    vm.runLoop(0);
+                }
+                catch (GeneratorCancelled&) {
+                    // Owner cancelled — drop out.
+                }
+                catch (...) {
+                    std::lock_guard<std::mutex> lk(gen->mtx);
+                    gen->pendingError = std::current_exception();
+                }
+
+                std::lock_guard<std::mutex> lk(gen->mtx);
+                gen->state = GenState::Done;
+                gen->cv.notify_all();
+            });
+
+        return Value(gen);
     }
 
     // ===========================================================================

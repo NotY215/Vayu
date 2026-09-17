@@ -67,8 +67,12 @@ namespace vayu {
         // ---- Functions ----
         MAKE_FN,            // <idx:u16>      push Callable for functions[idx],
         //                closure = current env
+        MAKE_GENERATOR,     // <idx:u16>      like MAKE_FN, marks callable as generator
         CALL,               // <argc:u8>      [callee, a0..aN-1] -> result
         RETURN_V,           //                pop value; pop frame; push to caller
+
+        // ---- Generators (Phase 11.1k2) ----
+        YIELD_V,            // pop TOS; suspend current generator; on resume
 
         // ---- Misc ----
         PRINT,              // pop, print with newline

@@ -24,6 +24,9 @@ namespace vayu {
     struct StructInstance;
     struct Callable;
     struct GeneratorValue;
+    // Thrown inside a generator worker thread when the owner cancelled it
+    // (its last shared_ptr died mid-suspension).
+    struct GeneratorCancelled {};
 
     // ===========================================================================
     // Value — hand-rolled tagged union.
@@ -190,6 +193,7 @@ namespace vayu {
         // VMFunction
         std::shared_ptr<Chunk>       chunk;
         std::vector<std::string>     vmParams;
+        bool                         isGenerator = false;
 
         // ClassCtor
         std::shared_ptr<ClassObject> classObj;

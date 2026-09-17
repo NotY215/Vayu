@@ -518,6 +518,44 @@ namespace vayu {
         return v;
     }
 
+    bool Interpreter::tryNextGenerator(const std::shared_ptr<GeneratorValue>& gen,
+        Value& out, SourceLocation loc) {
+        std::unique_lock<std::mutex> lk(gen->mtx);
+        if (gen->state == GenState::Done) {
+            if (gen->pendingError) {
+                auto err = gen->pendingError;
+                gen->pendingError = nullptr;
+                lk.unlock();
+                std::rethrow_exception(err);
+            }
+            return false;
+        }
+        if (gen->state == GenState::Running) {
+            lk.unlock();
+            throw RuntimeError("generator already running", loc);
+        }
+        gen->ownerEnv = env_;
+        gen->ownerGen = generatorContext_;
+        gen->resume = true;
+        gen->state = GenState::Running;
+        gen->cv.notify_all();
+        gen->cv.wait(lk, [&] {
+            return gen->state == GenState::Suspended ||
+                gen->state == GenState::Done;
+            });
+        if (gen->state == GenState::Done) {
+            if (gen->pendingError) {
+                auto err = gen->pendingError;
+                gen->pendingError = nullptr;
+                lk.unlock();
+                std::rethrow_exception(err);
+            }
+            return false;
+        }
+        out = std::move(gen->yielded);
+        return true;
+    }
+
     void Interpreter::execRaise(const RaiseStmt* r) {
         Value v;
         if (r->exception) v = eval(r->exception.get());

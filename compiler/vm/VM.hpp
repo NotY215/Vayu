@@ -46,6 +46,7 @@ namespace vayu {
         std::deque<CallFrame>        frames_;    // deque: stable refs across push_back
         std::vector<Handler>         handlers_;
         std::vector<Value>           activeExceptions_;
+        std::shared_ptr<GeneratorValue> generatorContext_;
         int                          currentLine_ = 0;
 
         uint8_t readByte();
@@ -58,6 +59,8 @@ namespace vayu {
         void doBitwise(int opcode);
         void doComparison(int opcode);
         void callVMFunction(const std::shared_ptr<Callable>& fn,
+            const std::vector<Value>& args);
+        Value createVMGenerator(const std::shared_ptr<Callable>& fn,
             const std::vector<Value>& args);
         void unwindToHandler(const Value& excValue);
 

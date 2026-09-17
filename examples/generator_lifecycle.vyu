@@ -1,0 +1,25 @@
+def fails_after_one():
+    yield 1
+    raise RuntimeError("boom")
+
+def finite():
+    yield 10
+    yield 20
+
+def main() -> None:
+    g = fails_after_one()
+    print(next(g))
+    try:
+        next(g)
+    except RuntimeError as e:
+        print("raised: " + e.message)
+
+    h = finite()
+    print(next(h))
+    print(next(h))
+    try:
+        next(h)
+    except RuntimeError as e:
+        print("exhausted: " + e.message)
+
+main()

@@ -1,0 +1,29 @@
+def countdown(n: int):
+    while n > 0:
+        yield n
+        n = n - 1
+
+def fib():
+    a = 0
+    b = 1
+    while true:
+        yield a
+        t = a + b
+        a = b
+        b = t
+
+def take(g, n: int) -> list<int>:
+    out = []
+    i = 0
+    while i < n:
+        out.append(next(g))
+        i = i + 1
+    return out
+
+def main() -> None:
+    for x in countdown(5):
+        print(x)
+    f = fib()
+    print(take(f, 10))
+
+main()

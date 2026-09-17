@@ -51,8 +51,10 @@ namespace vayu {
         case OpCode::ITER_NEXT:      return "ITER_NEXT";
         case OpCode::LIST_NEW:       return "LIST_NEW";
         case OpCode::MAKE_FN:        return "MAKE_FN";
+        case OpCode::MAKE_GENERATOR: return "MAKE_GENERATOR";
         case OpCode::CALL:           return "CALL";
         case OpCode::RETURN_V:       return "RETURN_V";
+        case OpCode::YIELD_V:        return "YIELD_V";
         case OpCode::PRINT:          return "PRINT";
         case OpCode::TRY_BEGIN:    return "TRY_BEGIN";
         case OpCode::TRY_END:      return "TRY_END";

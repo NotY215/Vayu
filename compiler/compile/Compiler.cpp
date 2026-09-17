@@ -256,6 +256,13 @@ namespace vayu {
         case StmtKind::Return: compileReturn(static_cast<const ReturnStmt*>(s)); return;
         case StmtKind::Try:    compileTry(static_cast<const TryStmt*>(s));    return;
         case StmtKind::Raise:  compileRaise(static_cast<const RaiseStmt*>(s));  return;
+        case StmtKind::Yield: {
+            auto* n = static_cast<const YieldStmt*>(s);
+            if (n->value) compileExpr(n->value.get());
+            else          chunk_->emitOp(OpCode::NONE, line);
+            chunk_->emitOp(OpCode::YIELD_V, line);
+            return;
+        }
 
         case StmtKind::Import:
             compileImport(static_cast<const ImportStmt*>(s));
@@ -315,8 +322,6 @@ namespace vayu {
 
     void Compiler::compileDef(const DefStmt* n) {
         int line = n->loc.line;
-        if (n->isGenerator)
-            error(n->loc, "VM mode: generators are not supported; use --run");
         auto fnChunk = std::make_shared<Chunk>();
         for (auto& p : n->params) fnChunk->paramNames.push_back(p.name);
 
@@ -328,7 +333,7 @@ namespace vayu {
         chunk_ = saved;
 
         int fnIdx = chunk_->addFunction(fnChunk);
-        chunk_->emitOp(OpCode::MAKE_FN, line);
+        chunk_->emitOp(n->isGenerator ? OpCode::MAKE_GENERATOR : OpCode::MAKE_FN, line);
         chunk_->emit((uint8_t)((fnIdx >> 8) & 0xFF), line);
         chunk_->emit((uint8_t)(fnIdx & 0xFF), line);
         emitNameU16(OpCode::DEFINE, n->name, line);

@@ -79,6 +79,7 @@ namespace vayu {
 
                 collectEnums(program);
                 collectStatics(program);
+                collectGenerators(program);
                 collectClasses(program);
                 for (auto& kv : modules_) collectClasses(kv.second);
 
@@ -124,7 +125,6 @@ namespace vayu {
                     for (auto& kv : sit->second) topVars.insert(kv.second);
                 }
 
-                // Emit top-level bindings + statics as QBE globals.
                 for (auto& n : topVars) {
                     std::string slot = "$" + mangle(n) + "_slot";
                     slots_[n] = slot;
@@ -186,7 +186,6 @@ namespace vayu {
             std::unordered_map<std::string, std::string>    slots_;
             std::unordered_map<std::string, VarInfo>        varInfo_;
 
-            // Phase 11.1b: top-level bindings visible inside function bodies.
             std::unordered_map<std::string, std::string>    globalSlots_;
             std::unordered_map<std::string, VarInfo>        globalVarInfo_;
 
@@ -198,24 +197,21 @@ namespace vayu {
             int                                        nextFieldOffset_ = 0;
             std::unordered_map<std::string, const DefStmt*> topFnDecls_;
 
-            // Phase 11.1d: enum name -> item name -> int value.
             std::unordered_map<std::string,
                 std::unordered_map<std::string, long long>> enums_;
 
-            // Phase 11.1c: class name -> { static member name -> mangled slot id }.
             std::unordered_map<std::string,
                 std::unordered_map<std::string, std::string>> statics_;
 
-            // ---- Phase 8: escape analysis state ----
+            // Phase 11.1k4: names of generator functions in scope.
+            std::unordered_set<std::string> generatorFunctions_;
+
             std::unordered_map<std::string, std::string> nonEscapingClasses_;
 
             std::string                                  strLitData_;
             std::unordered_map<std::string, std::string> strLitLabels_;
             int                                          nextStrLitId_ = 0;
 
-            // Phase 11.1c: QBE `%name` temps are function-local; cross-function
-            // refs are illegal.  Top-level bindings and statics live in this
-            // block as `$name` QBE globals instead.
             std::string                                  globalData_;
 
             std::string                                       sourceDir_;
@@ -443,6 +439,11 @@ namespace vayu {
                     if (n->value) collectStringLiteralsExpr(n->value.get());
                     break;
                 }
+                case StmtKind::Yield: {
+                    auto* n = static_cast<const YieldStmt*>(s);
+                    if (n->value) collectStringLiteralsExpr(n->value.get());
+                    break;
+                }
                 case StmtKind::If: {
                     auto* n = static_cast<const IfStmt*>(s);
                     collectStringLiteralsExpr(n->cond.get());
@@ -598,7 +599,6 @@ namespace vayu {
                 }
             }
 
-            // Phase 11.1c
             void collectStatics(const Block& program) {
                 for (auto& s : program.stmts) {
                     if (s->kind != StmtKind::Class) continue;
@@ -607,6 +607,14 @@ namespace vayu {
                     for (auto& sf : d->staticFields)
                         sm[sf.name] = "__static_" + d->name + "__" + sf.name;
                     statics_[d->name] = std::move(sm);
+                }
+            }
+
+            void collectGenerators(const Block& program) {
+                for (auto& s : program.stmts) {
+                    if (s->kind != StmtKind::Def) continue;
+                    auto* d = static_cast<const DefStmt*>(s.get());
+                    if (d->isGenerator) generatorFunctions_.insert(d->name);
                 }
             }
 
@@ -788,9 +796,7 @@ namespace vayu {
                 }
             }
 
-            // =====================================================================
-            // Phase 8: escape analysis
-            // =====================================================================
+            // ---- Phase 8 escape analysis ----
 
             static bool isSafeAttrTarget(const Expr* target, const std::string& varName) {
                 if (!target) return false;
@@ -914,6 +920,12 @@ namespace vayu {
                 case StmtKind::Const: {
                     auto* n = static_cast<const ConstStmt*>(s);
                     if (n->name == varName) return true;
+                    if (n->value) return exprEscapes(n->value.get(), varName);
+                    return false;
+                }
+
+                case StmtKind::Yield: {
+                    auto* n = static_cast<const YieldStmt*>(s);
                     if (n->value) return exprEscapes(n->value.get(), varName);
                     return false;
                 }
@@ -1050,8 +1062,6 @@ namespace vayu {
                 }
             }
 
-            // =====================================================================
-
             void inferTypeFromExpr(const Expr* e, Val& v) {
                 if (!e) return;
                 if (e->kind == ExprKind::NameRef) {
@@ -1106,8 +1116,6 @@ namespace vayu {
                         lookup = currentModulePrefix_ + name;
                     }
 
-                    // Never reassign an iterator across two different maps.
-                    // MSVC's debug STL asserts on cross-container compares.
                     const std::string* slotPtr = nullptr;
                     {
                         auto sit = slots_.find(lookup);
@@ -1264,6 +1272,7 @@ namespace vayu {
                         line(ext + " =l extsw " + c);
                         r.ssa = ext; r.type = VType::Bool; return r;
                     }
+
                     case BinOp::BAnd: {
                         std::string t = newTemp();
                         line(t + " =l and " + a.ssa + ", " + b.ssa);
@@ -1364,7 +1373,6 @@ namespace vayu {
                 case ExprKind::Attr: {
                     auto* n = static_cast<const AttrExpr*>(e);
 
-                    // Phase 11.1d: enum item access -> immediate int.
                     if (n->target->kind == ExprKind::NameRef) {
                         const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
                         auto eit = enums_.find(tn->name);
@@ -1380,7 +1388,6 @@ namespace vayu {
                         }
                     }
 
-                    // Phase 11.1c: ClassName.staticName -> load global slot.
                     if (n->target->kind == ExprKind::NameRef) {
                         const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
                         auto sit = statics_.find(tn->name);
@@ -1745,6 +1752,7 @@ namespace vayu {
                 }
                 return false;
             }
+
             Val emitFsCall(const CallExpr* n, const AttrExpr* attr) {
                 Val r;
                 const std::string& m = attr->name;
@@ -2438,33 +2446,15 @@ namespace vayu {
                     if (attr->target->kind == ExprKind::NameRef) {
                         const auto* tn0 = static_cast<const NameRefExpr*>(
                             attr->target.get());
-                        if (tn0->name == "fs") {
-                            return emitFsCall(n, attr);
-                        }
-                        if (tn0->name == "time") {
-                            return emitTimeCall(n, attr);
-                        }
-                        if (tn0->name == "json") {
-                            return emitJsonCall(n, attr);
-                        }
-                        if (tn0->name == "regex") {
-                            return emitRegexCall(n, attr);
-                        }
-                        if (tn0->name == "thread") {
-                            return emitThreadCall(n, attr);
-                        }
-                        if (tn0->name == "net") {
-                            return emitNetCall(n, attr);
-                        }
-                        if (tn0->name == "crypto") {
-                            return emitCryptoCall(n, attr);
-                        }
-                        if (tn0->name == "random") {
-                            return emitRandomCall(n, attr);
-                        }
-                        if (tn0->name == "os") {
-                            return emitOsCall(n, attr);
-                        }
+                        if (tn0->name == "fs")    return emitFsCall(n, attr);
+                        if (tn0->name == "time")  return emitTimeCall(n, attr);
+                        if (tn0->name == "json")  return emitJsonCall(n, attr);
+                        if (tn0->name == "regex") return emitRegexCall(n, attr);
+                        if (tn0->name == "thread")return emitThreadCall(n, attr);
+                        if (tn0->name == "net")   return emitNetCall(n, attr);
+                        if (tn0->name == "crypto")return emitCryptoCall(n, attr);
+                        if (tn0->name == "random")return emitRandomCall(n, attr);
+                        if (tn0->name == "os")    return emitOsCall(n, attr);
                     }
 
                     Val recv = emitExpr(attr->target.get());
@@ -2800,6 +2790,42 @@ namespace vayu {
                     return r;
                 }
 
+                // Phase 11.1k4: `next(generator)` builtin.
+                if (name == "next") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error(
+                            "native: next() takes exactly one argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gen_next(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return r;
+                }
+
+                // Phase 11.1k4: generator construction.
+                if (generatorFunctions_.count(name)) {
+                    size_t argCount = n->args.size();
+                    std::string argsStruct = newTemp();
+                    line(argsStruct + " =l call $vayu_alloc(l " +
+                        std::to_string((argCount == 0 ? 1 : argCount) * 8) + ")");
+                    for (size_t i = 0; i < argCount; ++i) {
+                        Val a = emitExpr(n->args[i].value.get());
+                        std::string slot = newTemp();
+                        line(slot + " =l add " + argsStruct + ", " +
+                            std::to_string(i * 8));
+                        line("storel " + a.ssa + ", " + slot);
+                    }
+                    std::string genSym =
+                        "$vayu_gen_" + currentModulePrefix_ + mangle(name);
+                    std::string fp = newTemp();
+                    line(fp + " =l copy " + genSym);
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gen_new(l " + fp +
+                        ", l " + argsStruct + ")");
+                    r.ssa = t; r.type = VType::Obj; r.cls = "Gen";
+                    return r;
+                }
+
                 auto fi = fromImports_.find(name);
                 std::string fnName = name;
                 if (fi != fromImports_.end())
@@ -2884,7 +2910,6 @@ namespace vayu {
 
                     if (n->target->kind == ExprKind::Attr) {
                         auto* attr = static_cast<const AttrExpr*>(n->target.get());
-                        // Phase 11.1c: ClassName.staticName = value
                         if (attr->target->kind == ExprKind::NameRef) {
                             const auto* tn = static_cast<const NameRefExpr*>(
                                 attr->target.get());
@@ -3051,6 +3076,14 @@ namespace vayu {
                     return;
                 }
 
+                case StmtKind::Yield: {
+                    auto* n = static_cast<const YieldStmt*>(s);
+                    Val v; v.ssa = "0"; v.type = VType::Int;
+                    if (n->value) v = emitExpr(n->value.get());
+                    line("call $vayu_gen_yield(l " + v.ssa + ")");
+                    return;
+                }
+
                 case StmtKind::Class: {
                     auto* n = static_cast<const ClassStmt*>(s);
                     auto sit = statics_.find(n->name);
@@ -3183,9 +3216,65 @@ namespace vayu {
                         const auto* rn = static_cast<const NameRefExpr*>(
                             call->callee.get());
                         if (rn->name == "range") { emitForRange(n, call); return; }
+                        if (generatorFunctions_.count(rn->name)) {
+                            emitForGenerator(n, call);
+                            return;
+                        }
                     }
                 }
                 emitForList(n);
+            }
+
+            void emitForGenerator(const ForStmt* n, const CallExpr* /*call*/) {
+                // Compute the generator value and stash it in a local slot.
+                Val genVal = emitExpr(n->iterable.get());
+                std::string genSlot = "%__for_gen_" +
+                    std::to_string(nextLabel_++);
+                line(genSlot + " =l alloc8 8");
+                line("storel " + genVal.ssa + ", " + genSlot);
+
+                std::string savedSlot; bool hadSaved = false;
+                {
+                    auto it = slots_.find(n->targetName);
+                    if (it != slots_.end()) { savedSlot = it->second; hadSaved = true; }
+                }
+                std::string uniq = std::to_string(nextLabel_++);
+                std::string varSlot = "%" + mangle(n->targetName) + "_slot_" + uniq;
+                slots_[n->targetName] = varSlot;
+                varInfo_[n->targetName] = VarInfo{ VType::Int };
+                line(varSlot + " =l alloc8 8");
+
+                std::string lBody = newLabel("forg_body_");
+                std::string lEnd = newLabel("forg_end_");
+                std::string lCond = newLabel("forg_cond_");
+                line("jmp " + lCond);
+
+                raw(lBody);
+                loopStack_.push_back({ lCond, lEnd });
+                {
+                    std::string g = newTemp(); line(g + " =l loadl " + genSlot);
+                    std::string v = newTemp();
+                    line(v + " =l call $vayu_gen_next(l " + g + ")");
+                    line("storel " + v + ", " + varSlot);
+                }
+                emitBlock(n->body);
+                loopStack_.pop_back();
+                if (!terminated_) line("jmp " + lCond);
+
+                raw(lCond);
+                {
+                    std::string g = newTemp(); line(g + " =l loadl " + genSlot);
+                    std::string d = newTemp();
+                    line(d + " =l call $vayu_gen_done(l " + g + ")");
+                    std::string c = newTemp();
+                    line(c + " =w cnel " + d + ", 0");
+                    line("jnz " + c + ", " + lEnd + ", " + lBody);
+                }
+                raw(lEnd);
+
+                if (hadSaved) slots_[n->targetName] = savedSlot;
+                else          slots_.erase(n->targetName);
+                varInfo_.erase(n->targetName);
             }
 
             void emitForRange(const ForStmt* n, const CallExpr* call) {
@@ -3456,19 +3545,26 @@ namespace vayu {
             void emitFunction(const DefStmt* def, const ClassInfo* cls,
                 const std::string& prefix) {
                 std::string sym;
-                if (def->isGenerator)
-                    throw std::runtime_error(
-                        "native: generators are not supported in the native "
-                        "backend; use --run");
-                if (cls)
+                if (def->isGenerator) {
+                    sym = "$vayu_gen_" + (cls ? (mangle(cls->name) + "_") : prefix)
+                        + mangle(def->name);
+                }
+                else if (cls) {
                     sym = "$vayu_mth_" + mangle(cls->name) + "_" + mangle(def->name);
-                else
+                }
+                else {
                     sym = "$vayu_fn_" + prefix + mangle(def->name);
+                }
 
                 std::string params;
-                for (size_t i = 0; i < def->params.size(); ++i) {
-                    if (i) params += ", ";
-                    params += "l %p_" + mangle(def->params[i].name);
+                if (def->isGenerator) {
+                    params = "l %__args_ptr";
+                }
+                else {
+                    for (size_t i = 0; i < def->params.size(); ++i) {
+                        if (i) params += ", ";
+                        params += "l %p_" + mangle(def->params[i].name);
+                    }
                 }
                 raw("function l " + sym + "(" + params + ") {");
                 raw("@start");
@@ -3494,7 +3590,17 @@ namespace vayu {
                     std::string slot = "%" + mangle(p.name) + "_slot";
                     slots_[p.name] = slot;
                     line(slot + " =l alloc8 8");
-                    line("storel %p_" + mangle(p.name) + ", " + slot);
+                    if (def->isGenerator) {
+                        std::string addr = newTemp();
+                        line(addr + " =l add %__args_ptr, " +
+                            std::to_string(pi * 8));
+                        std::string v = newTemp();
+                        line(v + " =l loadl " + addr);
+                        line("storel " + v + ", " + slot);
+                    }
+                    else {
+                        line("storel %p_" + mangle(p.name) + ", " + slot);
+                    }
 
                     VarInfo vi;
                     if (cls && pi == 0) {
@@ -3518,7 +3624,7 @@ namespace vayu {
                 for (auto& n : names) {
                     if (slots_.count(n)) continue;
                     if (nonEscapingClasses_.count(n)) continue;
-                    if (globalSlots_.count(n)) continue;   // don't shadow a global
+                    if (globalSlots_.count(n)) continue;
                     std::string slot = "%" + mangle(n) + "_slot";
                     slots_[n] = slot;
                     line(slot + " =l alloc8 8");
@@ -3986,9 +4092,7 @@ VayuStr* vayu_str_substr(VayuStr* s, int64_t start, int64_t end) {
     return vayu_mkstr(s->data + start, end - start);
 }
 VayuStr* vayu_str_replace(VayuStr* s, VayuStr* from, VayuStr* to) {
-    if (from->len == 0) {
-        return vayu_mkstr(s->data, s->len);
-    }
+    if (from->len == 0) return vayu_mkstr(s->data, s->len);
     int64_t count = 0;
     for (int64_t i = 0; i + from->len <= s->len; ) {
         if (memcmp(s->data + i, from->data, (size_t)from->len) == 0) {
@@ -4325,6 +4429,15 @@ long long vayu_floordiv(long long a, long long b) {
     if ((a ^ b) < 0 && q * b != a) q--;
     return q;
 }
+long long vayu_mod(long long a, long long b) {
+    if (b == 0) {
+        vayu_raise_str(vayu_mkstr_c("ZeroDivisionError"),
+                       vayu_mkstr_c("modulo by zero"));
+    }
+    long long r = a % b;
+    if (r != 0 && ((r < 0) != (b < 0))) r += b;
+    return r;
+}
 long long vayu_pow_int(long long a, long long b) {
     if (b < 0) {
         if (a == 1)  return 1;
@@ -4402,22 +4515,26 @@ int64_t vayu_run_command(VayuStr* cmd) {
     {
         char wrapped[8256];
         int wr = snprintf(wrapped, sizeof(wrapped), "call %s", buf);
-        if (wr > 0) {
-            return (int64_t)system(wrapped);
-        }
+        if (wr > 0) return (int64_t)system(wrapped);
     }
 #endif
     return (int64_t)system(buf);
 }
-void vayu_exit(int64_t code) {
-    exit((int)code);
-}
+void vayu_exit(int64_t code) { exit((int)code); }
+
+// ---- try/except (thread-local for generator workers) ----
 
 #define VAYU_MAX_TRY 64
 
-static jmp_buf  g_jmpBufs[VAYU_MAX_TRY];
-static int      g_trySp = 0;
-static VayuExc* g_excValue = NULL;
+#ifdef _MSC_VER
+#  define VAYU_THREAD_LOCAL __declspec(thread)
+#else
+#  define VAYU_THREAD_LOCAL __thread
+#endif
+
+static VAYU_THREAD_LOCAL jmp_buf  g_jmpBufs[VAYU_MAX_TRY];
+static VAYU_THREAD_LOCAL int      g_trySp = 0;
+static VAYU_THREAD_LOCAL VayuExc* g_excValue = NULL;
 
 int vayu_try_push(void) {
     if (g_trySp >= VAYU_MAX_TRY) {
@@ -4462,14 +4579,13 @@ void vayu_reraise(void) {
     longjmp(g_jmpBufs[g_trySp - 1], 1);
 }
 
-// ---- Phase 10.1: fs module ----
+// ---- fs ----
 static char* vayu_fs_cstr(VayuStr* s) {
     char* buf = (char*)malloc((size_t)s->len + 1);
     memcpy(buf, s->data, (size_t)s->len);
     buf[s->len] = 0;
     return buf;
 }
-
 static int64_t vayu_fs_stat_mode(const char* p) {
 #ifdef _WIN32
     struct _stat64 st;
@@ -4481,14 +4597,12 @@ static int64_t vayu_fs_stat_mode(const char* p) {
     return (int64_t)st.st_mode;
 #endif
 }
-
 int64_t vayu_fs_exists(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
     int64_t mode = vayu_fs_stat_mode(p);
     free(p);
     return mode < 0 ? 0 : 1;
 }
-
 int64_t vayu_fs_is_file(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
     int64_t mode = vayu_fs_stat_mode(p);
@@ -4500,7 +4614,6 @@ int64_t vayu_fs_is_file(VayuStr* path) {
     return S_ISREG(mode) ? 1 : 0;
 #endif
 }
-
 int64_t vayu_fs_is_dir(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
     int64_t mode = vayu_fs_stat_mode(p);
@@ -4512,7 +4625,6 @@ int64_t vayu_fs_is_dir(VayuStr* path) {
     return S_ISDIR(mode) ? 1 : 0;
 #endif
 }
-
 int64_t vayu_fs_size(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
 #ifdef _WIN32
@@ -4526,7 +4638,6 @@ int64_t vayu_fs_size(VayuStr* path) {
     free(p);
     return sz;
 }
-
 VayuStr* vayu_fs_cwd(void) {
     char buf[4096];
 #ifdef _WIN32
@@ -4536,23 +4647,15 @@ VayuStr* vayu_fs_cwd(void) {
 #endif
     return vayu_mkstr_c(buf);
 }
-
 VayuStr* vayu_fs_abs(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
 #ifdef _WIN32
     char full[4096];
-    if (_fullpath(full, p, sizeof(full)) == NULL) {
-        free(p);
-        return vayu_mkstr("", 0);
-    }
+    if (_fullpath(full, p, sizeof(full)) == NULL) { free(p); return vayu_mkstr("", 0); }
     free(p);
     return vayu_mkstr_c(full);
 #else
-    if (p[0] == '/') {
-        VayuStr* r = vayu_mkstr_c(p);
-        free(p);
-        return r;
-    }
+    if (p[0] == '/') { VayuStr* r = vayu_mkstr_c(p); free(p); return r; }
     char* cwd_buf = getcwd(NULL, 0);
     if (!cwd_buf) { free(p); return vayu_mkstr("", 0); }
     size_t clen = strlen(cwd_buf);
@@ -4562,27 +4665,22 @@ VayuStr* vayu_fs_abs(VayuStr* path) {
     full[clen] = '/';
     memcpy(full + clen + 1, p, plen);
     full[clen + 1 + plen] = 0;
-    free(cwd_buf);
-    free(p);
+    free(cwd_buf); free(p);
     VayuStr* r = vayu_mkstr_c(full);
     free(full);
     return r;
 #endif
 }
-
 VayuStr* vayu_fs_join(VayuStr* a, VayuStr* b) {
     if (a->len == 0) return vayu_mkstr(b->data, b->len);
     char last = a->data[a->len - 1];
-    if (last == '/' || last == '\\') {
-        return vayu_str_concat(a, b);
-    }
+    if (last == '/' || last == '\\') return vayu_str_concat(a, b);
 #ifdef _WIN32
     return vayu_str_concat(vayu_str_concat(a, vayu_mkstr_c("\\")), b);
 #else
     return vayu_str_concat(vayu_str_concat(a, vayu_mkstr_c("/")), b);
 #endif
 }
-
 VayuStr* vayu_fs_extension(VayuStr* path) {
     int64_t dot = -1;
     int64_t i = path->len - 1;
@@ -4595,50 +4693,35 @@ VayuStr* vayu_fs_extension(VayuStr* path) {
     if (dot < 0) return vayu_mkstr("", 0);
     return vayu_mkstr(path->data + dot + 1, path->len - dot - 1);
 }
-
 VayuStr* vayu_fs_basename(VayuStr* path) {
     int64_t slash = -1;
-    int64_t i = 0;
-    while (i < path->len) {
+    for (int64_t i = 0; i < path->len; ++i) {
         char c = path->data[i];
         if (c == '/' || c == '\\') slash = i;
-        i = i + 1;
     }
     return vayu_mkstr(path->data + slash + 1, path->len - slash - 1);
 }
-
 VayuStr* vayu_fs_dirname(VayuStr* path) {
     int64_t slash = -1;
-    int64_t i = 0;
-    while (i < path->len) {
+    for (int64_t i = 0; i < path->len; ++i) {
         char c = path->data[i];
         if (c == '/' || c == '\\') slash = i;
-        i = i + 1;
     }
     if (slash < 0) return vayu_mkstr_c(".");
     if (slash == 0) return vayu_mkstr(path->data, 1);
     return vayu_mkstr(path->data, slash);
 }
-
-void vayu_fs_remove(VayuStr* path) {
-    char* p = vayu_fs_cstr(path);
-    remove(p);
-    free(p);
-}
-
+void vayu_fs_remove(VayuStr* path) { char* p = vayu_fs_cstr(path); remove(p); free(p); }
 void vayu_fs_rename(VayuStr* a, VayuStr* b) {
     char* pa = vayu_fs_cstr(a);
     char* pb = vayu_fs_cstr(b);
     rename(pa, pb);
-    free(pa);
-    free(pb);
+    free(pa); free(pb);
 }
-
 void vayu_fs_mkdir(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
     int64_t n = (int64_t)strlen(p);
-    int64_t i = 0;
-    while (i < n) {
+    for (int64_t i = 0; i < n; ++i) {
         if (p[i] == '/' || p[i] == '\\') {
             char save = p[i];
             p[i] = 0;
@@ -4651,7 +4734,6 @@ void vayu_fs_mkdir(VayuStr* path) {
             }
             p[i] = save;
         }
-        i = i + 1;
     }
 #ifdef _WIN32
     _mkdir(p);
@@ -4660,7 +4742,6 @@ void vayu_fs_mkdir(VayuStr* path) {
 #endif
     free(p);
 }
-
 void vayu_fs_rmdir(VayuStr* path) {
     char* p = vayu_fs_cstr(path);
     char cmd[8192];
@@ -4672,15 +4753,11 @@ void vayu_fs_rmdir(VayuStr* path) {
     system(cmd);
     free(p);
 }
-
 VayuList* vayu_fs_read_dir(VayuStr* path) {
     VayuList* lst = vayu_list_new();
     char* p = vayu_fs_cstr(path);
     DIR* d = opendir(p);
-    if (!d) {
-        free(p);
-        return lst;
-    }
+    if (!d) { free(p); return lst; }
     struct dirent* ent;
     while ((ent = readdir(d)) != NULL) {
         const char* n = ent->d_name;
@@ -4691,11 +4768,9 @@ VayuList* vayu_fs_read_dir(VayuStr* path) {
     free(p);
     return lst;
 }
-// ---- Phase 10.2: time module ----
-int64_t vayu_time_now(void) {
-    return (int64_t)time(NULL);
-}
 
+// ---- time ----
+int64_t vayu_time_now(void) { return (int64_t)time(NULL); }
 int64_t vayu_time_now_ms(void) {
 #ifdef _WIN32
     FILETIME ft;
@@ -4710,7 +4785,6 @@ int64_t vayu_time_now_ms(void) {
     return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
 #endif
 }
-
 void vayu_time_sleep(int64_t ms) {
     if (ms <= 0) return;
 #ifdef _WIN32
@@ -4722,13 +4796,11 @@ void vayu_time_sleep(int64_t ms) {
     nanosleep(&ts, NULL);
 #endif
 }
-
 VayuStr* vayu_time_format(int64_t unix_secs, VayuStr* fmt) {
     char fmtbuf[256];
     int64_t n = fmt->len < 255 ? fmt->len : 255;
     memcpy(fmtbuf, fmt->data, (size_t)n);
     fmtbuf[n] = 0;
-
     time_t t = (time_t)unix_secs;
     struct tm tmv;
 #ifdef _WIN32
@@ -4741,22 +4813,18 @@ VayuStr* vayu_time_format(int64_t unix_secs, VayuStr* fmt) {
     return vayu_mkstr(out, (int64_t)len);
 }
 
-// ---- Phase 10.3: json module ----
-
+// ---- json ----
 typedef struct VayuJsonValue {
     int32_t tag;
     int32_t pad;
     int64_t data;
 } VayuJsonValue;
-
 typedef struct { const char* s; int64_t n; int64_t i; } JsonParser;
-
 static VayuJsonValue* jp_new(int32_t tag, int64_t data) {
     VayuJsonValue* v = (VayuJsonValue*)malloc(sizeof(VayuJsonValue));
     v->tag = tag; v->pad = 0; v->data = data;
     return v;
 }
-
 static void jp_skip_ws(JsonParser* p) {
     while (p->i < p->n) {
         char c = p->s[p->i];
@@ -4764,9 +4832,7 @@ static void jp_skip_ws(JsonParser* p) {
         else break;
     }
 }
-
 static VayuJsonValue* jp_parse_value(JsonParser* p);
-
 static VayuJsonValue* jp_parse_string(JsonParser* p) {
     p->i++;
     size_t cap = 32, len = 0;
@@ -4824,7 +4890,6 @@ static VayuJsonValue* jp_parse_string(JsonParser* p) {
     free(buf);
     return jp_new(3, (int64_t)s);
 }
-
 static VayuJsonValue* jp_parse_number(JsonParser* p) {
     int neg = 0;
     if (p->i < p->n && p->s[p->i] == '-') { neg = 1; p->i++; }
@@ -4845,7 +4910,6 @@ static VayuJsonValue* jp_parse_number(JsonParser* p) {
     if (neg) n = -n;
     return jp_new(2, n);
 }
-
 static VayuJsonValue* jp_parse_array(JsonParser* p) {
     p->i++;
     VayuList* lst = vayu_list_new();
@@ -4865,7 +4929,6 @@ static VayuJsonValue* jp_parse_array(JsonParser* p) {
     }
     return jp_new(4, (int64_t)lst);
 }
-
 static VayuJsonValue* jp_parse_object(JsonParser* p) {
     p->i++;
     VayuMap* m = vayu_map_new();
@@ -4892,7 +4955,6 @@ static VayuJsonValue* jp_parse_object(JsonParser* p) {
     }
     return jp_new(5, (int64_t)m);
 }
-
 static VayuJsonValue* jp_parse_value(JsonParser* p) {
     jp_skip_ws(p);
     if (p->i >= p->n) return jp_new(0, 0);
@@ -4912,7 +4974,6 @@ static VayuJsonValue* jp_parse_value(JsonParser* p) {
     if (c == '-' || (c >= '0' && c <= '9')) return jp_parse_number(p);
     return jp_new(0, 0);
 }
-
 VayuJsonValue* vayu_json_parse(VayuStr* s) {
     JsonParser p;
     p.s = s->data;
@@ -4920,7 +4981,6 @@ VayuJsonValue* vayu_json_parse(VayuStr* s) {
     p.i = 0;
     return jp_parse_value(&p);
 }
-
 static void vayu_json_stringify_to(VayuJsonValue* v, VayuList* chunks) {
     if (!v) { vayu_list_push(chunks, (int64_t)vayu_mkstr_c("null")); return; }
     if (v->tag == 0) { vayu_list_push(chunks, (int64_t)vayu_mkstr_c("null")); return; }
@@ -4997,7 +5057,6 @@ static void vayu_json_stringify_to(VayuJsonValue* v, VayuList* chunks) {
     }
     vayu_list_push(chunks, (int64_t)vayu_mkstr_c("null"));
 }
-
 VayuStr* vayu_json_stringify(VayuJsonValue* v) {
     VayuList* chunks = vayu_list_new();
     vayu_json_stringify_to(v, chunks);
@@ -5015,7 +5074,6 @@ VayuStr* vayu_json_stringify(VayuJsonValue* v) {
     out->data[total] = 0;
     return out;
 }
-
 VayuJsonValue* vayu_json_get(VayuJsonValue* v, VayuStr* key) {
     if (!v || v->tag != 5) {
         vayu_raise_str(vayu_mkstr_c("RuntimeError"),
@@ -5025,7 +5083,6 @@ VayuJsonValue* vayu_json_get(VayuJsonValue* v, VayuStr* key) {
     if (!e) vayu_raise_str(vayu_mkstr_c("KeyError"), key);
     return (VayuJsonValue*)e->value;
 }
-
 VayuJsonValue* vayu_json_index(VayuJsonValue* v, int64_t i) {
     if (!v || v->tag != 4) {
         vayu_raise_str(vayu_mkstr_c("RuntimeError"),
@@ -5039,7 +5096,6 @@ VayuJsonValue* vayu_json_index(VayuJsonValue* v, int64_t i) {
     }
     return (VayuJsonValue*)lst->items[i];
 }
-
 int64_t vayu_json_as_int(VayuJsonValue* v) {
     if (!v || v->tag != 2) {
         vayu_raise_str(vayu_mkstr_c("RuntimeError"),
@@ -5047,7 +5103,6 @@ int64_t vayu_json_as_int(VayuJsonValue* v) {
     }
     return v->data;
 }
-
 VayuStr* vayu_json_as_str(VayuJsonValue* v) {
     if (!v || v->tag != 3) {
         vayu_raise_str(vayu_mkstr_c("RuntimeError"),
@@ -5055,7 +5110,6 @@ VayuStr* vayu_json_as_str(VayuJsonValue* v) {
     }
     return (VayuStr*)v->data;
 }
-
 int64_t vayu_json_as_bool(VayuJsonValue* v) {
     if (!v || v->tag != 1) {
         vayu_raise_str(vayu_mkstr_c("RuntimeError"),
@@ -5063,19 +5117,16 @@ int64_t vayu_json_as_bool(VayuJsonValue* v) {
     }
     return v->data;
 }
-
 int64_t vayu_json_len(VayuJsonValue* v) {
     if (!v) return 0;
     if (v->tag == 4) return ((VayuList*)v->data)->len;
     if (v->tag == 5) return ((VayuMap*)v->data)->len;
     return 0;
 }
-
 int64_t vayu_json_has(VayuJsonValue* v, VayuStr* key) {
     if (!v || v->tag != 5) return 0;
     return map_find((VayuMap*)v->data, key) != NULL ? 1 : 0;
 }
-
 VayuStr* vayu_json_type(VayuJsonValue* v) {
     if (!v) return vayu_mkstr_c("null");
     if (v->tag == 0) return vayu_mkstr_c("null");
@@ -5086,14 +5137,12 @@ VayuStr* vayu_json_type(VayuJsonValue* v) {
     if (v->tag == 5) return vayu_mkstr_c("map");
     return vayu_mkstr_c("?");
 }
-
 int64_t vayu_json_is_null(VayuJsonValue* v) { return (!v || v->tag == 0) ? 1 : 0; }
 int64_t vayu_json_is_int (VayuJsonValue* v) { return (v && v->tag == 2) ? 1 : 0; }
 int64_t vayu_json_is_str (VayuJsonValue* v) { return (v && v->tag == 3) ? 1 : 0; }
 int64_t vayu_json_is_bool(VayuJsonValue* v) { return (v && v->tag == 1) ? 1 : 0; }
 int64_t vayu_json_is_list(VayuJsonValue* v) { return (v && v->tag == 4) ? 1 : 0; }
 int64_t vayu_json_is_map (VayuJsonValue* v) { return (v && v->tag == 5) ? 1 : 0; }
-
 VayuList* vayu_json_keys(VayuJsonValue* v) {
     if (!v || v->tag != 5) return vayu_list_new();
     VayuMap* m = (VayuMap*)v->data;
@@ -5104,30 +5153,23 @@ VayuList* vayu_json_keys(VayuJsonValue* v) {
     }
     return out;
 }
-
 VayuJsonValue* vayu_json_make_null(void)          { return jp_new(0, 0); }
 VayuJsonValue* vayu_json_make_bool(int64_t b)     { return jp_new(1, b ? 1 : 0); }
 VayuJsonValue* vayu_json_make_int (int64_t n)     { return jp_new(2, n); }
 VayuJsonValue* vayu_json_make_str (VayuStr* s)    { return jp_new(3, (int64_t)s); }
 
-// ---- Phase 10.4: regex module ----
-
+// ---- regex ----
 typedef struct {
     const char* pat; int64_t plen;
     const char* txt; int64_t tlen;
 } VayuRx;
-
 static int vayu_rx_match_one(VayuRx* r, int64_t pi, int64_t ti,
                              int64_t* adv_pi, int64_t* adv_ti) {
     if (pi >= r->plen) return 0;
     if (ti >= r->tlen) return 0;
     char pc = r->pat[pi];
     char tc = r->txt[ti];
-
-    if (pc == '.') {
-        *adv_pi = pi + 1; *adv_ti = ti + 1;
-        return 1;
-    }
+    if (pc == '.') { *adv_pi = pi + 1; *adv_ti = ti + 1; return 1; }
     if (pc == '\\') {
         if (pi + 1 >= r->plen) return 0;
         char e = r->pat[pi + 1];
@@ -5185,7 +5227,6 @@ static int vayu_rx_match_one(VayuRx* r, int64_t pi, int64_t ti,
     *adv_pi = pi + 1; *adv_ti = ti + 1;
     return 1;
 }
-
 static int64_t vayu_rx_atom_end(VayuRx* r, int64_t pi) {
     char c = r->pat[pi];
     if (c == '\\') return pi + 2;
@@ -5199,7 +5240,6 @@ static int64_t vayu_rx_atom_end(VayuRx* r, int64_t pi) {
     }
     return pi + 1;
 }
-
 static int vayu_rx_here(VayuRx* r, int64_t pi, int64_t ti, int64_t* out_end) {
     if (pi >= r->plen) { *out_end = ti; return 1; }
     char c = r->pat[pi];
@@ -5213,7 +5253,6 @@ static int vayu_rx_here(VayuRx* r, int64_t pi, int64_t ti, int64_t* out_end) {
     }
     int64_t atom_end = vayu_rx_atom_end(r, pi);
     char q = (atom_end < r->plen) ? r->pat[atom_end] : 0;
-
     if (q == '*' || q == '+') {
         int64_t cur_pi = atom_end + 1;
         int64_t positions[2048];
@@ -5244,7 +5283,6 @@ static int vayu_rx_here(VayuRx* r, int64_t pi, int64_t ti, int64_t* out_end) {
     if (!vayu_rx_match_one(r, pi, ti, &np, &nt)) return 0;
     return vayu_rx_here(r, np, nt, out_end);
 }
-
 static int vayu_rx_find(VayuRx* r, int64_t from, int64_t* ms, int64_t* me) {
     int64_t start = from;
     while (start <= r->tlen) {
@@ -5257,7 +5295,6 @@ static int vayu_rx_find(VayuRx* r, int64_t from, int64_t* ms, int64_t* me) {
     }
     return 0;
 }
-
 int64_t vayu_regex_match(VayuStr* pat, VayuStr* s) {
     VayuRx r;
     r.pat = pat->data; r.plen = pat->len;
@@ -5266,7 +5303,6 @@ int64_t vayu_regex_match(VayuStr* pat, VayuStr* s) {
     if (!vayu_rx_here(&r, 0, 0, &end)) return 0;
     return end == s->len ? 1 : 0;
 }
-
 int64_t vayu_regex_search(VayuStr* pat, VayuStr* s) {
     VayuRx r;
     r.pat = pat->data; r.plen = pat->len;
@@ -5275,7 +5311,6 @@ int64_t vayu_regex_search(VayuStr* pat, VayuStr* s) {
     if (!vayu_rx_find(&r, 0, &ms, &me)) return -1;
     return ms;
 }
-
 VayuList* vayu_regex_find_all(VayuStr* pat, VayuStr* s) {
     VayuList* out = vayu_list_new();
     VayuRx r;
@@ -5290,7 +5325,6 @@ VayuList* vayu_regex_find_all(VayuStr* pat, VayuStr* s) {
     }
     return out;
 }
-
 VayuStr* vayu_regex_replace(VayuStr* pat, VayuStr* s, VayuStr* repl) {
     VayuRx r;
     r.pat = pat->data; r.plen = pat->len;
@@ -5323,7 +5357,6 @@ VayuStr* vayu_regex_replace(VayuStr* pat, VayuStr* s, VayuStr* repl) {
     out->data[total] = 0;
     return out;
 }
-
 VayuList* vayu_regex_split(VayuStr* pat, VayuStr* s) {
     VayuList* out = vayu_list_new();
     VayuRx r;
@@ -5342,9 +5375,8 @@ VayuList* vayu_regex_split(VayuStr* pat, VayuStr* s) {
     return out;
 }
 
-// ---- Phase 10.5: thread module ----
+// ---- thread ----
 typedef int64_t (*vayu_thread_fn_t)(int64_t);
-
 typedef struct {
 #ifdef _WIN32
     HANDLE handle;
@@ -5355,7 +5387,6 @@ typedef struct {
     int64_t result;
     vayu_thread_fn_t fn;
 } VayuThread;
-
 #ifdef _WIN32
 static DWORD WINAPI vayu_thread_win_proc(LPVOID p) {
     VayuThread* t = (VayuThread*)p;
@@ -5369,7 +5400,6 @@ static void* vayu_thread_posix_proc(void* p) {
     return NULL;
 }
 #endif
-
 int64_t vayu_thread_spawn(void* fn, int64_t arg) {
     VayuThread* t = (VayuThread*)malloc(sizeof(VayuThread));
     t->fn = (vayu_thread_fn_t)fn;
@@ -5380,13 +5410,11 @@ int64_t vayu_thread_spawn(void* fn, int64_t arg) {
     if (!t->handle) { free(t); return 0; }
 #else
     if (pthread_create(&t->tid, NULL, vayu_thread_posix_proc, t) != 0) {
-        free(t);
-        return 0;
+        free(t); return 0;
     }
 #endif
     return (int64_t)t;
 }
-
 int64_t vayu_thread_join(int64_t handle) {
     VayuThread* t = (VayuThread*)handle;
     if (!t) return 0;
@@ -5400,7 +5428,6 @@ int64_t vayu_thread_join(int64_t handle) {
     free(t);
     return r;
 }
-
 int64_t vayu_thread_id(void) {
 #ifdef _WIN32
     return (int64_t)GetCurrentThreadId();
@@ -5408,7 +5435,6 @@ int64_t vayu_thread_id(void) {
     return (int64_t)(uintptr_t)pthread_self();
 #endif
 }
-
 typedef struct {
 #ifdef _WIN32
     CRITICAL_SECTION cs;
@@ -5416,7 +5442,6 @@ typedef struct {
     pthread_mutex_t mtx;
 #endif
 } VayuMutex;
-
 int64_t vayu_mutex_new(void) {
     VayuMutex* m = (VayuMutex*)malloc(sizeof(VayuMutex));
 #ifdef _WIN32
@@ -5426,7 +5451,6 @@ int64_t vayu_mutex_new(void) {
 #endif
     return (int64_t)m;
 }
-
 void vayu_mutex_lock(int64_t h) {
     VayuMutex* m = (VayuMutex*)h;
 #ifdef _WIN32
@@ -5435,7 +5459,6 @@ void vayu_mutex_lock(int64_t h) {
     pthread_mutex_lock(&m->mtx);
 #endif
 }
-
 void vayu_mutex_unlock(int64_t h) {
     VayuMutex* m = (VayuMutex*)h;
 #ifdef _WIN32
@@ -5445,7 +5468,7 @@ void vayu_mutex_unlock(int64_t h) {
 #endif
 }
 
-// ---- Phase 10.6: net module ----
+// ---- net ----
 #ifdef _WIN32
 typedef SOCKET vayu_socket_t;
 #  define VAYU_INVALID_SOCKET INVALID_SOCKET
@@ -5464,7 +5487,6 @@ typedef int vayu_socket_t;
 #  define VAYU_CLOSE_SOCKET   close
 static int vayu_net_init(void) { return 0; }
 #endif
-
 int64_t vayu_net_listen(int64_t port) {
     if (vayu_net_init() != 0) return 0;
     vayu_socket_t s = socket(AF_INET, SOCK_STREAM, 0);
@@ -5477,16 +5499,13 @@ int64_t vayu_net_listen(int64_t port) {
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons((unsigned short)port);
     if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        VAYU_CLOSE_SOCKET(s);
-        return 0;
+        VAYU_CLOSE_SOCKET(s); return 0;
     }
     if (listen(s, 16) != 0) {
-        VAYU_CLOSE_SOCKET(s);
-        return 0;
+        VAYU_CLOSE_SOCKET(s); return 0;
     }
     return (int64_t)s;
 }
-
 int64_t vayu_net_server_port(int64_t h) {
     vayu_socket_t s = (vayu_socket_t)h;
     struct sockaddr_in addr;
@@ -5498,14 +5517,12 @@ int64_t vayu_net_server_port(int64_t h) {
     if (getsockname(s, (struct sockaddr*)&addr, &alen) != 0) return 0;
     return (int64_t)ntohs(addr.sin_port);
 }
-
 int64_t vayu_net_accept(int64_t srv) {
     vayu_socket_t s = (vayu_socket_t)srv;
     vayu_socket_t c = accept(s, NULL, NULL);
     if (c == VAYU_INVALID_SOCKET) return 0;
     return (int64_t)c;
 }
-
 int64_t vayu_net_connect(VayuStr* host, int64_t port) {
     if (vayu_net_init() != 0) return 0;
     vayu_socket_t s = socket(AF_INET, SOCK_STREAM, 0);
@@ -5524,19 +5541,16 @@ int64_t vayu_net_connect(VayuStr* host, int64_t port) {
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
         if (getaddrinfo(hostbuf, NULL, &hints, &res) != 0 || !res) {
-            VAYU_CLOSE_SOCKET(s);
-            return 0;
+            VAYU_CLOSE_SOCKET(s); return 0;
         }
         addr.sin_addr = ((struct sockaddr_in*)res->ai_addr)->sin_addr;
         freeaddrinfo(res);
     }
     if (connect(s, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        VAYU_CLOSE_SOCKET(s);
-        return 0;
+        VAYU_CLOSE_SOCKET(s); return 0;
     }
     return (int64_t)s;
 }
-
 int64_t vayu_net_send(int64_t h, VayuStr* s) {
     vayu_socket_t sock = (vayu_socket_t)h;
     int64_t sent = 0;
@@ -5547,29 +5561,23 @@ int64_t vayu_net_send(int64_t h, VayuStr* s) {
     }
     return sent;
 }
-
 VayuStr* vayu_net_recv(int64_t h, int64_t maxlen) {
     vayu_socket_t sock = (vayu_socket_t)h;
     if (maxlen <= 0) maxlen = 4096;
     if (maxlen > 65536) maxlen = 65536;
     char* buf = (char*)malloc((size_t)maxlen);
     int n = recv(sock, buf, (int)maxlen, 0);
-    if (n <= 0) {
-        free(buf);
-        return vayu_mkstr("", 0);
-    }
+    if (n <= 0) { free(buf); return vayu_mkstr("", 0); }
     VayuStr* r = vayu_mkstr(buf, n);
     free(buf);
     return r;
 }
-
 int64_t vayu_net_send_line(int64_t h, VayuStr* s) {
     int64_t r = vayu_net_send(h, s);
     vayu_socket_t sock = (vayu_socket_t)h;
     send(sock, "\n", 1, 0);
     return r;
 }
-
 VayuStr* vayu_net_recv_line(int64_t h) {
     vayu_socket_t sock = (vayu_socket_t)h;
     size_t cap = 128, len = 0;
@@ -5587,15 +5595,13 @@ VayuStr* vayu_net_recv_line(int64_t h) {
     free(buf);
     return r;
 }
-
 void vayu_net_close(int64_t h) {
     if (!h) return;
     vayu_socket_t s = (vayu_socket_t)h;
     VAYU_CLOSE_SOCKET(s);
 }
 
-// ---- Phase 10.7: crypto module ----
-
+// ---- crypto ----
 static VayuStr* vayu_hex(const uint8_t* b, int64_t n) {
     static const char hx[] = "0123456789abcdef";
     char* buf = (char*)malloc((size_t)n * 2);
@@ -5607,14 +5613,12 @@ static VayuStr* vayu_hex(const uint8_t* b, int64_t n) {
     free(buf);
     return r;
 }
-
 typedef struct {
     uint32_t state[8];
     uint64_t bitlen;
     uint8_t  data[64];
     uint32_t datalen;
 } VayuSHA256Ctx;
-
 static const uint32_t vayu_sha256_k[64] = {
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,
     0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -5633,9 +5637,7 @@ static const uint32_t vayu_sha256_k[64] = {
     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,
     0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
-
 #define VAYU_ROTR32(x, n) (((x) >> (n)) | ((x) << (32 - (n))))
-
 static void vayu_sha256_transform(VayuSHA256Ctx* ctx, const uint8_t data[64]) {
     uint32_t a, b, c, d, e, f, g, h, t1, t2, m[64];
     int i, j;
@@ -5662,7 +5664,6 @@ static void vayu_sha256_transform(VayuSHA256Ctx* ctx, const uint8_t data[64]) {
     ctx->state[0] += a; ctx->state[1] += b; ctx->state[2] += c; ctx->state[3] += d;
     ctx->state[4] += e; ctx->state[5] += f; ctx->state[6] += g; ctx->state[7] += h;
 }
-
 static void vayu_sha256_init(VayuSHA256Ctx* ctx) {
     ctx->datalen = 0; ctx->bitlen = 0;
     ctx->state[0] = 0x6a09e667; ctx->state[1] = 0xbb67ae85;
@@ -5670,7 +5671,6 @@ static void vayu_sha256_init(VayuSHA256Ctx* ctx) {
     ctx->state[4] = 0x510e527f; ctx->state[5] = 0x9b05688c;
     ctx->state[6] = 0x1f83d9ab; ctx->state[7] = 0x5be0cd19;
 }
-
 static void vayu_sha256_update(VayuSHA256Ctx* ctx, const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; ++i) {
         ctx->data[ctx->datalen++] = data[i];
@@ -5681,7 +5681,6 @@ static void vayu_sha256_update(VayuSHA256Ctx* ctx, const uint8_t* data, size_t l
         }
     }
 }
-
 static void vayu_sha256_final(VayuSHA256Ctx* ctx, uint8_t hash[32]) {
     uint32_t i = ctx->datalen;
     if (ctx->datalen < 56) {
@@ -5714,14 +5713,12 @@ static void vayu_sha256_final(VayuSHA256Ctx* ctx, uint8_t hash[32]) {
         hash[i + 28] = (uint8_t)((ctx->state[7] >> (24 - i * 8)) & 0xff);
     }
 }
-
 typedef struct {
     uint32_t state[4];
     uint64_t bitlen;
     uint8_t  data[64];
     uint32_t datalen;
 } VayuMD5Ctx;
-
 static const uint32_t vayu_md5_k[64] = {
     0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,
     0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
@@ -5740,16 +5737,13 @@ static const uint32_t vayu_md5_k[64] = {
     0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,
     0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391
 };
-
 static const uint32_t vayu_md5_s[64] = {
     7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
     5, 9,14,20,5, 9,14,20,5, 9,14,20,5, 9,14,20,
     4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
     6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21
 };
-
 #define VAYU_ROTL32(x, n) (((x) << (n)) | ((x) >> (32 - (n))))
-
 static void vayu_md5_transform(VayuMD5Ctx* ctx, const uint8_t data[64]) {
     uint32_t m[16];
     for (int i = 0; i < 16; ++i)
@@ -5763,14 +5757,12 @@ static void vayu_md5_transform(VayuMD5Ctx* ctx, const uint8_t data[64]) {
         else if (i < 48) { f = b ^ c ^ d; g = (3*i + 5) % 16; }
         else { f = c ^ (b | (~d)); g = (7*i) % 16; }
         uint32_t tmp = d;
-        d = c;
-        c = b;
+        d = c; c = b;
         b = b + VAYU_ROTL32(a + f + vayu_md5_k[i] + m[g], vayu_md5_s[i]);
         a = tmp;
     }
     ctx->state[0] += a; ctx->state[1] += b; ctx->state[2] += c; ctx->state[3] += d;
 }
-
 static void vayu_md5_init(VayuMD5Ctx* ctx) {
     ctx->datalen = 0; ctx->bitlen = 0;
     ctx->state[0] = 0x67452301;
@@ -5778,7 +5770,6 @@ static void vayu_md5_init(VayuMD5Ctx* ctx) {
     ctx->state[2] = 0x98badcfe;
     ctx->state[3] = 0x10325476;
 }
-
 static void vayu_md5_update(VayuMD5Ctx* ctx, const uint8_t* data, size_t len) {
     for (size_t i = 0; i < len; ++i) {
         ctx->data[ctx->datalen++] = data[i];
@@ -5789,7 +5780,6 @@ static void vayu_md5_update(VayuMD5Ctx* ctx, const uint8_t* data, size_t len) {
         }
     }
 }
-
 static void vayu_md5_final(VayuMD5Ctx* ctx, uint8_t hash[16]) {
     uint32_t i = ctx->datalen;
     if (ctx->datalen < 56) {
@@ -5818,7 +5808,6 @@ static void vayu_md5_final(VayuMD5Ctx* ctx, uint8_t hash[16]) {
         hash[i + 12] = (uint8_t)((ctx->state[3] >> (i * 8)) & 0xff);
     }
 }
-
 VayuStr* vayu_crypto_sha256(VayuStr* s) {
     VayuSHA256Ctx ctx;
     vayu_sha256_init(&ctx);
@@ -5827,7 +5816,6 @@ VayuStr* vayu_crypto_sha256(VayuStr* s) {
     vayu_sha256_final(&ctx, h);
     return vayu_hex(h, 32);
 }
-
 VayuStr* vayu_crypto_md5(VayuStr* s) {
     VayuMD5Ctx ctx;
     vayu_md5_init(&ctx);
@@ -5836,7 +5824,6 @@ VayuStr* vayu_crypto_md5(VayuStr* s) {
     vayu_md5_final(&ctx, h);
     return vayu_hex(h, 16);
 }
-
 VayuStr* vayu_crypto_hmac_sha256(VayuStr* key, VayuStr* msg) {
     uint8_t k[64];
     memset(k, 0, 64);
@@ -5865,10 +5852,8 @@ VayuStr* vayu_crypto_hmac_sha256(VayuStr* key, VayuStr* msg) {
     vayu_sha256_final(&c, out);
     return vayu_hex(out, 32);
 }
-
 static const char vayu_b64e[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 VayuStr* vayu_crypto_base64_encode(VayuStr* s) {
     int64_t n = s->len;
     int64_t outLen = ((n + 2) / 3) * 4;
@@ -5897,7 +5882,6 @@ VayuStr* vayu_crypto_base64_encode(VayuStr* s) {
     free(out);
     return r;
 }
-
 static int vayu_b64_dec_char(char c) {
     if (c >= 'A' && c <= 'Z') return c - 'A';
     if (c >= 'a' && c <= 'z') return 26 + (c - 'a');
@@ -5906,7 +5890,6 @@ static int vayu_b64_dec_char(char c) {
     if (c == '/') return 63;
     return -1;
 }
-
 VayuStr* vayu_crypto_base64_decode(VayuStr* s) {
     int64_t n = s->len;
     char* buf = (char*)malloc((size_t)n + 1);
@@ -5936,11 +5919,9 @@ VayuStr* vayu_crypto_base64_decode(VayuStr* s) {
         i += 4;
     }
     VayuStr* r = vayu_mkstr(out, oi);
-    free(out);
-    free(buf);
+    free(out); free(buf);
     return r;
 }
-
 VayuStr* vayu_crypto_random_bytes(int64_t n) {
     if (n <= 0) return vayu_mkstr("", 0);
     char* buf = (char*)malloc((size_t)n);
@@ -5968,21 +5949,12 @@ VayuStr* vayu_crypto_random_bytes(int64_t n) {
     return r;
 }
 
-// ---- Phase 10.8: random module ----
+// ---- random ----
 static int vayu_rand_seeded = 0;
-
-void vayu_random_seed(int64_t s) {
-    srand((unsigned)s);
-    vayu_rand_seeded = 1;
-}
-
+void vayu_random_seed(int64_t s) { srand((unsigned)s); vayu_rand_seeded = 1; }
 static void vayu_random_ensure_seed(void) {
-    if (!vayu_rand_seeded) {
-        srand((unsigned)time(NULL));
-        vayu_rand_seeded = 1;
-    }
+    if (!vayu_rand_seeded) { srand((unsigned)time(NULL)); vayu_rand_seeded = 1; }
 }
-
 int64_t vayu_random_randint(int64_t lo, int64_t hi) {
     if (hi < lo) { int64_t t = lo; lo = hi; hi = t; }
     vayu_random_ensure_seed();
@@ -5990,13 +5962,11 @@ int64_t vayu_random_randint(int64_t lo, int64_t hi) {
     if (span <= 0) return lo;
     return lo + (int64_t)(rand() % span);
 }
-
 int64_t vayu_random_randrange(int64_t lo, int64_t hi) {
     if (hi <= lo) return lo;
     vayu_random_ensure_seed();
     return lo + (int64_t)(rand() % (hi - lo));
 }
-
 int64_t vayu_random_choice(VayuList* lst) {
     if (!lst || lst->len == 0) {
         vayu_raise_str(vayu_mkstr_c("IndexError"),
@@ -6005,7 +5975,6 @@ int64_t vayu_random_choice(VayuList* lst) {
     vayu_random_ensure_seed();
     return lst->items[rand() % lst->len];
 }
-
 void vayu_random_shuffle(VayuList* lst) {
     if (!lst || lst->len <= 1) return;
     vayu_random_ensure_seed();
@@ -6016,7 +5985,6 @@ void vayu_random_shuffle(VayuList* lst) {
         lst->items[j] = t;
     }
 }
-
 VayuList* vayu_random_sample(VayuList* lst, int64_t k) {
     if (!lst || lst->len == 0 || k <= 0) return vayu_list_new();
     if (k > lst->len) k = lst->len;
@@ -6034,7 +6002,7 @@ VayuList* vayu_random_sample(VayuList* lst, int64_t k) {
     return out;
 }
 
-// ---- Phase 10.9: os module ----
+// ---- os ----
 VayuStr* vayu_os_getenv(VayuStr* name) {
     char namebuf[256];
     int64_t n = name->len < 255 ? name->len : 255;
@@ -6044,7 +6012,6 @@ VayuStr* vayu_os_getenv(VayuStr* name) {
     if (!v) return vayu_mkstr("", 0);
     return vayu_mkstr_c(v);
 }
-
 void vayu_os_setenv(VayuStr* name, VayuStr* val) {
     char namebuf[256], valbuf[4096];
     int64_t n = name->len < 255 ? name->len : 255;
@@ -6057,7 +6024,6 @@ void vayu_os_setenv(VayuStr* name, VayuStr* val) {
     setenv(namebuf, valbuf, 1);
 #endif
 }
-
 VayuStr* vayu_os_platform(void) {
 #ifdef _WIN32
     return vayu_mkstr_c("windows");
@@ -6069,14 +6035,12 @@ VayuStr* vayu_os_platform(void) {
     return vayu_mkstr_c("unknown");
 #endif
 }
-
 VayuStr* vayu_os_hostname(void) {
     char buf[256];
     if (gethostname(buf, sizeof(buf)) != 0) return vayu_mkstr("", 0);
     buf[sizeof(buf) - 1] = 0;
     return vayu_mkstr_c(buf);
 }
-
 VayuStr* vayu_os_cwd(void) {
     char buf[4096];
 #ifdef _WIN32
@@ -6086,7 +6050,6 @@ VayuStr* vayu_os_cwd(void) {
 #endif
     return vayu_mkstr_c(buf);
 }
-
 void vayu_os_chdir(VayuStr* path) {
     char buf[4096];
     int64_t n = path->len < 4095 ? path->len : 4095;
@@ -6098,8 +6061,180 @@ void vayu_os_chdir(VayuStr* path) {
     chdir(buf);
 #endif
 }
-
 void vayu_os_exit(int64_t code) { exit((int)code); }
+
+// ---- Phase 11.1k4: native generators ----
+
+typedef struct VayuGen {
+#ifdef _WIN32
+    HANDLE                worker;
+    CRITICAL_SECTION      mtx;
+    CONDITION_VARIABLE    cv;
+#else
+    pthread_t             worker;
+    pthread_mutex_t       mtx;
+    pthread_cond_t        cv;
+#endif
+    int                   state;
+    int                   resume;
+    int                   cancel;
+    int64_t               yielded;
+    int                   has_error;
+    VayuExc*              error;
+    int64_t             (*fn)(int64_t);
+    int64_t               arg;
+} VayuGen;
+
+static VAYU_THREAD_LOCAL VayuGen* tls_current_gen = NULL;
+
+#ifdef _WIN32
+#  define VG_LOCK(g)      EnterCriticalSection(&(g)->mtx)
+#  define VG_UNLOCK(g)    LeaveCriticalSection(&(g)->mtx)
+#  define VG_WAIT(g)      SleepConditionVariableCS(&(g)->cv, &(g)->mtx, INFINITE)
+#  define VG_SIGNAL(g)    WakeAllConditionVariable(&(g)->cv)
+#else
+#  define VG_LOCK(g)      pthread_mutex_lock(&(g)->mtx)
+#  define VG_UNLOCK(g)    pthread_mutex_unlock(&(g)->mtx)
+#  define VG_WAIT(g)      pthread_cond_wait(&(g)->cv, &(g)->mtx)
+#  define VG_SIGNAL(g)    pthread_cond_broadcast(&(g)->cv)
+#endif
+
+static void vayu_gen_worker_body(VayuGen* g) {
+    tls_current_gen = g;
+
+    VG_LOCK(g);
+    while (!g->resume && !g->cancel) VG_WAIT(g);
+    if (g->cancel) {
+        g->state = 3;
+        VG_SIGNAL(g);
+        VG_UNLOCK(g);
+        return;
+    }
+    g->resume = 0;
+    g->state = 1;
+    VG_UNLOCK(g);
+
+    int fid = vayu_try_push();
+    if (setjmp(g_jmpBufs[fid]) == 0) {
+        g->fn(g->arg);
+    } else {
+        g->has_error = 1;
+        g->error = g_excValue;
+        g_excValue = NULL;
+        vayu_try_pop();
+    }
+
+    VG_LOCK(g);
+    g->state = 3;
+    VG_SIGNAL(g);
+    VG_UNLOCK(g);
+}
+
+#ifdef _WIN32
+static DWORD WINAPI vayu_gen_worker_win(LPVOID p) {
+    vayu_gen_worker_body((VayuGen*)p);
+    return 0;
+}
+#else
+static void* vayu_gen_worker_posix(void* p) {
+    vayu_gen_worker_body((VayuGen*)p);
+    return NULL;
+}
+#endif
+
+VayuGen* vayu_gen_new(int64_t (*fn)(int64_t), int64_t arg) {
+    VayuGen* g = (VayuGen*)malloc(sizeof(VayuGen));
+#ifdef _WIN32
+    InitializeCriticalSection(&g->mtx);
+    InitializeConditionVariable(&g->cv);
+#else
+    pthread_mutex_init(&g->mtx, NULL);
+    pthread_cond_init(&g->cv, NULL);
+#endif
+    g->state = 0;
+    g->resume = 0;
+    g->cancel = 0;
+    g->yielded = 0;
+    g->has_error = 0;
+    g->error = NULL;
+    g->fn = fn;
+    g->arg = arg;
+#ifdef _WIN32
+    g->worker = CreateThread(NULL, 0, vayu_gen_worker_win, g, 0, NULL);
+#else
+    pthread_create(&g->worker, NULL, vayu_gen_worker_posix, g);
+#endif
+    return g;
+}
+
+int64_t vayu_gen_done(VayuGen* g) {
+    if (!g) return 1;
+    VG_LOCK(g);
+    int64_t r = (g->state == 3) ? 1 : 0;
+    VG_UNLOCK(g);
+    return r;
+}
+
+int64_t vayu_gen_next(VayuGen* g) {
+    VG_LOCK(g);
+    if (g->state == 3) {
+        int has_err = g->has_error;
+        VayuExc* err = g->error;
+        g->has_error = 0;
+        g->error = NULL;
+        VG_UNLOCK(g);
+        if (has_err && err) vayu_raise(err);
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("generator exhausted"));
+    }
+    if (g->state == 1) {
+        VG_UNLOCK(g);
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("generator already running"));
+    }
+    g->resume = 1;
+    g->state = 1;
+    VG_SIGNAL(g);
+    while (g->state == 1) VG_WAIT(g);
+    if (g->state == 3) {
+        int has_err = g->has_error;
+        VayuExc* err = g->error;
+        g->has_error = 0;
+        g->error = NULL;
+        VG_UNLOCK(g);
+        if (has_err && err) vayu_raise(err);
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("generator exhausted"));
+    }
+    int64_t v = g->yielded;
+    VG_UNLOCK(g);
+    return v;
+}
+
+void vayu_gen_yield(int64_t value) {
+    VayuGen* g = tls_current_gen;
+    if (!g) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("'yield' outside generator"));
+    }
+    VG_LOCK(g);
+    g->yielded = value;
+    g->state = 2;
+    VG_SIGNAL(g);
+    while (!g->resume && !g->cancel) VG_WAIT(g);
+    if (g->cancel) {
+        VG_UNLOCK(g);
+#ifdef _WIN32
+        ExitThread(0);
+#else
+        pthread_exit(NULL);
+#endif
+        return;
+    }
+    g->resume = 0;
+    g->state = 1;
+    VG_UNLOCK(g);
+}
 
 extern void vayu_main(void);
 
