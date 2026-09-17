@@ -221,6 +221,12 @@ namespace vayu {
         Value                   yielded;
         std::exception_ptr      pendingError;
 
+        // Phase 11.1k1 fix: the worker and owner share the Interpreter's
+        // env_/generatorContext_ fields.  At every suspend point the worker
+        // stashes the owner's state here and restores its own on resume.
+        std::shared_ptr<Environment>    ownerEnv;
+        std::shared_ptr<GeneratorValue> ownerGen;
+
         ~GeneratorValue();
     };
 

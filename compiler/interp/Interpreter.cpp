@@ -392,11 +392,26 @@ namespace vayu {
             throw RuntimeError("'yield' outside a generator function", y->loc);
         Value v = y->value ? eval(y->value.get()) : Value();
         auto gen = generatorContext_;
+
+        // Save our generator-local env so we can restore it after the wait.
+        auto myEnv = env_;
+        auto myGen = generatorContext_;
+
         std::unique_lock<std::mutex> lk(gen->mtx);
         gen->yielded = std::move(v);
         gen->state = GenState::Suspended;
+
+        // Hand the interpreter's env back to the owner thread while we wait.
+        env_ = gen->ownerEnv;
+        generatorContext_ = gen->ownerGen;
+
         gen->cv.notify_all();
         gen->cv.wait(lk, [&] { return gen->resume || gen->cancel; });
+
+        // We're back — restore our generator-local env.
+        env_ = myEnv;
+        generatorContext_ = myGen;
+
         if (gen->cancel) throw GeneratorCancelled{};
         gen->resume = false;
         gen->state = GenState::Running;
@@ -434,8 +449,11 @@ namespace vayu {
                 gen->resume = false;
             }
 
-            auto savedEnv = self->env_;
-            auto savedGen = self->generatorContext_;
+            // The owner is blocked on gen->cv; we are the only thread
+            // touching the Interpreter.  Capture the owner's state and
+            // install our own.
+            auto outerEnv = self->env_;
+            auto outerGen = self->generatorContext_;
             self->env_ = callEnv;
             self->generatorContext_ = gen;
 
@@ -455,8 +473,9 @@ namespace vayu {
                 gen->pendingError = std::current_exception();
             }
 
-            self->env_ = savedEnv;
-            self->generatorContext_ = savedGen;
+            // Always restore the owner's env before publishing Done.
+            self->env_ = outerEnv;
+            self->generatorContext_ = outerGen;
 
             std::lock_guard<std::mutex> lk(gen->mtx);
             gen->state = GenState::Done;
@@ -473,6 +492,10 @@ namespace vayu {
             throw RuntimeError("generator exhausted", loc);
         if (gen->state == GenState::Running)
             throw RuntimeError("generator already running", loc);
+
+        // Hand our env to the generator so it can restore it while suspended.
+        gen->ownerEnv = env_;
+        gen->ownerGen = generatorContext_;
 
         gen->resume = true;
         gen->state = GenState::Running;

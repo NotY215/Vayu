@@ -73,6 +73,8 @@ namespace vayu {
         B("ord", Types::Function({ Types::Str() }, Types::Int()));
         B("chr", Types::Function({ Types::Int() }, Types::Str()));
         B("list", Types::Function({ A }, listAny));
+        // Phase 11.1k1: generator iteration builtin.
+        B("next", Types::Function({ A }, A));
 
         // ---- Higher-order ----
         B("map", Types::Function({ A, listAny }, listAny));
