@@ -301,6 +301,14 @@ namespace vayu {
         case StmtKind::Class: {
             auto* n = static_cast<const ClassStmt*>(s);
             std::string lbl = "Class " + n->name;
+            if (!n->typeParams.empty()) {
+                lbl += "<";
+                for (size_t i = 0; i < n->typeParams.size(); ++i) {
+                    if (i) lbl += ", ";
+                    lbl += n->typeParams[i];
+                }
+                lbl += ">";
+            }
             if (!n->parentName.empty()) lbl += "(" + n->parentName + ")";
             putLabel(prefix, isLast, lbl);
             std::string cp = childPrefix(prefix, isLast);

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -1053,6 +1054,178 @@ namespace vayu {
                     const ClassInfo* ci = findClass(className);
                     if (!ci) continue;
                     nonEscapingClasses_[varName] = className;
+                }
+            }
+
+            // Phase 11.2 fix: infer the type of an expression without
+// emitting any IL.  Used at generic call sites to bind type
+// parameters to concrete VTypes.
+            Val inferExprType(const Expr* e) {
+                Val r;
+                if (!e) return r;
+                switch (e->kind) {
+                case ExprKind::IntLit:   r.type = VType::Int;  break;
+                case ExprKind::FloatLit: r.type = VType::Int;  break;
+                case ExprKind::BoolLit:  r.type = VType::Bool; break;
+                case ExprKind::NoneLit:  r.type = VType::Int;  break;
+                case ExprKind::StringLit:
+                case ExprKind::CharLit:  r.type = VType::Str;  break;
+                case ExprKind::NameRef: {
+                    auto* n = static_cast<const NameRefExpr*>(e);
+                    auto it = varInfo_.find(n->name);
+                    if (it != varInfo_.end()) {
+                        r.type = it->second.type;
+                        r.cls = it->second.clsName;
+                        r.elemType = it->second.elemType;
+                        r.elemCls = it->second.elemClsName;
+                        r.valType = it->second.valType;
+                    }
+                    else {
+                        auto git = globalVarInfo_.find(n->name);
+                        if (git != globalVarInfo_.end()) {
+                            r.type = git->second.type;
+                            r.cls = git->second.clsName;
+                            r.elemType = git->second.elemType;
+                            r.elemCls = git->second.elemClsName;
+                            r.valType = git->second.valType;
+                        }
+                    }
+                    break;
+                }
+                case ExprKind::ListLit: {
+                    auto* n = static_cast<const ListLitExpr*>(e);
+                    r.type = VType::List;
+                    if (!n->elements.empty()) {
+                        Val f = inferExprType(n->elements[0].get());
+                        r.elemType = f.type;
+                        r.elemCls = f.cls;
+                    }
+                    break;
+                }
+                case ExprKind::MapLit: {
+                    auto* n = static_cast<const MapLitExpr*>(e);
+                    r.type = VType::Map;
+                    if (!n->entries.empty()) {
+                        Val vv = inferExprType(n->entries[0].value.get());
+                        r.valType = vv.type;
+                    }
+                    break;
+                }
+                case ExprKind::Call: {
+                    auto* c = static_cast<const CallExpr*>(e);
+                    if (c->callee->kind == ExprKind::NameRef) {
+                        const auto* nm = static_cast<const NameRefExpr*>(
+                            c->callee.get());
+                        auto fit = topFnDecls_.find(nm->name);
+                        if (fit != topFnDecls_.end() && fit->second->returnType) {
+                            bindTypeParamsFromCall(fit->second, c, r);
+                        }
+                    }
+                    break;
+                }
+                case ExprKind::Grouping:
+                    return inferExprType(
+                        static_cast<const GroupingExpr*>(e)->inner.get());
+                default: break;
+                }
+                return r;
+            }
+
+            // Phase 11.2 fix: walk a generic function's parameter annotations
+            // against the actual argument types of `call`, recording each
+            // type-param name -> concrete VType, then apply the resulting
+            // substitution to the return type.
+            void bindTypeParamsFromCall(const DefStmt* def,
+                const CallExpr* call,
+                Val& r) {
+                if (!def) return;
+                if (def->typeParams.empty()) {
+                    if (def->returnType) inferFromAnnotation(def->returnType.get(), r);
+                    return;
+                }
+                std::unordered_map<std::string, Val> subst;
+
+                auto unify = [&](auto&& self, const Expr* ann,
+                    const Val& actual) -> void {
+                        if (!ann) return;
+                        if (ann->kind == ExprKind::NameRef) {
+                            const std::string& n =
+                                static_cast<const NameRefExpr*>(ann)->name;
+                            for (auto& tp : def->typeParams) {
+                                if (tp == n) {
+                                    if (actual.type != VType::Unknown &&
+                                        subst.find(n) == subst.end())
+                                        subst[n] = actual;
+                                    return;
+                                }
+                            }
+                            return;
+                        }
+                        if (ann->kind == ExprKind::GenericType) {
+                            const auto* g = static_cast<const GenericTypeExpr*>(ann);
+                            if (g->name == "list" && !g->typeArgs.empty()) {
+                                Val inner;
+                                inner.type = actual.elemType;
+                                inner.cls = actual.elemCls;
+                                self(self, g->typeArgs[0].get(), inner);
+                            }
+                            else if (g->name == "map" && g->typeArgs.size() >= 2) {
+                                Val kk; kk.type = actual.elemType; kk.cls = actual.elemCls;
+                                Val vv; vv.type = actual.valType;
+                                self(self, g->typeArgs[0].get(), kk);
+                                self(self, g->typeArgs[1].get(), vv);
+                            }
+                        }
+                    };
+
+                for (size_t i = 0; i < call->args.size() && i < def->params.size(); ++i) {
+                    Val a = inferExprType(call->args[i].value.get());
+                    unify(unify, def->params[i].type.get(), a);
+                }
+
+                applySubst(def->returnType.get(), subst, r, def->typeParams);
+            }
+
+            void applySubst(const Expr* ann,
+                const std::unordered_map<std::string, Val>& subst,
+                Val& out,
+                const std::vector<std::string>& typeParams) {
+                if (!ann) return;
+                if (ann->kind == ExprKind::NameRef) {
+                    const std::string& n =
+                        static_cast<const NameRefExpr*>(ann)->name;
+                    for (auto& tp : typeParams) {
+                        if (tp == n) {
+                            auto it = subst.find(n);
+                            if (it != subst.end()) out = it->second;
+                            return;
+                        }
+                    }
+                    inferFromAnnotation(ann, out);
+                    return;
+                }
+                if (ann->kind == ExprKind::GenericType) {
+                    const auto* g = static_cast<const GenericTypeExpr*>(ann);
+                    if (g->name == "list") {
+                        out.type = VType::List;
+                        if (!g->typeArgs.empty()) {
+                            Val inner;
+                            applySubst(g->typeArgs[0].get(), subst, inner, typeParams);
+                            out.elemType = inner.type;
+                            out.elemCls = inner.cls;
+                        }
+                    }
+                    else if (g->name == "map") {
+                        out.type = VType::Map;
+                        if (g->typeArgs.size() >= 2) {
+                            Val kk, vv;
+                            applySubst(g->typeArgs[0].get(), subst, kk, typeParams);
+                            applySubst(g->typeArgs[1].get(), subst, vv, typeParams);
+                            out.elemType = kk.type;
+                            out.elemCls = kk.cls;
+                            out.valType = vv.type;
+                        }
+                    }
                 }
             }
 
@@ -2837,6 +3010,8 @@ namespace vayu {
                 if (fi != fromImports_.end())
                     fnName = mangle(fi->second) + "_" + name;
 
+                auto fit = topFnDecls_.find(name);
+
                 std::vector<std::string> args;
                 for (auto& a : n->args) {
                     if (!a.name.empty())
@@ -2851,15 +3026,8 @@ namespace vayu {
                 std::string t = newTemp();
                 line(t + " =l call $vayu_fn_" + mangle(fnName) + "(" + argsStr + ")");
                 r.ssa = t;
-                auto fit = topFnDecls_.find(name);
                 if (fit != topFnDecls_.end() && fit->second->returnType) {
-                    Val tmp;
-                    inferFromAnnotation(fit->second->returnType.get(), tmp);
-                    r.type = tmp.type;
-                    r.cls = tmp.cls;
-                    r.elemType = tmp.elemType;
-                    r.elemCls = tmp.elemCls;
-                    r.valType = tmp.valType;
+                    bindTypeParamsFromCall(fit->second, n, r);
                 }
                 else {
                     r.type = VType::Unknown;

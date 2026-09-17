@@ -191,6 +191,15 @@ namespace vayu {
                     ct->parent = it->second;
                 }
 
+                // Phase 11.2b: push a type-param scope for the class body.
+                // Type params are erased to Any inside the class (duck typing
+                // at runtime); the syntax is accepted and downstream code
+                // compiles.
+                typeParamScopes_.emplace_back();
+                for (auto& tp : d->typeParams) {
+                    typeParamScopes_.back()[tp] = Types::Any();
+                }
+
                 std::vector<StructFieldInfo> fields;
                 for (auto& f : d->fields) {
                     for (auto& e : fields) if (e.name == f.name)
@@ -239,6 +248,7 @@ namespace vayu {
                     ct->methods[m->name] = Types::Function(std::move(params), ret);
                     ct->methodVis[m->name] = (int8_t)visCode(m->vis);
                 }
+                typeParamScopes_.pop_back();
             }
         }
         // ---- enums (Phase 11.1d) ----
@@ -287,6 +297,17 @@ namespace vayu {
 
                 auto sig = Types::Function(std::move(params), std::move(ret));
                 sig->typeParams = typeParamScopes_.back();
+                // Phase 11.2c: resolve constraints against the same scope.
+                for (size_t i = 0; i < d->typeParams.size() &&
+                    i < d->typeParamConstraints.size(); ++i) {
+                    if (d->typeParamConstraints[i].empty()) continue;
+                    auto t = sig->typeParams[d->typeParams[i]];
+                    auto cst = structs_.find(d->typeParamConstraints[i]);
+                    if (cst == structs_.end())
+                        error(d->loc, "unknown constraint '" +
+                            d->typeParamConstraints[i] + "'");
+                    sig->typeParamConstraints[t->name] = cst->second;
+                }
                 typeParamScopes_.pop_back();
 
                 if (isTopLevel && functions_.count(d->name))
@@ -522,6 +543,13 @@ namespace vayu {
     }
 
     void TypeChecker::checkMethodBody(const DefStmt* m, TypePtr cls) {
+        // Phase 11.2b: expose the class's type params (erased to Any) to the
+        // method body so `T` resolves.
+        typeParamScopes_.emplace_back();
+        for (auto& tp : cls->typeParams) {
+            typeParamScopes_.back()[tp] = Types::Any();
+        }
+
         auto sig = cls->methods.at(m->name);
         pushScope();
         for (size_t i = 0; i < m->params.size(); ++i)
@@ -540,6 +568,7 @@ namespace vayu {
         currentClass_ = savedClass;
         loopDepth_ = savedLoop;
         popScope();
+        typeParamScopes_.pop_back();
     }
 
     // ===========================================================================
@@ -1328,6 +1357,16 @@ namespace vayu {
                         std::to_string(i + 1) + ": expected " +
                         callee->params[i]->toString() +
                         ", got " + argTypes[i]->toString());
+            }
+            // Phase 11.2c: verify constraints on substituted type params.
+            for (auto& [tpName, constraint] : callee->typeParamConstraints) {
+                auto it = subst.find(tpName);
+                if (it == subst.end() || it->second->kind == TypeKind::Any)
+                    continue;
+                if (!isSubclassOf(it->second, constraint))
+                    error(n->loc, "type parameter bound violated: '" +
+                        it->second->toString() + "' is not a subclass of '" +
+                        constraint->toString() + "'");
             }
             // Unresolved type params default to Any.
             for (auto& [k, v] : callee->typeParams) {

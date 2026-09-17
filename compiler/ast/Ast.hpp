@@ -210,7 +210,8 @@ namespace vayu {
 
     struct DefStmt : Stmt {
         std::string               name;
-        std::vector<std::string>  typeParams;   // Phase 11.2: `def f<T, U>(...)`
+        std::vector<std::string>  typeParams;            // Phase 11.2
+        std::vector<std::string>  typeParamConstraints;  // Phase 11.2c (parallel)
         std::vector<Param>        params;
         ExprPtr                   returnType;
         Block                     body;
@@ -258,6 +259,8 @@ namespace vayu {
 
     struct ClassStmt : Stmt {
         std::string                           name;
+        std::vector<std::string>              typeParams;           // Phase 11.2b
+        std::vector<std::string>              typeParamConstraints; // Phase 11.2c
         std::string                           parentName;
         std::vector<FieldDef>                 fields;
         std::vector<StaticFieldDef>           staticFields;

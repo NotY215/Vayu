@@ -728,12 +728,19 @@ namespace vayu {
         Token defTok = advance();
         Token name = expect(TokenType::Identifier, "function name");
 
-        // Phase 11.2: optional type parameter list `<T, U, ...>`.
+        // Phase 11.2: optional type parameter list `<T: C, U, ...>`.
         std::vector<std::string> typeParams;
+        std::vector<std::string> typeParamConstraints;
         if (match(TokenType::Lt)) {
             for (;;) {
                 Token tp = expect(TokenType::Identifier, "type parameter name");
+                std::string constraint;
+                if (match(TokenType::Colon)) {
+                    Token c = expect(TokenType::Identifier, "constraint name");
+                    constraint = c.lexeme;
+                }
                 typeParams.push_back(tp.lexeme);
+                typeParamConstraints.push_back(std::move(constraint));
                 if (!match(TokenType::Comma)) break;
             }
             expect(TokenType::Gt, "'>' to close type parameter list");
@@ -757,6 +764,7 @@ namespace vayu {
             std::move(retType), std::move(body),
             defTok.location);
         def->typeParams = std::move(typeParams);
+        def->typeParamConstraints = std::move(typeParamConstraints);
 
         // Phase 11.1k1: walk the body for a top-level `yield`.  If found,
         // this function is a generator.
@@ -870,6 +878,24 @@ namespace vayu {
     StmtPtr Parser::parseClass() {
         Token cTok = advance();
         Token name = expect(TokenType::Identifier, "class name");
+
+        std::vector<std::string> typeParams;
+        std::vector<std::string> typeParamConstraints;
+        if (match(TokenType::Lt)) {
+            for (;;) {
+                Token tp = expect(TokenType::Identifier, "type parameter name");
+                std::string constraint;
+                if (match(TokenType::Colon)) {
+                    Token c = expect(TokenType::Identifier, "constraint name");
+                    constraint = c.lexeme;
+                }
+                typeParams.push_back(tp.lexeme);
+                typeParamConstraints.push_back(std::move(constraint));
+                if (!match(TokenType::Comma)) break;
+            }
+            expect(TokenType::Gt, "'>' to close type parameter list");
+        }
+
         std::string parentName;
         if (match(TokenType::LParen)) {
             Token p = expect(TokenType::Identifier, "parent class name");
@@ -881,6 +907,8 @@ namespace vayu {
         expect(TokenType::Indent, "indented class body");
 
         auto cls = std::make_unique<ClassStmt>(name.lexeme, parentName, cTok.location);
+        cls->typeParams = std::move(typeParams);
+        cls->typeParamConstraints = std::move(typeParamConstraints);
 
         for (;;) {
             skipNewlines();

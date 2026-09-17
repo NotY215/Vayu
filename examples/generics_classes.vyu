@@ -1,0 +1,46 @@
+class Box<T>:
+    value: T
+    def __init__(self, v: T) -> None:
+        self.value = v
+    def get(self) -> T:
+        return self.value
+    def replace(self, v: T) -> None:
+        self.value = v
+
+class Pair<A, B>:
+    first: A
+    second: B
+    def __init__(self, a: A, b: B) -> None:
+        self.first = a
+        self.second = b
+
+class Shape:
+    name: str
+    def __init__(self, n: str) -> None:
+        self.name = n
+
+class Circle(Shape):
+    radius: int
+    def __init__(self, r: int) -> None:
+        self.name = "circle"
+        self.radius = r
+
+def describe<T: Shape>(x: T) -> str:
+    return x.name
+
+def main() -> None:
+    b = Box(42)
+    print(b.get())
+    b.replace(99)
+    print(b.get())
+
+    p = Pair(1, 2)
+    print(p.first)
+    print(p.second)
+
+    s = Shape("triangle")
+    c = Circle(5)
+    print(describe(s))
+    print(describe(c))
+
+main()

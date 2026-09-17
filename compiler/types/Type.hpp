@@ -44,6 +44,7 @@ namespace vayu {
         // type-parameter name (`T`) to a fresh, uniquely-named TypeParam node
         // (`T#0`).  Empty for non-generic functions.
         std::unordered_map<std::string, TypePtr> typeParams;
+        std::unordered_map<std::string, TypePtr> typeParamConstraints;
 
         explicit Type(TypeKind k) : kind(k) {}
         Type(TypeKind k, std::string n) : kind(k), name(std::move(n)) {}
