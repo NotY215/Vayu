@@ -12,11 +12,11 @@ namespace vayu {
         None, Bool, Int, Float, Str, Char, Bytes,
         Any, Unknown, Error,
         Function,
-        Struct,   // covers struct AND class
-        List,     // params[0] = element type
-        Map,      // params[0] = key type, params[1] = value type
+        Struct,
+        List,
+        Map,
         Named,
-        TypeParam,   // Phase 11.2: `T` in a generic signature/body
+        TypeParam,
     };
 
     class Type;
@@ -25,7 +25,7 @@ namespace vayu {
     struct StructFieldInfo {
         std::string name;
         TypePtr     type;
-        int8_t      vis = 0;   // 0=public, 1=protected, 2=private
+        int8_t      vis = 0;
     };
 
     class Type {
@@ -40,10 +40,12 @@ namespace vayu {
         std::unordered_map<std::string, int8_t>  methodVis;
         TypePtr                                  parent;
 
-        // Phase 11.2: for a generic function signature, maps the user-visible
-        // type-parameter name (`T`) to a fresh, uniquely-named TypeParam node
-        // (`T#0`).  Empty for non-generic functions.
+        // Phase 11.2 — maps user-visible type-param name (`T`) to a fresh
+        // TypeParam node with a unique internal name (`T#0`).  Empty for
+        // non-generic functions/classes.
         std::unordered_map<std::string, TypePtr> typeParams;
+
+        // Phase 11.2c — constraint bound keyed by mangled name (`T#0`).
         std::unordered_map<std::string, TypePtr> typeParamConstraints;
 
         explicit Type(TypeKind k) : kind(k) {}

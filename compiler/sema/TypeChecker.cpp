@@ -58,7 +58,6 @@ namespace vayu {
             builtins_[name] = std::move(t);
             };
 
-        // ---- Core ----
         B("print", Types::Function({ A }, Types::None()));
         B("str", Types::Function({ A }, Types::Str()));
         B("int", Types::Function({ A }, Types::Int()));
@@ -73,10 +72,7 @@ namespace vayu {
         B("ord", Types::Function({ Types::Str() }, Types::Int()));
         B("chr", Types::Function({ Types::Int() }, Types::Str()));
         B("list", Types::Function({ A }, listAny));
-        // Phase 11.1k1: generator iteration builtin.
-        B("next", Types::Function({ A }, A));
 
-        // ---- Higher-order ----
         B("map", Types::Function({ A, listAny }, listAny));
         B("filter", Types::Function({ A, listAny }, listAny));
         B("sorted", Types::Function({ listAny }, listAny));
@@ -85,31 +81,25 @@ namespace vayu {
         B("all", Types::Function({ listAny }, Types::Bool()));
         B("sum", Types::Function({ listAny }, A));
 
-        // ---- math module placeholder ----
+        B("next", Types::Function({ A }, A));
+
         B("math", Types::Any());
 
-        // ---- Phase 7A: file I/O ----
         B("read_file", Types::Function({ Types::Str() }, Types::Str()));
         B("write_file", Types::Function({ Types::Str(), Types::Str() }, Types::None()));
         B("file_exists", Types::Function({ Types::Str() }, Types::Bool()));
 
-        // ---- Phase 7A: process + CLI ----
         B("args", Types::Function({}, Types::List(Types::Str())));
         B("run_command", Types::Function({ Types::Str() }, Types::Int()));
         B("exit", Types::Function({ Types::Int() }, Types::None()));
         B("join", Types::Function({ Types::Str(), listStr }, Types::Str()));
 
-        // ---- Phase 7A: input primitives ----
         B("input", Types::Function({}, Types::Str()));
         B("read_line", Types::Function({}, Types::Str()));
         B("read_all", Types::Function({}, Types::Str()));
         B("read_int", Types::Function({}, Types::Int()));
         B("print_raw", Types::Function({ Types::Str() }, Types::None()));
 
-        // ---- Phase 10 builtin modules (name-only registration) ----
-        // The compiler's native backend handles these directly.  The type
-        // checker just needs to know the names exist and be liberal about
-        // their members.
         B("fs", Types::Any());
         B("time", Types::Any());
         B("json", Types::Any());
@@ -123,7 +113,7 @@ namespace vayu {
 
     void TypeChecker::installBuiltinExceptions() {
         auto base = Types::Struct("Exception", {});
-        base->fields.push_back({ "message", Types::Str() });
+        base->fields.push_back({ "message", Types::Str(), 0 });
         structs_["Exception"] = base;
 
         auto mkStruct = [&](const std::string& name, TypePtr parent) {
@@ -160,7 +150,11 @@ namespace vayu {
                 for (auto& e : fields) if (e.name == f.name)
                     error(f.loc, "duplicate field '" + f.name +
                         "' in struct '" + d->name + "'");
-                fields.push_back({ f.name, resolveTypeExpr(f.type.get()) });
+                StructFieldInfo fi;
+                fi.name = f.name;
+                fi.type = resolveTypeExpr(f.type.get());
+                fi.vis = (int8_t)visCode(f.vis);
+                fields.push_back(std::move(fi));
             }
             st->fields = std::move(fields);
         }
@@ -191,13 +185,13 @@ namespace vayu {
                     ct->parent = it->second;
                 }
 
-                // Phase 11.2b: push a type-param scope for the class body.
-                // Type params are erased to Any inside the class (duck typing
-                // at runtime); the syntax is accepted and downstream code
-                // compiles.
+                // Phase 11.2b: register class type params (erased to Any).
                 typeParamScopes_.emplace_back();
                 for (auto& tp : d->typeParams) {
                     typeParamScopes_.back()[tp] = Types::Any();
+                }
+                for (auto& tp : d->typeParams) {
+                    ct->typeParams[tp] = Types::Any();
                 }
 
                 std::vector<StructFieldInfo> fields;
@@ -215,19 +209,17 @@ namespace vayu {
                 }
                 ct->fields = std::move(fields);
 
-                                // Phase 11.1c: statics.
-                std::unordered_map<std::string, TypePtr> statics;
-                for (auto& sf : d->staticFields) {
-                    if (statics.count(sf.name))
-                        error(sf.loc, "duplicate static member '" + sf.name +
-                            "' in class '" + d->name + "'");
-                    if (ct->findField(sf.name))
-                        error(sf.loc, "static member '" + sf.name +
-                            "' clashes with an instance field");
-                    TypePtr st = sf.type ? resolveTypeExpr(sf.type.get()) : Types::Any();
-                    statics[sf.name] = st;
+                // Phase 11.1c: register static members.
+                {
+                    std::unordered_map<std::string, TypePtr> sm;
+                    for (auto& sf : d->staticFields) {
+                        TypePtr st = sf.type
+                            ? resolveTypeExpr(sf.type.get())
+                            : Types::Any();
+                        sm[sf.name] = st;
+                    }
+                    statics_[d->name] = std::move(sm);
                 }
-                statics_[d->name] = std::move(statics);
 
                 for (auto& m : d->methods) {
                     if (ct->methods.count(m->name))
@@ -251,7 +243,8 @@ namespace vayu {
                 typeParamScopes_.pop_back();
             }
         }
-        // ---- enums (Phase 11.1d) ----
+
+        // ---- enums ----
         for (auto& s : program.stmts) {
             if (s->kind != StmtKind::Enum) continue;
             auto* d = static_cast<const EnumStmt*>(s.get());
@@ -259,7 +252,6 @@ namespace vayu {
                 error(d->loc, "'" + d->name + "' already defined");
             std::unordered_map<std::string, long long> items;
             for (auto& it : d->items) {
-                // Values were filled in by the parser.  Require IntLit.
                 if (!it.value || it.value->kind != ExprKind::IntLit)
                     error(d->loc, "internal: enum item '" + it.name +
                         "' missing int value (parser bug)");
@@ -279,12 +271,25 @@ namespace vayu {
             case StmtKind::Def: {
                 auto* d = static_cast<const DefStmt*>(s.get());
 
-                // Phase 11.2: fresh type-param scope for this signature.
+                // Phase 11.2 / 11.2c: type-param scope.  A constrained param
+                // resolves to its constraint struct so `x.name` typechecks.
                 typeParamScopes_.emplace_back();
-                for (auto& tp : d->typeParams) {
+                for (size_t i = 0; i < d->typeParams.size(); ++i) {
+                    std::string cstName;
+                    if (i < d->typeParamConstraints.size())
+                        cstName = d->typeParamConstraints[i];
+                    if (!cstName.empty()) {
+                        auto cstIt = structs_.find(cstName);
+                        if (cstIt != structs_.end()) {
+                            typeParamScopes_.back()[d->typeParams[i]] =
+                                cstIt->second;
+                            continue;
+                        }
+                    }
                     auto t = std::make_shared<Type>(TypeKind::TypeParam);
-                    t->name = tp + "#" + std::to_string(nextTypeParamId_++);
-                    typeParamScopes_.back()[tp] = t;
+                    t->name = d->typeParams[i] + "#" +
+                        std::to_string(nextTypeParamId_++);
+                    typeParamScopes_.back()[d->typeParams[i]] = t;
                 }
 
                 std::vector<TypePtr> params;
@@ -297,16 +302,20 @@ namespace vayu {
 
                 auto sig = Types::Function(std::move(params), std::move(ret));
                 sig->typeParams = typeParamScopes_.back();
-                // Phase 11.2c: resolve constraints against the same scope.
+
                 for (size_t i = 0; i < d->typeParams.size() &&
                     i < d->typeParamConstraints.size(); ++i) {
-                    if (d->typeParamConstraints[i].empty()) continue;
-                    auto t = sig->typeParams[d->typeParams[i]];
-                    auto cst = structs_.find(d->typeParamConstraints[i]);
-                    if (cst == structs_.end())
-                        error(d->loc, "unknown constraint '" +
-                            d->typeParamConstraints[i] + "'");
-                    sig->typeParamConstraints[t->name] = cst->second;
+                    const std::string& constraintName = d->typeParamConstraints[i];
+                    if (constraintName.empty()) continue;
+                    const std::string& userParamName = d->typeParams[i];
+                    auto tpIt = sig->typeParams.find(userParamName);
+                    if (tpIt == sig->typeParams.end()) continue;
+                    if (tpIt->second->kind != TypeKind::TypeParam) continue;
+                    auto cstIt = structs_.find(constraintName);
+                    if (cstIt == structs_.end())
+                        error(d->loc, "unknown constraint '" + constraintName + "'");
+                    const std::string& mangled = tpIt->second->name;
+                    sig->typeParamConstraints[mangled] = cstIt->second;
                 }
                 typeParamScopes_.pop_back();
 
@@ -376,14 +385,12 @@ namespace vayu {
 
         const std::string& n = static_cast<const NameRefExpr*>(e)->name;
 
-        // Phase 11.2: type params in the current generic signature.
         for (auto it = typeParamScopes_.rbegin();
             it != typeParamScopes_.rend(); ++it) {
             auto found = it->find(n);
             if (found != it->end()) return found->second;
         }
 
-        if (n == "int")   return Types::Int();
         if (n == "int")   return Types::Int();
         if (n == "float") return Types::Float();
         if (n == "bool")  return Types::Bool();
@@ -428,7 +435,6 @@ namespace vayu {
     TypePtr TypeChecker::lookupCollectionMethod(const TypePtr& target,
         const std::string& name,
         SourceLocation loc) {
-        // ---- str ----
         if (target->kind == TypeKind::Str) {
             if (name == "upper" || name == "lower" || name == "strip" ||
                 name == "lstrip" || name == "rstrip")
@@ -454,7 +460,6 @@ namespace vayu {
             error(loc, "str has no method '" + name + "'");
         }
 
-        // ---- list ----
         if (target->kind == TypeKind::List) {
             TypePtr E = target->params.empty() ? Types::Any() : target->params[0];
             if (name == "append")   return Types::Function({ E }, Types::None());
@@ -467,7 +472,6 @@ namespace vayu {
             error(loc, "list has no method '" + name + "'");
         }
 
-        // ---- map ----
         if (target->kind == TypeKind::Map) {
             TypePtr K = target->params.size() > 0 ? target->params[0] : Types::Str();
             TypePtr V = target->params.size() > 1 ? target->params[1] : Types::Any();
@@ -482,6 +486,12 @@ namespace vayu {
         }
 
         return nullptr;
+    }
+
+    bool TypeChecker::isSubclassOf(TypePtr sub, TypePtr base) const {
+        for (auto c = sub; c; c = c->parent)
+            if (c->name == base->name) return true;
+        return false;
     }
 
     // ===========================================================================
@@ -536,18 +546,11 @@ namespace vayu {
     // ===========================================================================
     // Method bodies
     // ===========================================================================
-    bool TypeChecker::isSubclassOf(TypePtr sub, TypePtr base) const {
-        for (auto c = sub; c; c = c->parent)
-            if (c->name == base->name) return true;
-        return false;
-    }
 
     void TypeChecker::checkMethodBody(const DefStmt* m, TypePtr cls) {
-        // Phase 11.2b: expose the class's type params (erased to Any) to the
-        // method body so `T` resolves.
         typeParamScopes_.emplace_back();
-        for (auto& tp : cls->typeParams) {
-            typeParamScopes_.back()[tp] = Types::Any();
+        for (auto& kv : cls->typeParams) {
+            typeParamScopes_.back()[kv.first] = Types::Any();
         }
 
         auto sig = cls->methods.at(m->name);
@@ -598,9 +601,9 @@ namespace vayu {
                 TypePtr v = checkExpr(n->value.get());
                 const auto* nm =
                     static_cast<const NameRefExpr*>(n->target.get());
-                TypePtr ex = lookupUserVar(nm->name);
                 if (consts_.count(nm->name))
                     error(n->loc, "cannot assign to const '" + nm->name + "'");
+                TypePtr ex = lookupUserVar(nm->name);
                 if (ex) {
                     if (!isAssignable(ex, v))
                         error(n->loc, "cannot assign " + v->toString() +
@@ -695,6 +698,24 @@ namespace vayu {
             return;
         }
 
+        case StmtKind::Const: {
+            auto* n = static_cast<const ConstStmt*>(s);
+            if (consts_.count(n->name) || lookupUserVar(n->name) ||
+                structs_.count(n->name) || enums_.count(n->name))
+                error(n->loc, "'" + n->name + "' already defined");
+            TypePtr declared = n->type ? resolveTypeExpr(n->type.get()) : nullptr;
+            TypePtr v = checkExpr(n->value.get());
+            if (declared && !isAssignable(declared, v))
+                error(n->loc, "cannot initialize const '" + n->name + "' (" +
+                    declared->toString() + ") with value of type " + v->toString());
+            defineVar(n->name, declared ? declared : v);
+            consts_.insert(n->name);
+            return;
+        }
+
+        case StmtKind::Enum:
+            return;
+
         case StmtKind::If: {
             auto* n = static_cast<const IfStmt*>(s);
             checkExpr(n->cond.get());
@@ -755,8 +776,6 @@ namespace vayu {
 
             defineVar(n->name, sig);
 
-            // Phase 11.2: reuse the signature's type-param scope so `T`
-            // resolves to the same TypeParam inside the body.
             typeParamScopes_.push_back(sig->typeParams);
 
             pushScope();
@@ -833,6 +852,12 @@ namespace vayu {
             return;
         }
 
+        case StmtKind::Yield: {
+            auto* n = static_cast<const YieldStmt*>(s);
+            if (n->value) checkExpr(n->value.get());
+            return;
+        }
+
         case StmtKind::Import: {
             auto* n = static_cast<const ImportStmt*>(s);
             const std::string& bind =
@@ -848,30 +873,6 @@ namespace vayu {
                     item.alias.empty() ? item.name : item.alias;
                 defineVar(bind, Types::Any());
             }
-            return;
-        }
-        case StmtKind::Const: {
-            auto* n = static_cast<const ConstStmt*>(s);
-            if (consts_.count(n->name) || lookupUserVar(n->name) ||
-                structs_.count(n->name) || enums_.count(n->name))
-                error(n->loc, "'" + n->name + "' already defined");
-            TypePtr declared = n->type ? resolveTypeExpr(n->type.get()) : nullptr;
-            TypePtr v = checkExpr(n->value.get());
-            if (declared && !isAssignable(declared, v))
-                error(n->loc, "cannot initialize const '" + n->name + "' (" +
-                    declared->toString() + ") with value of type " + v->toString());
-            defineVar(n->name, declared ? declared : v);
-            consts_.insert(n->name);
-            return;
-        }
-
-        case StmtKind::Enum:
-            // Enum items are type-level; no runtime work here.
-            return;
-
-        case StmtKind::Yield: {
-            auto* n = static_cast<const YieldStmt*>(s);
-            if (n->value) checkExpr(n->value.get());
             return;
         }
 
@@ -958,6 +959,11 @@ namespace vayu {
             TypePtr t = checkExpr(n->operand.get());
             switch (n->op) {
             case UnOp::Not: return Types::Bool();
+            case UnOp::BNot:
+                if (t->kind == TypeKind::Int)   return Types::Int();
+                if (t->kind == TypeKind::Any)   return Types::Any();
+                if (t->kind == TypeKind::Error) return t;
+                error(n->loc, "cannot apply '~' to " + t->toString());
             case UnOp::Neg: case UnOp::Pos:
                 if (t->kind == TypeKind::Int)   return Types::Int();
                 if (t->kind == TypeKind::Float) return Types::Float();
@@ -1072,6 +1078,17 @@ namespace vayu {
                         rt->toString());
                 return c;
             }
+            case BinOp::BAnd: case BinOp::BOr: case BinOp::BXor:
+            case BinOp::Shl:  case BinOp::Shr: {
+                if (lt->kind == TypeKind::Int && rt->kind == TypeKind::Int)
+                    return Types::Int();
+                if (lt->kind == TypeKind::Any || rt->kind == TypeKind::Any)
+                    return Types::Any();
+                error(n->loc, std::string("cannot apply '") +
+                    binOpName(n->op) + "' to " +
+                    lt->toString() + " and " +
+                    rt->toString());
+            }
             case BinOp::Eq: case BinOp::NotEq:
             case BinOp::Lt: case BinOp::Gt:
             case BinOp::LtEq: case BinOp::GtEq:
@@ -1111,7 +1128,7 @@ namespace vayu {
 
         case ExprKind::Attr: {
             auto* n = static_cast<const AttrExpr*>(e);
-            // Enum item access: `Color.Red` -> int
+
             if (n->target->kind == ExprKind::NameRef) {
                 const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
                 auto eit = enums_.find(tn->name);
@@ -1122,7 +1139,7 @@ namespace vayu {
                     return Types::Int();
                 }
             }
-            // Phase 11.1c: ClassName.staticName
+
             if (n->target->kind == ExprKind::NameRef) {
                 const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
                 auto sit = statics_.find(tn->name);
@@ -1134,6 +1151,7 @@ namespace vayu {
                     return fit->second;
                 }
             }
+
             TypePtr t = checkExpr(n->target.get());
             if (t->kind == TypeKind::Error) return t;
             if (t->kind == TypeKind::Any)   return Types::Any();
@@ -1147,8 +1165,8 @@ namespace vayu {
             if (t->kind != TypeKind::Struct)
                 error(n->loc, "cannot read field or method '" + n->name +
                     "' on value of type " + t->toString());
+
             if (const auto* f = t->findField(n->name)) {
-                // Phase 11.1j: enforce visibility.
                 if (f->vis != 0) {
                     std::shared_ptr<Type> declaring;
                     for (auto c = t; c; c = c->parent) {
@@ -1159,10 +1177,8 @@ namespace vayu {
                             error(n->loc, "member '" + n->name +
                                 "' is not accessible outside its class");
                         bool ok = false;
-                        if (f->vis == 2 /*private*/)
-                            ok = (currentClass_->name == declaring->name);
-                        else /*protected*/
-                            ok = isSubclassOf(currentClass_, declaring);
+                        if (f->vis == 2) ok = (currentClass_->name == declaring->name);
+                        else             ok = isSubclassOf(currentClass_, declaring);
                         if (!ok)
                             error(n->loc, "member '" + n->name +
                                 "' is not accessible from class '" +
@@ -1172,7 +1188,6 @@ namespace vayu {
                 return f->type;
             }
             if (TypePtr m = t->findMethod(n->name)) {
-                // Visibility.
                 int8_t code = 0;
                 std::shared_ptr<Type> declaring;
                 for (auto c = t; c; c = c->parent) {
@@ -1186,10 +1201,8 @@ namespace vayu {
                         error(n->loc, "method '" + n->name +
                             "' is not accessible outside its class");
                     bool ok = false;
-                    if (code == 2 /*private*/)
-                        ok = (currentClass_->name == declaring->name);
-                    else
-                        ok = isSubclassOf(currentClass_, declaring);
+                    if (code == 2) ok = (currentClass_->name == declaring->name);
+                    else           ok = isSubclassOf(currentClass_, declaring);
                     if (!ok)
                         error(n->loc, "method '" + n->name +
                             "' is not accessible from class '" +
@@ -1291,11 +1304,6 @@ namespace vayu {
 
             TypePtr callee = checkExpr(n->callee.get());
 
-            // Methods with optional trailing args: split/strip.
-            // But not for builtin modules — regex.split takes 2 args, and
-            // the native backend routes .split calls to regex_split, not to
-            // the str.split rule.  Skip this special-case when the receiver
-            // is a builtin module name.
             if (n->callee->kind == ExprKind::Attr) {
                 auto* attr = static_cast<const AttrExpr*>(n->callee.get());
                 bool fromBuiltinModule = false;
@@ -1340,7 +1348,7 @@ namespace vayu {
             if (nm && (nm->name == "print" || nm->name == "min" ||
                 nm->name == "max" || nm->name == "range" ||
                 nm->name == "list" || nm->name == "sorted" ||
-                nm->name == "input"))
+                nm->name == "input" || nm->name == "next"))
                 return callee->returnType ? callee->returnType : Types::None();
 
             if (argTypes.size() != callee->params.size())
@@ -1349,7 +1357,6 @@ namespace vayu {
                     " argument(s), got " +
                     std::to_string(argTypes.size()));
 
-            // Phase 11.2: infer type-param substitutions from arg types.
             std::unordered_map<std::string, TypePtr> subst;
             for (size_t i = 0; i < argTypes.size(); ++i) {
                 if (!unify(callee->params[i], argTypes[i], subst))
@@ -1358,8 +1365,10 @@ namespace vayu {
                         callee->params[i]->toString() +
                         ", got " + argTypes[i]->toString());
             }
-            // Phase 11.2c: verify constraints on substituted type params.
-            for (auto& [tpName, constraint] : callee->typeParamConstraints) {
+
+            for (const auto& kv : callee->typeParamConstraints) {
+                const std::string& tpName = kv.first;
+                const TypePtr& constraint = kv.second;
                 auto it = subst.find(tpName);
                 if (it == subst.end() || it->second->kind == TypeKind::Any)
                     continue;
@@ -1368,11 +1377,14 @@ namespace vayu {
                         it->second->toString() + "' is not a subclass of '" +
                         constraint->toString() + "'");
             }
-            // Unresolved type params default to Any.
-            for (auto& [k, v] : callee->typeParams) {
-                if (subst.find(v->name) == subst.end())
-                    subst[v->name] = Types::Any();
+
+            for (const auto& kv : callee->typeParams) {
+                const TypePtr& tp = kv.second;
+                if (tp->kind != TypeKind::TypeParam) continue;
+                if (subst.find(tp->name) == subst.end())
+                    subst[tp->name] = Types::Any();
             }
+
             TypePtr result = callee->returnType
                 ? substitute(callee->returnType, subst)
                 : Types::None();
@@ -1384,6 +1396,10 @@ namespace vayu {
         }
         return Types::Error();
     }
+
+    // ===========================================================================
+    // Phase 11.2 / 11.2c helpers
+    // ===========================================================================
 
     bool TypeChecker::unify(const TypePtr& pattern, const TypePtr& actual,
         std::unordered_map<std::string, TypePtr>& subst) {

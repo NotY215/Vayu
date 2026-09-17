@@ -1197,7 +1197,14 @@ namespace vayu {
                     for (auto& tp : typeParams) {
                         if (tp == n) {
                             auto it = subst.find(n);
-                            if (it != subst.end()) out = it->second;
+                            if (it != subst.end()) {
+                                out.type = it->second.type;
+                                out.cls = it->second.cls;
+                                out.elemType = it->second.elemType;
+                                out.elemCls = it->second.elemCls;
+                                out.valType = it->second.valType;
+                                // Do NOT copy ssa — the caller already set it.
+                            }
                             return;
                         }
                     }
@@ -1647,17 +1654,27 @@ namespace vayu {
                             "native: attribute access on non-object (type " +
                             std::to_string((int)base.type) + ") at line " +
                             std::to_string(e->loc.line));
-                    auto ci = findClass(base.cls);
-                    if (!ci) throw std::runtime_error("native: unknown class '" +
-                        base.cls + "' at line " +
-                        std::to_string(e->loc.line));
-                    auto fit = ci->fieldOffsets.find(n->name);
-                    if (fit == ci->fieldOffsets.end())
+                    const ClassInfo* ci = findClass(base.cls);
+                    int fieldOff = -1;
+                    if (ci) {
+                        auto fit = ci->fieldOffsets.find(n->name);
+                        if (fit != ci->fieldOffsets.end())
+                            fieldOff = fit->second;
+                    }
+                    if (fieldOff < 0) {
+                        // Phase 11.2c fallback: type-erased param, look the
+                        // field up by name in the global field table.  Field
+                        // offsets are class-independent in this ABI, so any
+                        // class declaring `name` will read the right slot.
+                        auto git = fieldGlobals_.find(n->name);
+                        if (git != fieldGlobals_.end()) fieldOff = git->second;
+                    }
+                    if (fieldOff < 0)
                         throw std::runtime_error(
                             "native: '" + n->name + "' is not a field of class '" +
                             base.cls + "'");
                     std::string addr = newTemp();
-                    line(addr + " =l add " + base.ssa + ", " + std::to_string(fit->second));
+                    line(addr + " =l add " + base.ssa + ", " + std::to_string(fieldOff));
                     std::string t = newTemp();
                     line(t + " =l loadl " + addr);
                     r.ssa = t;
@@ -3123,16 +3140,24 @@ namespace vayu {
                         if (recv.type != VType::Obj)
                             throw std::runtime_error(
                                 "native: field assign on non-object");
-                        auto ci = findClass(recv.cls);
-                        if (!ci) throw std::runtime_error(
-                            "native: unknown class");
-                        auto fit = ci->fieldOffsets.find(attr->name);
-                        if (fit == ci->fieldOffsets.end())
+                        const ClassInfo* ci = findClass(recv.cls);
+                        int fieldOff = -1;
+                        if (ci) {
+                            auto fit = ci->fieldOffsets.find(attr->name);
+                            if (fit != ci->fieldOffsets.end())
+                                fieldOff = fit->second;
+                        }
+                        if (fieldOff < 0) {
+                            auto git = fieldGlobals_.find(attr->name);
+                            if (git != fieldGlobals_.end())
+                                fieldOff = git->second;
+                        }
+                        if (fieldOff < 0)
                             throw std::runtime_error(
                                 "native: '" + attr->name + "' is not a field");
                         std::string addr = newTemp();
                         line(addr + " =l add " + recv.ssa + ", " +
-                            std::to_string(fit->second));
+                            std::to_string(fieldOff));
                         line("storel " + v.ssa + ", " + addr);
                         return;
                     }
@@ -3780,6 +3805,27 @@ namespace vayu {
                         vi.elemType = tmp.elemType;
                         vi.elemClsName = tmp.elemCls;
                         vi.valType = tmp.valType;
+
+                        // Phase 11.2c fix: a param annotated with a type
+                        // parameter (`T` or `T: Constraint`) is erased at
+                        // runtime but must be treated as an object here.
+                        // If constrained, use the constraint class so field
+                        // lookups resolve.
+                        if (vi.type == VType::Unknown &&
+                            p.type->kind == ExprKind::NameRef) {
+                            const std::string& annName =
+                                static_cast<const NameRefExpr*>(p.type.get())->name;
+                            for (size_t ti = 0; ti < def->typeParams.size(); ++ti) {
+                                if (def->typeParams[ti] != annName) continue;
+                                std::string cst;
+                                if (ti < def->typeParamConstraints.size())
+                                    cst = def->typeParamConstraints[ti];
+                                vi.type = VType::Obj;
+                                if (!cst.empty() && classes_.count(cst))
+                                    vi.clsName = cst;
+                                break;
+                            }
+                        }
                     }
                     varInfo_[p.name] = vi;
                 }

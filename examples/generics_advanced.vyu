@@ -1,0 +1,32 @@
+class Animal:
+    name: str
+    def __init__(self, n: str) -> None:
+        self.name = n
+
+class Dog(Animal):
+    def __init__(self) -> None:
+        self.name = "rex"
+
+class Box<T>:
+    value: T
+    def __init__(self, v: T) -> None:
+        self.value = v
+
+def pair<A, B>(a: A, b: B) -> list<A>:
+    return [a, a]
+
+def unbox<T>(b: Box) -> T:
+    return b.value
+
+def name_of<T: Animal>(a: T) -> str:
+    return a.name
+
+def main() -> None:
+    p = pair(1, "x")
+    print(p)
+    print(unbox(Box(42)))
+    print(unbox(Box("inner")))
+    print(name_of(Animal("generic")))
+    print(name_of(Dog()))
+
+main()

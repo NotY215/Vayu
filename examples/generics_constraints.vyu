@@ -1,0 +1,19 @@
+class Animal:
+    name: str
+    def __init__(self, n: str) -> None:
+        self.name = n
+
+class Dog(Animal):
+    def __init__(self) -> None:
+        self.name = "rex"
+
+def speak<T: Animal>(a: T) -> str:
+    return a.name
+
+def main() -> None:
+    a = Animal("generic")
+    d = Dog()
+    print(speak(a))
+    print(speak(d))
+
+main()

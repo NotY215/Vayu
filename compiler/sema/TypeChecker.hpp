@@ -36,10 +36,9 @@ namespace vayu {
         std::unordered_map<std::string,
             std::unordered_map<std::string, TypePtr>> statics_;
 
-        // Phase 11.2: type-parameter scopes.  Each scope maps the user-visible
-        // name (`T`) to a fresh TypeParam node with a unique internal name
-        // (`T#0`, `T#1`, ...).  The scope stack is pushed when a generic
-        // function signature is resolved and while its body is typechecked.
+        // Phase 11.2 — stack of type-parameter scopes.  Each scope maps a
+        // user-visible name (`T`) to its TypeParam node.  Pushed on entering
+        // a generic signature or class body.
         std::vector<std::unordered_map<std::string, TypePtr>> typeParamScopes_;
         int nextTypeParamId_ = 0;
 
@@ -71,7 +70,6 @@ namespace vayu {
             SourceLocation loc);
         TypePtr commonElementType(const TypePtr& a, const TypePtr& b, SourceLocation loc);
 
-        // Phase 11.2: inference helpers.
         bool    unify(const TypePtr& pattern, const TypePtr& actual,
             std::unordered_map<std::string, TypePtr>& subst);
         TypePtr substitute(const TypePtr& t,

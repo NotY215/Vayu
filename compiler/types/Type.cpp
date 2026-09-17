@@ -132,8 +132,12 @@ namespace vayu {
             return false;
         }
 
-        if (to->kind == TypeKind::Struct && from->kind == TypeKind::Struct)
-            return to->name == from->name;
+        if (to->kind == TypeKind::Struct && from->kind == TypeKind::Struct) {
+            if (to->name == from->name) return true;
+            for (auto c = from->parent; c; c = c->parent)
+                if (c->name == to->name) return true;
+            return false;
+        }
         if (to->kind == TypeKind::Named && from->kind == TypeKind::Named)
             return to->name == from->name;
 

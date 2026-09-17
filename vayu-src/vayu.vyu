@@ -390,6 +390,20 @@ class Parser:
     def parse_def(self) -> int:
         self.advance()
         name = self.expect("Identifier", "function name")
+
+        # Phase 11.3: optional type parameter list `<T, U: Constraint>`.
+        # Semantics are erased at runtime, so we only parse and discard.
+        if self.check("Lt"):
+            self.advance()
+            while true:
+                self.expect("Identifier", "type parameter name")
+                if self.check("Colon"):
+                    self.advance()
+                    self.expect("Identifier", "constraint name")
+                if not self.match("Comma"):
+                    break
+            self.expect("Gt", "'>' to close type parameter list")
+
         params = self.parse_params()
         ret_type = 0
         if self.match("Arrow"):
@@ -406,6 +420,19 @@ class Parser:
     def parse_class(self) -> int:
         self.advance()
         name = self.expect("Identifier", "class name")
+
+        # Phase 11.3: optional type parameter list on classes too.
+        if self.check("Lt"):
+            self.advance()
+            while true:
+                self.expect("Identifier", "type parameter name")
+                if self.check("Colon"):
+                    self.advance()
+                    self.expect("Identifier", "constraint name")
+                if not self.match("Comma"):
+                    break
+            self.expect("Gt", "'>' to close type parameter list")
+
         parent = 0
         if self.match("LParen"):
             pname = self.expect("Identifier", "parent class name")
