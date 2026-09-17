@@ -268,6 +268,15 @@ namespace vayu {
             switch (s->kind) {
             case StmtKind::Def: {
                 auto* d = static_cast<const DefStmt*>(s.get());
+
+                // Phase 11.2: fresh type-param scope for this signature.
+                typeParamScopes_.emplace_back();
+                for (auto& tp : d->typeParams) {
+                    auto t = std::make_shared<Type>(TypeKind::TypeParam);
+                    t->name = tp + "#" + std::to_string(nextTypeParamId_++);
+                    typeParamScopes_.back()[tp] = t;
+                }
+
                 std::vector<TypePtr> params;
                 for (auto& p : d->params)
                     params.push_back(p.type ? resolveTypeExpr(p.type.get())
@@ -276,10 +285,13 @@ namespace vayu {
                     ? resolveTypeExpr(d->returnType.get())
                     : Types::Any();
 
+                auto sig = Types::Function(std::move(params), std::move(ret));
+                sig->typeParams = typeParamScopes_.back();
+                typeParamScopes_.pop_back();
+
                 if (isTopLevel && functions_.count(d->name))
                     error(d->loc, "function '" + d->name + "' already defined");
 
-                auto sig = Types::Function(std::move(params), std::move(ret));
                 functions_[d->name] = sig;
                 if (isTopLevel) defineVar(d->name, sig);
 
@@ -342,6 +354,15 @@ namespace vayu {
         if (e->kind != ExprKind::NameRef) error(e->loc, "expected a type name");
 
         const std::string& n = static_cast<const NameRefExpr*>(e)->name;
+
+        // Phase 11.2: type params in the current generic signature.
+        for (auto it = typeParamScopes_.rbegin();
+            it != typeParamScopes_.rend(); ++it) {
+            auto found = it->find(n);
+            if (found != it->end()) return found->second;
+        }
+
+        if (n == "int")   return Types::Int();
         if (n == "int")   return Types::Int();
         if (n == "float") return Types::Float();
         if (n == "bool")  return Types::Bool();
@@ -704,6 +725,11 @@ namespace vayu {
             TypePtr sig = it->second;
 
             defineVar(n->name, sig);
+
+            // Phase 11.2: reuse the signature's type-param scope so `T`
+            // resolves to the same TypeParam inside the body.
+            typeParamScopes_.push_back(sig->typeParams);
+
             pushScope();
             for (size_t i = 0; i < n->params.size(); ++i)
                 defineVar(n->params[i].name, sig->params[i]);
@@ -718,6 +744,7 @@ namespace vayu {
             currentReturnType_ = savedRet;
             loopDepth_ = savedLoop;
             popScope();
+            typeParamScopes_.pop_back();
             return;
         }
 
@@ -1292,19 +1319,86 @@ namespace vayu {
                     std::to_string(callee->params.size()) +
                     " argument(s), got " +
                     std::to_string(argTypes.size()));
-            for (size_t i = 0; i < argTypes.size(); ++i)
-                if (!isAssignable(callee->params[i], argTypes[i]))
+
+            // Phase 11.2: infer type-param substitutions from arg types.
+            std::unordered_map<std::string, TypePtr> subst;
+            for (size_t i = 0; i < argTypes.size(); ++i) {
+                if (!unify(callee->params[i], argTypes[i], subst))
                     error(n->args[i].loc, "argument " +
                         std::to_string(i + 1) + ": expected " +
                         callee->params[i]->toString() +
                         ", got " + argTypes[i]->toString());
-            return callee->returnType ? callee->returnType : Types::None();
+            }
+            // Unresolved type params default to Any.
+            for (auto& [k, v] : callee->typeParams) {
+                if (subst.find(v->name) == subst.end())
+                    subst[v->name] = Types::Any();
+            }
+            TypePtr result = callee->returnType
+                ? substitute(callee->returnType, subst)
+                : Types::None();
+            return result;
         }
 
         case ExprKind::GenericType:
             error(e->loc, "generic type expression used where a value was expected");
         }
         return Types::Error();
+    }
+
+    bool TypeChecker::unify(const TypePtr& pattern, const TypePtr& actual,
+        std::unordered_map<std::string, TypePtr>& subst) {
+        if (!pattern || !actual) return false;
+        if (pattern->kind == TypeKind::Error || actual->kind == TypeKind::Error)
+            return true;
+
+        if (pattern->kind == TypeKind::TypeParam) {
+            auto it = subst.find(pattern->name);
+            if (it == subst.end()) {
+                subst[pattern->name] = actual;
+                return true;
+            }
+            return isAssignable(it->second, actual) &&
+                isAssignable(actual, it->second);
+        }
+        if (pattern->kind == TypeKind::Any || actual->kind == TypeKind::Any)
+            return true;
+        if (pattern->kind == TypeKind::List && actual->kind == TypeKind::List) {
+            if (pattern->params.empty() || actual->params.empty()) return true;
+            return unify(pattern->params[0], actual->params[0], subst);
+        }
+        if (pattern->kind == TypeKind::Map && actual->kind == TypeKind::Map) {
+            if (pattern->params.size() < 2 || actual->params.size() < 2)
+                return true;
+            return unify(pattern->params[0], actual->params[0], subst) &&
+                unify(pattern->params[1], actual->params[1], subst);
+        }
+        return isAssignable(pattern, actual);
+    }
+
+    TypePtr TypeChecker::substitute(
+        const TypePtr& t,
+        const std::unordered_map<std::string, TypePtr>& subst) {
+        if (!t) return t;
+        if (t->kind == TypeKind::TypeParam) {
+            auto it = subst.find(t->name);
+            return it != subst.end() ? it->second : Types::Any();
+        }
+        if (t->kind == TypeKind::List) {
+            auto r = std::make_shared<Type>(TypeKind::List);
+            r->params.push_back(substitute(
+                t->params.empty() ? Types::Any() : t->params[0], subst));
+            return r;
+        }
+        if (t->kind == TypeKind::Map) {
+            auto r = std::make_shared<Type>(TypeKind::Map);
+            r->params.push_back(substitute(
+                t->params.size() > 0 ? t->params[0] : Types::Any(), subst));
+            r->params.push_back(substitute(
+                t->params.size() > 1 ? t->params[1] : Types::Any(), subst));
+            return r;
+        }
+        return t;
     }
 
 } // namespace vayu

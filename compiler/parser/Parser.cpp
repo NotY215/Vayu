@@ -727,6 +727,18 @@ namespace vayu {
     std::unique_ptr<DefStmt> Parser::parseDef() {
         Token defTok = advance();
         Token name = expect(TokenType::Identifier, "function name");
+
+        // Phase 11.2: optional type parameter list `<T, U, ...>`.
+        std::vector<std::string> typeParams;
+        if (match(TokenType::Lt)) {
+            for (;;) {
+                Token tp = expect(TokenType::Identifier, "type parameter name");
+                typeParams.push_back(tp.lexeme);
+                if (!match(TokenType::Comma)) break;
+            }
+            expect(TokenType::Gt, "'>' to close type parameter list");
+        }
+
         expect(TokenType::LParen, "'(' after function name");
         std::vector<Param> params;
         if (!check(TokenType::RParen)) {
@@ -744,6 +756,7 @@ namespace vayu {
         auto def = std::make_unique<DefStmt>(name.lexeme, std::move(params),
             std::move(retType), std::move(body),
             defTok.location);
+        def->typeParams = std::move(typeParams);
 
         // Phase 11.1k1: walk the body for a top-level `yield`.  If found,
         // this function is a generator.

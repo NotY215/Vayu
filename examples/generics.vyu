@@ -1,0 +1,49 @@
+def identity<T>(x: T) -> T:
+    return x
+
+def first<T>(xs: list<T>) -> T:
+    return xs[0]
+
+def last<T>(xs: list<T>) -> T:
+    return xs[len(xs) - 1]
+
+def wrap<T>(x: T) -> list<T>:
+    return [x]
+
+def pair<T>(a: T, b: T) -> list<T>:
+    return [a, b]
+
+def sum_int(xs: list<int>) -> int:
+    total = 0
+    for x in xs:
+        total = total + x
+    return total
+
+def main() -> None:
+    x: int = identity(42)
+    print(x)
+
+    y: str = identity("hello")
+    print(y)
+
+    nums = [10, 20, 30, 40]
+    print(first(nums))
+    print(last(nums))
+
+    words = ["alpha", "beta", "gamma"]
+    print(first(words))
+    print(last(words))
+
+    wrapped = wrap(7)
+    print(wrapped)
+
+    p = pair(1, 2)
+    print(p)
+
+    s = pair("a", "b")
+    print(s)
+
+    print(sum_int([1, 2, 3, 4, 5]))
+    print(sum_int(wrap(99)))
+
+main()

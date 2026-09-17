@@ -33,9 +33,15 @@ namespace vayu {
         std::unordered_map<std::string,
             std::unordered_map<std::string, long long>> enums_;
 
-        // Phase 11.1c: class name -> static member name -> declared type.
         std::unordered_map<std::string,
             std::unordered_map<std::string, TypePtr>> statics_;
+
+        // Phase 11.2: type-parameter scopes.  Each scope maps the user-visible
+        // name (`T`) to a fresh TypeParam node with a unique internal name
+        // (`T#0`, `T#1`, ...).  The scope stack is pushed when a generic
+        // function signature is resolved and while its body is typechecked.
+        std::vector<std::unordered_map<std::string, TypePtr>> typeParamScopes_;
+        int nextTypeParamId_ = 0;
 
         TypePtr currentReturnType_;
         TypePtr currentClass_;
@@ -61,7 +67,16 @@ namespace vayu {
             const std::string& name);
         void    checkMethodBody(const DefStmt* m, TypePtr cls);
 
-        // Phase 11.1j: enforce member visibility.
+        TypePtr lookupCollectionMethod(const TypePtr& target, const std::string& name,
+            SourceLocation loc);
+        TypePtr commonElementType(const TypePtr& a, const TypePtr& b, SourceLocation loc);
+
+        // Phase 11.2: inference helpers.
+        bool    unify(const TypePtr& pattern, const TypePtr& actual,
+            std::unordered_map<std::string, TypePtr>& subst);
+        TypePtr substitute(const TypePtr& t,
+            const std::unordered_map<std::string, TypePtr>& subst);
+
         void checkVisibility(const std::string& declClass,
             Visibility vis,
             const std::string& member,
@@ -75,10 +90,6 @@ namespace vayu {
             return 0;
         }
         bool isSubclassOf(TypePtr sub, TypePtr base) const;
-
-        TypePtr lookupCollectionMethod(const TypePtr& target, const std::string& name,
-            SourceLocation loc);
-        TypePtr commonElementType(const TypePtr& a, const TypePtr& b, SourceLocation loc);
 
         [[noreturn]] void error(SourceLocation loc, const std::string& msg);
         void installBuiltins();

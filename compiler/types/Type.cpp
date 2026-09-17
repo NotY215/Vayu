@@ -23,6 +23,10 @@ namespace vayu {
         case TypeKind::Unknown: return "?"; case TypeKind::Error: return "<error>";
         case TypeKind::Named: return name;
         case TypeKind::Struct: return name;
+        case TypeKind::TypeParam: {
+            auto pos = name.find('#');
+            return pos == std::string::npos ? name : name.substr(0, pos);
+        }
         case TypeKind::List: {
             std::string s = "list<";
             if (!params.empty()) s += params[0]->toString();
@@ -55,6 +59,8 @@ namespace vayu {
     bool Type::equals(const TypePtr& other) const {
         if (!other) return false;
         if (kind != other->kind) return false;
+        if (kind == TypeKind::TypeParam)
+            return name == other->name;
         if (kind == TypeKind::Named || kind == TypeKind::Struct)
             return name == other->name;
         if (kind == TypeKind::List || kind == TypeKind::Map) {
@@ -117,18 +123,26 @@ namespace vayu {
         if (to->kind == TypeKind::Unknown || from->kind == TypeKind::Unknown) return true;
         if (to->kind == TypeKind::Float && from->kind == TypeKind::Int) return true;
 
+        // Phase 11.2: a bare type parameter is only assignable from itself.
+        if (to->kind == TypeKind::TypeParam)
+            return from->kind == TypeKind::TypeParam && to->name == from->name;
+        if (from->kind == TypeKind::TypeParam) {
+            // from is T#N, to is concrete — only allow when to is Any
+            // (handled above) or a matching TypeParam (handled above).
+            return false;
+        }
+
         if (to->kind == TypeKind::Struct && from->kind == TypeKind::Struct)
             return to->name == from->name;
         if (to->kind == TypeKind::Named && from->kind == TypeKind::Named)
             return to->name == from->name;
 
-        // Collections: element types must match, EXCEPT when either side's
-        // element type is Any (e.g. an empty list literal `[]` starts as
-        // list<any> and unifies with any concrete list type).
         if (to->kind == TypeKind::List && from->kind == TypeKind::List) {
             TypePtr a = to->params.empty() ? Types::Any() : to->params[0];
             TypePtr b = from->params.empty() ? Types::Any() : from->params[0];
             if (a->kind == TypeKind::Any || b->kind == TypeKind::Any) return true;
+            if (a->kind == TypeKind::TypeParam || b->kind == TypeKind::TypeParam)
+                return a->equals(b);
             return a->equals(b);
         }
         if (to->kind == TypeKind::Map && from->kind == TypeKind::Map) {

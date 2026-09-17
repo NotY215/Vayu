@@ -115,8 +115,6 @@ namespace vayu {
                     if (s->kind == StmtKind::Def) continue;
                     collectVarsStmt(s.get(), topVars);
                 }
-                // Phase 11.1c: static slots must exist in globalSlots_ so that
-                // method bodies emitted later can read/write them.
                 for (auto& s : program.stmts) {
                     if (s->kind != StmtKind::Class) continue;
                     auto* d = static_cast<const ClassStmt*>(s.get());
@@ -131,7 +129,6 @@ namespace vayu {
                     globalData_ += "data " + slot + " = { l 0 }\n";
                 }
 
-                // Snapshot BEFORE emitting any function bodies.
                 globalSlots_ = slots_;
 
                 for (auto& kv : modules_)
@@ -203,7 +200,6 @@ namespace vayu {
             std::unordered_map<std::string,
                 std::unordered_map<std::string, std::string>> statics_;
 
-            // Phase 11.1k4: names of generator functions in scope.
             std::unordered_set<std::string> generatorFunctions_;
 
             std::unordered_map<std::string, std::string> nonEscapingClasses_;
@@ -796,8 +792,6 @@ namespace vayu {
                 }
             }
 
-            // ---- Phase 8 escape analysis ----
-
             static bool isSafeAttrTarget(const Expr* target, const std::string& varName) {
                 if (!target) return false;
                 if (target->kind != ExprKind::NameRef) return false;
@@ -1252,6 +1246,24 @@ namespace vayu {
                         line(t + " =l call $vayu_mod(l " + a.ssa + ", l " + b.ssa + ")");
                         r.ssa = t; r.type = VType::Int; return r;
                     }
+                    case BinOp::Pow: {
+                        // Native only ever produces an int for `**`.  Reject
+                        // any exponent we can't prove is a non-negative int
+                        // literal, since tree-walk/VM would produce a float
+                        // for a negative or non-integer exponent.
+                        if (n->rhs->kind != ExprKind::IntLit)
+                            throw std::runtime_error(
+                                "native: '**' requires a non-negative integer "
+                                "literal exponent");
+                        auto* lit = static_cast<const IntLitExpr*>(n->rhs.get());
+                        if (lit->value < 0)
+                            throw std::runtime_error(
+                                "native: '**' with a negative exponent is not supported");
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_pow_int(l " + a.ssa +
+                            ", l " + b.ssa + ")");
+                        r.ssa = t; r.type = VType::Int; return r;
+                    }
 
                     case BinOp::Eq: case BinOp::NotEq:
                     case BinOp::Lt: case BinOp::Gt:
@@ -1319,12 +1331,6 @@ namespace vayu {
                             r.ssa = t; r.type = VType::Bool; return r;
                         }
                         throw std::runtime_error("native: 'in' unsupported on these types");
-                    }
-                    case BinOp::Pow: {
-                        std::string t = newTemp();
-                        line(t + " =l call $vayu_pow_int(l " + a.ssa +
-                            ", l " + b.ssa + ")");
-                        r.ssa = t; r.type = VType::Int; return r;
                     }
                     case BinOp::Is:
                         throw std::runtime_error("native: 'is' not supported");
@@ -2790,7 +2796,7 @@ namespace vayu {
                     return r;
                 }
 
-                // Phase 11.1k4: `next(generator)` builtin.
+                // Phase 11.1k4: `next(generator)`.
                 if (name == "next") {
                     if (n->args.size() != 1)
                         throw std::runtime_error(
@@ -3225,11 +3231,11 @@ namespace vayu {
                 emitForList(n);
             }
 
+            // Phase 11.1k4 fix: use try_next so we never call next() a final
+            // time on an already-exhausted generator.
             void emitForGenerator(const ForStmt* n, const CallExpr* /*call*/) {
-                // Compute the generator value and stash it in a local slot.
                 Val genVal = emitExpr(n->iterable.get());
-                std::string genSlot = "%__for_gen_" +
-                    std::to_string(nextLabel_++);
+                std::string genSlot = "%__for_gen_" + std::to_string(nextLabel_++);
                 line(genSlot + " =l alloc8 8");
                 line("storel " + genVal.ssa + ", " + genSlot);
 
@@ -3245,31 +3251,22 @@ namespace vayu {
                 line(varSlot + " =l alloc8 8");
 
                 std::string lBody = newLabel("forg_body_");
+                std::string lIter = newLabel("forg_iter_");
                 std::string lEnd = newLabel("forg_end_");
-                std::string lCond = newLabel("forg_cond_");
-                line("jmp " + lCond);
 
                 raw(lBody);
-                loopStack_.push_back({ lCond, lEnd });
                 {
                     std::string g = newTemp(); line(g + " =l loadl " + genSlot);
-                    std::string v = newTemp();
-                    line(v + " =l call $vayu_gen_next(l " + g + ")");
-                    line("storel " + v + ", " + varSlot);
+                    std::string status = newTemp();
+                    line(status + " =w call $vayu_gen_try_next(l " + g +
+                        ", l " + varSlot + ")");
+                    line("jnz " + status + ", " + lIter + ", " + lEnd);
                 }
+                raw(lIter);
+                loopStack_.push_back({ lBody, lEnd });
                 emitBlock(n->body);
                 loopStack_.pop_back();
-                if (!terminated_) line("jmp " + lCond);
-
-                raw(lCond);
-                {
-                    std::string g = newTemp(); line(g + " =l loadl " + genSlot);
-                    std::string d = newTemp();
-                    line(d + " =l call $vayu_gen_done(l " + g + ")");
-                    std::string c = newTemp();
-                    line(c + " =w cnel " + d + ", 0");
-                    line("jnz " + c + ", " + lEnd + ", " + lBody);
-                }
+                if (!terminated_) line("jmp " + lBody);
                 raw(lEnd);
 
                 if (hadSaved) slots_[n->targetName] = savedSlot;
@@ -4440,9 +4437,8 @@ long long vayu_mod(long long a, long long b) {
 }
 long long vayu_pow_int(long long a, long long b) {
     if (b < 0) {
-        if (a == 1)  return 1;
-        if (a == -1) return (b & 1) ? -1 : 1;
-        return 0;
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("native: ** with a negative exponent is not supported"));
     }
     long long r = 1;
     while (b > 0) {
@@ -6075,7 +6071,7 @@ typedef struct VayuGen {
     pthread_mutex_t       mtx;
     pthread_cond_t        cv;
 #endif
-    int                   state;
+    int                   state;   /* 0=fresh, 1=running, 2=suspended, 3=done */
     int                   resume;
     int                   cancel;
     int64_t               yielded;
@@ -6173,6 +6169,46 @@ int64_t vayu_gen_done(VayuGen* g) {
     int64_t r = (g->state == 3) ? 1 : 0;
     VG_UNLOCK(g);
     return r;
+}
+
+/* try_next: returns 1 and writes *out if the generator yielded,
+   0 if it's exhausted.  Real errors still raise on the caller thread. */
+int64_t vayu_gen_try_next(VayuGen* g, int64_t* out) {
+    VG_LOCK(g);
+    if (g->state == 3) {
+        if (g->has_error) {
+            VayuExc* err = g->error;
+            g->has_error = 0;
+            g->error = NULL;
+            VG_UNLOCK(g);
+            vayu_raise(err);
+        }
+        VG_UNLOCK(g);
+        return 0;
+    }
+    if (g->state == 1) {
+        VG_UNLOCK(g);
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("generator already running"));
+    }
+    g->resume = 1;
+    g->state = 1;
+    VG_SIGNAL(g);
+    while (g->state == 1) VG_WAIT(g);
+    if (g->state == 3) {
+        if (g->has_error) {
+            VayuExc* err = g->error;
+            g->has_error = 0;
+            g->error = NULL;
+            VG_UNLOCK(g);
+            vayu_raise(err);
+        }
+        VG_UNLOCK(g);
+        return 0;
+    }
+    *out = g->yielded;
+    VG_UNLOCK(g);
+    return 1;
 }
 
 int64_t vayu_gen_next(VayuGen* g) {

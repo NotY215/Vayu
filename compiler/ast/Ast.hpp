@@ -209,14 +209,15 @@ namespace vayu {
     struct Param { std::string name; ExprPtr type; };
 
     struct DefStmt : Stmt {
-        std::string        name;
-        std::vector<Param> params;
-        ExprPtr            returnType;
-        Block              body;
+        std::string               name;
+        std::vector<std::string>  typeParams;   // Phase 11.2: `def f<T, U>(...)`
+        std::vector<Param>        params;
+        ExprPtr                   returnType;
+        Block                     body;
         // Phase 11.1j
-        Visibility         vis = Visibility::Public;
-        // Phase 11.1k: true if the body contains a top-level `yield`.
-        bool               isGenerator = false;
+        Visibility                vis = Visibility::Public;
+        // Phase 11.1k
+        bool                      isGenerator = false;
         DefStmt(std::string n, std::vector<Param> p, ExprPtr rt, Block b, SourceLocation l)
             : Stmt(StmtKind::Def, l),
             name(std::move(n)), params(std::move(p)),

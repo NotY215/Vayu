@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -15,6 +16,7 @@ namespace vayu {
         List,     // params[0] = element type
         Map,      // params[0] = key type, params[1] = value type
         Named,
+        TypeParam,   // Phase 11.2: `T` in a generic signature/body
     };
 
     class Type;
@@ -35,8 +37,13 @@ namespace vayu {
 
         std::vector<StructFieldInfo>             fields;
         std::unordered_map<std::string, TypePtr> methods;
-        std::unordered_map<std::string, int8_t>  methodVis;  // 0/1/2
+        std::unordered_map<std::string, int8_t>  methodVis;
         TypePtr                                  parent;
+
+        // Phase 11.2: for a generic function signature, maps the user-visible
+        // type-parameter name (`T`) to a fresh, uniquely-named TypeParam node
+        // (`T#0`).  Empty for non-generic functions.
+        std::unordered_map<std::string, TypePtr> typeParams;
 
         explicit Type(TypeKind k) : kind(k) {}
         Type(TypeKind k, std::string n) : kind(k), name(std::move(n)) {}

@@ -256,7 +256,16 @@ namespace vayu {
         }
         case StmtKind::Def: {
             auto* n = static_cast<const DefStmt*>(s);
-            std::string lbl = "Def " + n->name + "(";
+            std::string lbl = "Def " + n->name;
+            if (!n->typeParams.empty()) {
+                lbl += "<";
+                for (size_t i = 0; i < n->typeParams.size(); ++i) {
+                    if (i) lbl += ", ";
+                    lbl += n->typeParams[i];
+                }
+                lbl += ">";
+            }
+            lbl += "(";
             for (size_t i = 0; i < n->params.size(); ++i) {
                 if (i) lbl += ", ";
                 lbl += n->params[i].name;
