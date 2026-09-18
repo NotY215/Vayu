@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
 #  define _CRT_NONSTDC_NO_DEPRECATE
@@ -788,6 +789,15 @@ namespace vayu {
                             v.elemCls = kk.cls;
                             v.valType = vv.type;
                         }
+                        return;
+                    }
+                    // Phase 12.1 fix: `unique<T>` / `shared<T>` / `weak<T>`
+                    // are erased to `T` at runtime.  Unwrap for type
+                    // inference so native method dispatch works.
+                    if (g->name == "unique" || g->name == "shared" ||
+                        g->name == "weak") {
+                        if (!g->typeArgs.empty())
+                            inferFromAnnotation(g->typeArgs[0].get(), v);
                         return;
                     }
                 }
@@ -1816,6 +1826,462 @@ namespace vayu {
                     if (classes_.count(n->name)) return n->name;
                 }
                 return {};
+            }
+
+            // Phase 13.1: pure builtins with no runtime state.  All operate
+// on the i64 ABI directly.  Returns true if handled.
+            bool tryPureBuiltin(const std::string& name, const CallExpr* n,
+                Val& r) {
+                if (name == "hash") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: hash() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::string t = newTemp();
+                    if (v.type == VType::Str)
+                        line(t + " =l call $vayu_hash_str(l " + v.ssa + ")");
+                    else
+                        line(t + " =l call $vayu_hash_int(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "id") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: id() takes 1 argument");
+                    // Best-effort: for primitives return the value itself;
+                    // for objects return the pointer.
+                    Val v = emitExpr(n->args[0].value.get());
+                    r = v;
+                    r.type = VType::Int;
+                    return true;
+                }
+                if (name == "callable") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: callable() takes 1 argument");
+                    // Native has no first-class closures.  A bare name that
+                    // refers to a top-level function or a class counts.
+                    bool isCallable = false;
+                    if (n->args[0].value->kind == ExprKind::NameRef) {
+                        const std::string& argName =
+                            static_cast<const NameRefExpr*>(
+                                n->args[0].value.get())->name;
+                        if (topFnDecls_.count(argName) ||
+                            classes_.count(argName) ||
+                            generatorFunctions_.count(argName))
+                            isCallable = true;
+                    }
+                    r.ssa = isCallable ? "1" : "0";
+                    r.type = VType::Bool;
+                    return true;
+                }
+                if (name == "repr") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: repr() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type == VType::Str) { r = v; return true; }
+                    if (v.type == VType::Int || v.type == VType::Bool) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_int_to_str(l " + v.ssa + ", l " +
+                            std::to_string(kindOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Str;
+                        return true;
+                    }
+                    r = v;
+                    return true;
+                }
+                if (name == "round") {
+                    if (n->args.empty() || n->args.size() > 2)
+                        throw std::runtime_error(
+                            "native: round() takes 1 or 2 arguments");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (n->args.size() == 2)
+                        throw std::runtime_error(
+                            "native: round(x, n) requires floats (not supported)");
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_round_int(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "pow") {
+                    if (n->args.size() < 2 || n->args.size() > 3)
+                        throw std::runtime_error(
+                            "native: pow() takes 2 or 3 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    if (n->args.size() == 3) {
+                        Val m = emitExpr(n->args[2].value.get());
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_pow_mod(l " + a.ssa +
+                            ", l " + b.ssa + ", l " + m.ssa + ")");
+                        r.ssa = t; r.type = VType::Int;
+                        return true;
+                    }
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_pow_int(l " + a.ssa +
+                        ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "divmod") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error(
+                            "native: divmod() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string lst = newTemp();
+                    line(lst + " =l call $vayu_list_new()");
+                    std::string q = newTemp();
+                    line(q + " =l call $vayu_floordiv(l " + a.ssa +
+                        ", l " + b.ssa + ")");
+                    std::string m = newTemp();
+                    line(m + " =l call $vayu_mod(l " + a.ssa +
+                        ", l " + b.ssa + ")");
+                    line("call $vayu_list_push(l " + lst + ", l " + q + ")");
+                    line("call $vayu_list_push(l " + lst + ", l " + m + ")");
+                    r.ssa = lst; r.type = VType::List; r.elemType = VType::Int;
+                    return true;
+                }
+                if (name == "sign") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: sign() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_sign_int(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "gcd") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error("native: gcd() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gcd(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "lcm") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error("native: lcm() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_lcm(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "clamp") {
+                    if (n->args.size() != 3)
+                        throw std::runtime_error("native: clamp() takes 3 arguments");
+                    Val x = emitExpr(n->args[0].value.get());
+                    Val lo = emitExpr(n->args[1].value.get());
+                    Val hi = emitExpr(n->args[2].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_clamp_int(l " + x.ssa +
+                        ", l " + lo.ssa + ", l " + hi.ssa + ")");
+                    r.ssa = t; r.type = VType::Int;
+                    return true;
+                }
+                if (name == "enumerate") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error(
+                            "native: enumerate() takes 1 argument");
+                    Val src = emitExpr(n->args[0].value.get());
+                    if (src.type != VType::List)
+                        throw std::runtime_error(
+                            "native: enumerate() requires a list");
+                    std::string out = newTemp();
+                    line(out + " =l call $vayu_list_new()");
+                    std::string idx = "%eidx_" + std::to_string(nextLabel_++);
+                    line(idx + " =l alloc8 8");
+                    line("storel 0, " + idx);
+                    std::string lenT = newTemp();
+                    line(lenT + " =l call $vayu_list_len(l " + src.ssa + ")");
+                    std::string lLoop = newLabel("enum_loop_");
+                    std::string lEnd = newLabel("enum_end_");
+                    raw(lLoop);
+                    {
+                        std::string i = newTemp();
+                        line(i + " =l loadl " + idx);
+                        std::string c = newTemp();
+                        line(c + " =w csltl " + i + ", " + lenT);
+                        line("jnz " + c + ", @enum_body_" +
+                            std::to_string(nextLabel_) + ", " + lEnd);
+                        raw("@enum_body_" + std::to_string(nextLabel_++));
+                        std::string elem = newTemp();
+                        line(elem + " =l call $vayu_list_get(l " + src.ssa +
+                            ", l " + i + ")");
+                        std::string pair = newTemp();
+                        line(pair + " =l call $vayu_list_new()");
+                        line("call $vayu_list_push(l " + pair + ", l " + i + ")");
+                        line("call $vayu_list_push(l " + pair + ", l " + elem + ")");
+                        line("call $vayu_list_push(l " + out + ", l " + pair + ")");
+                        std::string nx = newTemp();
+                        line(nx + " =l add " + i + ", 1");
+                        line("storel " + nx + ", " + idx);
+                        line("jmp " + lLoop);
+                    }
+                    raw(lEnd);
+                    r.ssa = out; r.type = VType::List;
+                    r.elemType = VType::List;
+                    return true;
+                }
+                if (name == "zip") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error("native: zip() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    if (a.type != VType::List || b.type != VType::List)
+                        throw std::runtime_error(
+                            "native: zip() requires two lists");
+                    std::string out = newTemp();
+                    line(out + " =l call $vayu_list_new()");
+                    std::string idx = "%zidx_" + std::to_string(nextLabel_++);
+                    line(idx + " =l alloc8 8");
+                    line("storel 0, " + idx);
+                    std::string la = newTemp();
+                    line(la + " =l call $vayu_list_len(l " + a.ssa + ")");
+                    std::string lb = newTemp();
+                    line(lb + " =l call $vayu_list_len(l " + b.ssa + ")");
+                    std::string lmin = newTemp();
+                    line(lmin + " =w csltl " + la + ", " + lb);
+                    std::string nlen = newTemp();
+                    line(nlen + " =l select " + lmin + ", " + la + ", " + lb);
+                    std::string lLoop = newLabel("zip_loop_");
+                    std::string lEnd = newLabel("zip_end_");
+                    raw(lLoop);
+                    {
+                        std::string i = newTemp();
+                        line(i + " =l loadl " + idx);
+                        std::string c = newTemp();
+                        line(c + " =w csltl " + i + ", " + nlen);
+                        std::string lBody = newLabel("zip_body_");
+                        line("jnz " + c + ", " + lBody + ", " + lEnd);
+                        raw(lBody);
+                        std::string ea = newTemp();
+                        line(ea + " =l call $vayu_list_get(l " + a.ssa +
+                            ", l " + i + ")");
+                        std::string eb = newTemp();
+                        line(eb + " =l call $vayu_list_get(l " + b.ssa +
+                            ", l " + i + ")");
+                        std::string pair = newTemp();
+                        line(pair + " =l call $vayu_list_new()");
+                        line("call $vayu_list_push(l " + pair + ", l " + ea + ")");
+                        line("call $vayu_list_push(l " + pair + ", l " + eb + ")");
+                        line("call $vayu_list_push(l " + out + ", l " + pair + ")");
+                        std::string nx = newTemp();
+                        line(nx + " =l add " + i + ", 1");
+                        line("storel " + nx + ", " + idx);
+                        line("jmp " + lLoop);
+                    }
+                    raw(lEnd);
+                    r.ssa = out; r.type = VType::List;
+                    r.elemType = VType::List;
+                    return true;
+                }
+                if (name == "reversed") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error(
+                            "native: reversed() takes 1 argument");
+                    Val src = emitExpr(n->args[0].value.get());
+                    if (src.type != VType::List)
+                        throw std::runtime_error(
+                            "native: reversed() requires a list");
+                    std::string out = newTemp();
+                    line(out + " =l call $vayu_list_new()");
+                    std::string i = "%ridx_" + std::to_string(nextLabel_++);
+                    line(i + " =l alloc8 8");
+                    std::string lenT = newTemp();
+                    line(lenT + " =l call $vayu_list_len(l " + src.ssa + ")");
+                    std::string minus1 = newTemp();
+                    line(minus1 + " =l sub " + lenT + ", 1");
+                    line("storel " + minus1 + ", " + i);
+                    std::string lLoop = newLabel("rev_loop_");
+                    std::string lEnd = newLabel("rev_end_");
+                    std::string lBody = newLabel("rev_body_");
+                    line("jmp " + lLoop);
+                    raw(lLoop);
+                    {
+                        std::string iv = newTemp();
+                        line(iv + " =l loadl " + i);
+                        std::string c = newTemp();
+                        line(c + " =w csgel " + iv + ", 0");
+                        line("jnz " + c + ", " + lBody + ", " + lEnd);
+                    }
+                    raw(lBody);
+                    {
+                        std::string iv = newTemp();
+                        line(iv + " =l loadl " + i);
+                        std::string e = newTemp();
+                        line(e + " =l call $vayu_list_get(l " + src.ssa +
+                            ", l " + iv + ")");
+                        line("call $vayu_list_push(l " + out + ", l " + e + ")");
+                        std::string nx = newTemp();
+                        line(nx + " =l sub " + iv + ", 1");
+                        line("storel " + nx + ", " + i);
+                        line("jmp " + lLoop);
+                    }
+                    raw(lEnd);
+                    r.ssa = out; r.type = VType::List;
+                    r.elemType = src.elemType;
+                    return true;
+                }
+                // ---- Phase 13.2: compile-time reflection ----
+
+                if (name == "isinstance") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error(
+                            "native: isinstance() takes 2 arguments");
+                    Val v = emitExpr(n->args[0].value.get());
+                    const Expr* texpr = n->args[1].value.get();
+                    if (texpr->kind != ExprKind::NameRef)
+                        throw std::runtime_error(
+                            "native: isinstance() type argument must be a "
+                            "class name or primitive-type name");
+                    const std::string& tn =
+                        static_cast<const NameRefExpr*>(texpr)->name;
+
+                    bool ok = false;
+                    if (tn == "int")        ok = (v.type == VType::Int);
+                    else if (tn == "str")   ok = (v.type == VType::Str);
+                    else if (tn == "bool")  ok = (v.type == VType::Bool);
+                    else if (tn == "list")  ok = (v.type == VType::List);
+                    else if (tn == "map")   ok = (v.type == VType::Map);
+                    else if (tn == "None")  ok = (v.type == VType::Int &&
+                        v.ssa == "0");
+                    else if (v.type == VType::Obj) {
+                        for (auto c = findClass(v.cls); c; c = c->parent)
+                            if (c->name == tn) { ok = true; break; }
+                    }
+                    else if (v.type == VType::Exc) {
+                        // Exception objects are heap pointers tagged Exc;
+                        // check the interned type name.
+                        std::string typeLbl = internString(tn);
+                        std::string et = newTemp();
+                        line(et + " =l call $vayu_get_exc_type()");
+                        (void)typeLbl;   // handled below with explicit compare
+                        // Simple: just compare against the name string.
+                        std::string cond = newTemp();
+                        line(cond + " =w call $vayu_str_eq(l " + et +
+                            ", l " + typeLbl + ")");
+                        std::string ext = newTemp();
+                        line(ext + " =l extsw " + cond);
+                        r.ssa = ext; r.type = VType::Bool;
+                        return true;
+                    }
+
+                    r.ssa = ok ? "1" : "0"; r.type = VType::Bool;
+                    return true;
+                }
+                if (name == "issubclass") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error(
+                            "native: issubclass() takes 2 arguments");
+                    const Expr* ae = n->args[0].value.get();
+                    const Expr* be = n->args[1].value.get();
+                    if (ae->kind != ExprKind::NameRef ||
+                        be->kind != ExprKind::NameRef)
+                        throw std::runtime_error(
+                            "native: issubclass() arguments must be class names");
+                    const std::string& an =
+                        static_cast<const NameRefExpr*>(ae)->name;
+                    const std::string& bn =
+                        static_cast<const NameRefExpr*>(be)->name;
+                    bool ok = false;
+                    const ClassInfo* a = findClass(an);
+                    for (auto c = a; c; c = c->parent)
+                        if (c->name == bn) { ok = true; break; }
+                    r.ssa = ok ? "1" : "0"; r.type = VType::Bool;
+                    return true;
+                }
+                if (name == "hasattr") {
+                    if (n->args.size() != 2 ||
+                        n->args[1].value->kind != ExprKind::StringLit)
+                        throw std::runtime_error(
+                            "native: hasattr(obj, \"name\") requires a string literal");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type != VType::Obj) {
+                        r.ssa = "0"; r.type = VType::Bool;
+                        return true;
+                    }
+                    const std::string& attrName =
+                        static_cast<const StringLitExpr*>(
+                            n->args[1].value.get())->value;
+                    bool ok = false;
+                    const ClassInfo* ci = findClass(v.cls);
+                    for (auto c = ci; c && !ok; c = c->parent) {
+                        if (c->fieldOffsets.count(attrName)) { ok = true; break; }
+                        if (c->methods.count(attrName)) { ok = true; break; }
+                    }
+                    r.ssa = ok ? "1" : "0"; r.type = VType::Bool;
+                    return true;
+                }
+                if (name == "getattr") {
+                    if (n->args.size() != 2 ||
+                        n->args[1].value->kind != ExprKind::StringLit)
+                        throw std::runtime_error(
+                            "native: getattr(obj, \"name\") requires a string literal");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type != VType::Obj)
+                        throw std::runtime_error(
+                            "native: getattr() receiver must be an object");
+                    const std::string& attrName =
+                        static_cast<const StringLitExpr*>(
+                            n->args[1].value.get())->value;
+                    const ClassInfo* ci = findClass(v.cls);
+                    int off = -1;
+                    for (auto c = ci; c && off < 0; c = c->parent) {
+                        auto fit = c->fieldOffsets.find(attrName);
+                        if (fit != c->fieldOffsets.end()) off = fit->second;
+                    }
+                    if (off < 0)
+                        throw std::runtime_error(
+                            "native: getattr: class '" + v.cls +
+                            "' has no field '" + attrName + "'");
+                    std::string addr = newTemp();
+                    line(addr + " =l add " + v.ssa + ", " + std::to_string(off));
+                    std::string t = newTemp();
+                    line(t + " =l loadl " + addr);
+                    r.ssa = t;
+                    for (auto c = ci; c; c = c->parent) {
+                        bool found = false;
+                        for (auto& f : c->decl->fields) {
+                            if (f.name == attrName) {
+                                if (f.type) inferFromAnnotation(f.type.get(), r);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                    return true;
+                }
+                if (name == "dir") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error(
+                            "native: dir() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::vector<std::string> names;
+                    if (v.type == VType::Obj) {
+                        const ClassInfo* ci = findClass(v.cls);
+                        for (auto c = ci; c; c = c->parent) {
+                            for (auto& f : c->fieldOffsets) names.push_back(f.first);
+                            for (auto& m : c->methods) names.push_back(m.first);
+                        }
+                    }
+                    std::sort(names.begin(), names.end());
+                    names.erase(std::unique(names.begin(), names.end()),
+                        names.end());
+                    std::string lst = newTemp();
+                    line(lst + " =l call $vayu_list_new()");
+                    for (auto& nm : names) {
+                        std::string lbl = internString(nm);
+                        line("call $vayu_list_push(l " + lst + ", l " + lbl + ")");
+                    }
+                    r.ssa = lst; r.type = VType::List;
+                    r.elemType = VType::Str;
+                    return true;
+                }
+                return false;
             }
 
             bool tryBuiltinMethod(const std::string& recvName, const Val& recv,
@@ -2876,6 +3342,9 @@ namespace vayu {
                     r.ssa = ext; r.type = VType::Bool;
                     return r;
                 }
+
+                // Phase 13.1: pure builtins.
+                if (tryPureBuiltin(name, n, r)) return r;
 
                 if (name == "ord") {
                     Val v = emitExpr(n->args[0].value.get());
@@ -4707,6 +5176,58 @@ long long vayu_pow_int(long long a, long long b) {
     }
     return r;
 }
+
+// ---- Phase 13.1: pure helpers ----
+int64_t vayu_hash_int(int64_t x) {
+    uint64_t h = (uint64_t)x;
+    h ^= h >> 33; h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33; h *= 0xc4ceb9fe1a85ec53ULL;
+    h ^= h >> 33;
+    return (int64_t)h;
+}
+int64_t vayu_hash_str(VayuStr* s) {
+    uint64_t h = 1469598103934665603ULL;
+    for (int64_t i = 0; i < s->len; ++i) {
+        h ^= (uint8_t)s->data[i];
+        h *= 1099511628211ULL;
+    }
+    return (int64_t)h;
+}
+int64_t vayu_round_int(int64_t x) { return x; }
+int64_t vayu_pow_mod(int64_t b, int64_t e, int64_t m) {
+    if (m == 0) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("pow(): modulus cannot be zero"));
+    }
+    if (m < 0) m = -m;
+    int64_t r = 1 % m;
+    b %= m;
+    if (b < 0) b += m;
+    while (e > 0) {
+        if (e & 1) r = (r * b) % m;
+        b = (b * b) % m;
+        e >>= 1;
+    }
+    return r;
+}
+int64_t vayu_sign_int(int64_t x) { return (x > 0) - (x < 0); }
+int64_t vayu_gcd(int64_t a, int64_t b) {
+    if (a < 0) a = -a;
+    if (b < 0) b = -b;
+    while (b) { int64_t t = a % b; a = b; b = t; }
+    return a;
+}
+int64_t vayu_lcm(int64_t a, int64_t b) {
+    if (a == 0 || b == 0) return 0;
+    int64_t g = vayu_gcd(a, b);
+    return (a / g) * b;
+}
+int64_t vayu_clamp_int(int64_t x, int64_t lo, int64_t hi) {
+    if (x < lo) return lo;
+    if (x > hi) return hi;
+    return x;
+}
+int64_t vayu_list_size(VayuList* l) { return l->len; }
 
 VayuStr* vayu_read_file(VayuStr* path) {
     char buf[4096];

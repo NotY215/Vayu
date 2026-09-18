@@ -1,0 +1,38 @@
+class Animal:
+    name: str
+    def __init__(self, n: str) -> None:
+        self.name = n
+    def speak(self) -> str:
+        return "..."
+
+class Dog(Animal):
+    def __init__(self) -> None:
+        self.name = "rex"
+    def speak(self) -> str:
+        return "woof"
+
+def main() -> None:
+    a = Animal("cat")
+    d = Dog()
+
+    print(isinstance(a, Animal))
+    print(isinstance(a, Dog))
+    print(isinstance(d, Animal))
+    print(isinstance(d, Dog))
+
+    print(issubclass(Dog, Animal))
+    print(issubclass(Animal, Dog))
+
+    print(hasattr(a, "name"))
+    print(hasattr(a, "speak"))
+    print(hasattr(a, "zzz"))
+
+    print(getattr(a, "name"))
+    print(getattr(d, "name"))
+
+    names = dir(a)
+    print(len(names) > 0)
+    print(names.contains("name"))
+    print(names.contains("speak"))
+
+main()

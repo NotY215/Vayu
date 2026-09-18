@@ -1,0 +1,40 @@
+def greet() -> str:
+    return "hi"
+
+class Point:
+    x: int
+    y: int
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+def main() -> None:
+    print(hash("hello") == hash("hello"))
+    print(hash(42) == hash(42))
+    print(hash(42) == hash(43))
+
+    print(callable(greet))
+    print(callable(3))
+    print(callable(Point))
+
+    print(repr(42))
+    print(repr("abc"))
+
+    print(round(7))
+    print(pow(2, 10))
+    print(pow(2, 10, 1000))
+    print(divmod(17, 5))
+    print(sign(-7))
+    print(sign(0))
+    print(sign(42))
+    print(gcd(12, 18))
+    print(lcm(4, 6))
+    print(clamp(15, 0, 10))
+    print(clamp(-3, 0, 10))
+    print(clamp(5, 0, 10))
+
+    print(enumerate(["a", "b", "c"]))
+    print(zip([1, 2, 3], ["x", "y", "z"]))
+    print(reversed([1, 2, 3, 4]))
+
+main()
