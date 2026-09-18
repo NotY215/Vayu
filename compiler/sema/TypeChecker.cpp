@@ -19,8 +19,14 @@ namespace vayu {
     // Scopes
     // ===========================================================================
 
-    void TypeChecker::pushScope() { scopes_.emplace_back(); }
-    void TypeChecker::popScope() { scopes_.pop_back(); }
+    void TypeChecker::pushScope() {
+        scopes_.emplace_back();
+        moved_.emplace_back();
+    }
+    void TypeChecker::popScope() {
+        if (!moved_.empty()) moved_.pop_back();
+        scopes_.pop_back();
+    }
 
     void TypeChecker::defineVar(const std::string& n, TypePtr t) {
         scopes_.back().vars[n] = std::move(t);
@@ -378,6 +384,21 @@ namespace vayu {
                 return Types::Map(resolveTypeExpr(g->typeArgs[0].get()),
                     resolveTypeExpr(g->typeArgs[1].get()));
             }
+            if (g->name == "unique") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, "unique<> takes exactly one type argument");
+                return Types::Unique(resolveTypeExpr(g->typeArgs[0].get()));
+            }
+            if (g->name == "shared") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, "shared<> takes exactly one type argument");
+                return Types::Shared(resolveTypeExpr(g->typeArgs[0].get()));
+            }
+            if (g->name == "weak") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, "weak<> takes exactly one type argument");
+                return Types::Weak(resolveTypeExpr(g->typeArgs[0].get()));
+            }
             error(e->loc, "unknown generic type '" + g->name + "'");
         }
 
@@ -612,6 +633,16 @@ namespace vayu {
                 }
                 else {
                     defineVar(nm->name, v);
+                }
+                // Phase 12.0: if the RHS is a name bound to unique<T>, mark
+                // the source as moved — unless we're assigning back to the
+                // same name (a no-op move-to-self).
+                if (v->kind == TypeKind::Unique &&
+                    n->value->kind == ExprKind::NameRef) {
+                    const auto* src =
+                        static_cast<const NameRefExpr*>(n->value.get());
+                    if (src->name != nm->name && !moved_.empty())
+                        moved_.back().insert(src->name);
                 }
                 return;
             }
@@ -905,6 +936,9 @@ namespace vayu {
 
         case ExprKind::NameRef: {
             auto* n = static_cast<const NameRefExpr*>(e);
+            if (!moved_.empty() && moved_.back().count(n->name))
+                error(n->loc, "'" + n->name +
+                    "' has been moved and cannot be used again");
             if (TypePtr t = lookupVar(n->name)) return t;
             auto it = structs_.find(n->name);
             if (it != structs_.end()) return it->second;
@@ -1156,6 +1190,35 @@ namespace vayu {
             if (t->kind == TypeKind::Error) return t;
             if (t->kind == TypeKind::Any)   return Types::Any();
 
+            // Phase 12.1: weak<T>.upgrade() -> shared<T>.
+            if (t->kind == TypeKind::Weak) {
+                if (n->name != "upgrade")
+                    error(n->loc, "weak<...> only supports '.upgrade()' "
+                        "(attempted '." + n->name + "')");
+                TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
+                return Types::Function({}, Types::Shared(inner));
+            }
+            // Phase 12.1: shared<T> — delegate field/method access to T.
+            if (t->kind == TypeKind::Shared) {
+                TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
+                if (inner->kind == TypeKind::Error || inner->kind == TypeKind::Any)
+                    return Types::Any();
+                TypePtr saved = t;
+                t = inner;
+                // Fall through with t = inner for the rest of this case.
+                if (t->kind != TypeKind::Struct)
+                    error(n->loc, "cannot read field or method '" + n->name +
+                        "' on value of type " + saved->toString());
+                if (const auto* f = t->findField(n->name)) return f->type;
+                if (TypePtr m = t->findMethod(n->name)) {
+                    std::vector<TypePtr> bound(m->params.begin() + 1,
+                        m->params.end());
+                    return Types::Function(std::move(bound), m->returnType);
+                }
+                error(n->loc, "type '" + t->name +
+                    "' has no field or method '" + n->name + "'");
+            }
+
             if (t->kind == TypeKind::List || t->kind == TypeKind::Map ||
                 t->kind == TypeKind::Str) {
                 TypePtr m = lookupCollectionMethod(t, n->name, n->loc);
@@ -1321,6 +1384,14 @@ namespace vayu {
                     std::vector<TypePtr> argTypes;
                     for (auto& a : n->args)
                         argTypes.push_back(checkExpr(a.value.get()));
+                    // Phase 12.0: passing a unique<T> argument moves the source.
+                    for (auto& a : n->args) {
+                        if (a.value->kind != ExprKind::NameRef) continue;
+                        const auto* src = static_cast<const NameRefExpr*>(a.value.get());
+                        TypePtr st = lookupUserVar(src->name);
+                        if (st && st->kind == TypeKind::Unique && !moved_.empty())
+                            moved_.back().insert(src->name);
+                    }
                     if (argTypes.size() > 1)
                         error(n->loc, "method takes 0 or 1 argument(s), got " +
                             std::to_string(argTypes.size()));
