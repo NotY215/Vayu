@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <limits>
 #include "lexer/Lexer.hpp"
 #include "parser/Parser.hpp"
 #include <fstream>
@@ -91,10 +92,6 @@ namespace vayu {
             if (s->kind == StmtKind::Enum)
                 registerEnum(static_cast<const EnumStmt*>(s.get()));
         }
-        // Phase 11.1c: the VM never runs the top-level Class statement, so
-        // static initializers must run here.  Statics live in globals_ under
-        // the same mangled name the VM compiler emits via DEFINE, so both
-        // storage paths agree.
         for (auto& s : program.stmts) {
             if (s->kind != StmtKind::Class) continue;
             auto* n = static_cast<const ClassStmt*>(s.get());
@@ -184,7 +181,6 @@ namespace vayu {
 
     void Interpreter::vmSetAttr(const Value& base, const std::string& name,
         const Value& v, SourceLocation loc) {
-        // Phase 11.1c: ClassName.staticName = value
         if (base.isCallable() &&
             base.asCallable()->kind == Callable::Kind::ClassCtor) {
             auto cls = base.asCallable()->classObj;
@@ -231,7 +227,6 @@ namespace vayu {
         classDecls_[d->name] = d;
     }
 
-    // Phase 11.1d — enums become module-shaped values in globals_.
     void Interpreter::registerEnum(const EnumStmt* d) {
         auto mod = std::make_shared<ModuleValue>();
         mod->name = d->name;
@@ -366,8 +361,6 @@ namespace vayu {
         }
 
         case StmtKind::Class: {
-            // Phase 11.1c: statics live in globals_ under a mangled name that
-            // matches what the VM compiler emits via DEFINE.
             auto* n = static_cast<const ClassStmt*>(s);
             for (auto& sf : n->staticFields) {
                 Value v = sf.init ? eval(sf.init.get()) : Value();
@@ -383,9 +376,10 @@ namespace vayu {
         case StmtKind::Continue: throw ContinueSignal{};
         }
     }
+
     // ===========================================================================
-// Phase 11.1k1 — generators
-// ===========================================================================
+    // Phase 11.1k1 — generators
+    // ===========================================================================
 
     void Interpreter::execYield(const YieldStmt* y) {
         if (!generatorContext_)
@@ -393,7 +387,6 @@ namespace vayu {
         Value v = y->value ? eval(y->value.get()) : Value();
         auto gen = generatorContext_;
 
-        // Save our generator-local env so we can restore it after the wait.
         auto myEnv = env_;
         auto myGen = generatorContext_;
 
@@ -401,14 +394,12 @@ namespace vayu {
         gen->yielded = std::move(v);
         gen->state = GenState::Suspended;
 
-        // Hand the interpreter's env back to the owner thread while we wait.
         env_ = gen->ownerEnv;
         generatorContext_ = gen->ownerGen;
 
         gen->cv.notify_all();
         gen->cv.wait(lk, [&] { return gen->resume || gen->cancel; });
 
-        // We're back — restore our generator-local env.
         env_ = myEnv;
         generatorContext_ = myGen;
 
@@ -437,7 +428,6 @@ namespace vayu {
         gen->worker = std::thread([self, gen, callEnv, d]() {
             Interpreter::current_ = self;
 
-            // Wait for the first resume() call from the owner.
             {
                 std::unique_lock<std::mutex> lk(gen->mtx);
                 gen->cv.wait(lk, [&] { return gen->resume || gen->cancel; });
@@ -449,9 +439,6 @@ namespace vayu {
                 gen->resume = false;
             }
 
-            // The owner is blocked on gen->cv; we are the only thread
-            // touching the Interpreter.  Capture the owner's state and
-            // install our own.
             auto outerEnv = self->env_;
             auto outerGen = self->generatorContext_;
             self->env_ = callEnv;
@@ -462,18 +449,15 @@ namespace vayu {
                     for (auto& st : d->body.stmts) self->exec(st.get());
                 }
                 catch (ReturnSignal&) {
-                    // Normal generator exit.
                 }
             }
             catch (GeneratorCancelled&) {
-                // Owner cancelled — drop out.
             }
             catch (...) {
                 std::lock_guard<std::mutex> lk(gen->mtx);
                 gen->pendingError = std::current_exception();
             }
 
-            // Always restore the owner's env before publishing Done.
             self->env_ = outerEnv;
             self->generatorContext_ = outerGen;
 
@@ -493,7 +477,6 @@ namespace vayu {
         if (gen->state == GenState::Running)
             throw RuntimeError("generator already running", loc);
 
-        // Hand our env to the generator so it can restore it while suspended.
         gen->ownerEnv = env_;
         gen->ownerGen = generatorContext_;
 
@@ -775,7 +758,6 @@ namespace vayu {
         if (n->target->kind == ExprKind::Attr) {
             auto* a = static_cast<const AttrExpr*>(n->target.get());
             Value inst = eval(a->target.get());
-            // Phase 11.1c: ClassName.staticName = value
             if (inst.isCallable() &&
                 inst.asCallable()->kind == Callable::Kind::ClassCtor) {
                 auto cls = inst.asCallable()->classObj;
@@ -863,7 +845,7 @@ namespace vayu {
                     v = nextGenerator(gen, n->loc);
                 }
                 catch (const RuntimeError&) {
-                    break;   // exhausted
+                    break;
                 }
                 bindVar(v);
                 if (!runBody()) break;
@@ -1399,7 +1381,7 @@ namespace vayu {
     }
 
     // ===========================================================================
-    // List / Map / String methods
+    // List methods
     // ===========================================================================
 
     Value Interpreter::callListMethod(const std::shared_ptr<Callable>& fn,
@@ -1459,8 +1441,77 @@ namespace vayu {
                 if (valueEquals(lst->items[i], args[0])) return Value((long long)i);
             throw RuntimeError("index(): value not in list", loc);
         }
+        if (m == "extend") {
+            if (args.size() != 1 || !args[0].isList())
+                throw RuntimeError("extend() takes one list argument", loc);
+            for (auto& v : args[0].asList()->items) lst->items.push_back(v);
+            return Value();
+        }
+        if (m == "count") {
+            if (args.size() != 1)
+                throw RuntimeError("count() takes 1 argument", loc);
+            long long c = 0;
+            for (auto& v : lst->items) if (valueEquals(v, args[0])) ++c;
+            return Value(c);
+        }
+        if (m == "reverse") {
+            if (!args.empty())
+                throw RuntimeError("reverse() takes no arguments", loc);
+            std::reverse(lst->items.begin(), lst->items.end());
+            return Value();
+        }
+        if (m == "sort") {
+            if (!args.empty())
+                throw RuntimeError("sort() takes no arguments", loc);
+            bool allNum = true, allStr = true;
+            for (auto& v : lst->items) {
+                if (!v.isNumber()) allNum = false;
+                if (!v.isString()) allStr = false;
+                if (!allNum && !allStr) break;
+            }
+            if (!allNum && !allStr)
+                throw RuntimeError("sort(): elements are not comparable", loc);
+            if (allNum) {
+                std::stable_sort(lst->items.begin(), lst->items.end(),
+                    [](const Value& a, const Value& b) {
+                        return a.asDouble() < b.asDouble();
+                    });
+            }
+            else {
+                std::stable_sort(lst->items.begin(), lst->items.end(),
+                    [](const Value& a, const Value& b) {
+                        return a.asString() < b.asString();
+                    });
+            }
+            return Value();
+        }
+        if (m == "copy") {
+            if (!args.empty())
+                throw RuntimeError("copy() takes no arguments", loc);
+            auto out = std::make_shared<ListValue>();
+            out->items = lst->items;
+            return Value(out);
+        }
+        if (m == "first") {
+            if (!args.empty())
+                throw RuntimeError("first() takes no arguments", loc);
+            if (lst->items.empty())
+                throw RuntimeError("first() on empty list", loc);
+            return lst->items.front();
+        }
+        if (m == "last") {
+            if (!args.empty())
+                throw RuntimeError("last() takes no arguments", loc);
+            if (lst->items.empty())
+                throw RuntimeError("last() on empty list", loc);
+            return lst->items.back();
+        }
         throw RuntimeError("list has no method '" + m + "'", loc);
     }
+
+    // ===========================================================================
+    // Map methods
+    // ===========================================================================
 
     Value Interpreter::callMapMethod(const std::shared_ptr<Callable>& fn,
         const std::vector<Value>& args,
@@ -1509,8 +1560,73 @@ namespace vayu {
             if (!args.empty()) throw RuntimeError("clear() takes no arguments", loc);
             m->entries.clear(); return Value();
         }
+        if (name == "set") {
+            if (args.size() != 2 || !args[0].isString())
+                throw RuntimeError("set(key, value) takes (str, T)", loc);
+            m->entries[args[0].asString()] = args[1]; return Value();
+        }
+        if (name == "get_or") {
+            if (args.size() != 2 || !args[0].isString())
+                throw RuntimeError("get_or(key, default) takes (str, T)", loc);
+            auto it = m->entries.find(args[0].asString());
+            return it == m->entries.end() ? args[1] : it->second;
+        }
+        if (name == "pop") {
+            if (args.size() != 1 || !args[0].isString())
+                throw RuntimeError("pop(key) takes one str argument", loc);
+            auto it = m->entries.find(args[0].asString());
+            if (it == m->entries.end())
+                throw RuntimeError("map has no key '" + args[0].asString() + "'", loc);
+            Value v = it->second;
+            m->entries.erase(it);
+            return v;
+        }
+        if (name == "pop_or") {
+            if (args.size() != 2 || !args[0].isString())
+                throw RuntimeError("pop_or(key, default) takes (str, T)", loc);
+            auto it = m->entries.find(args[0].asString());
+            if (it == m->entries.end()) return args[1];
+            Value v = it->second;
+            m->entries.erase(it);
+            return v;
+        }
+        if (name == "update") {
+            if (args.size() != 1 || !args[0].isMap())
+                throw RuntimeError("update(other) takes one map argument", loc);
+            for (auto& kv : args[0].asMap()->entries)
+                m->entries[kv.first] = kv.second;
+            return Value();
+        }
+        if (name == "copy") {
+            if (!args.empty())
+                throw RuntimeError("copy() takes no arguments", loc);
+            auto out = std::make_shared<MapValue>();
+            out->entries = m->entries;
+            return Value(out);
+        }
+        if (name == "has_key") {
+            if (args.size() != 1 || !args[0].isString())
+                throw RuntimeError("has_key(key) takes one str argument", loc);
+            return Value(m->entries.count(args[0].asString()) > 0);
+        }
+        if (name == "items") {
+            if (!args.empty())
+                throw RuntimeError("items() takes no arguments", loc);
+            auto out = std::make_shared<ListValue>();
+            for (auto& kv : m->entries) {
+                auto pair = std::make_shared<ListValue>();
+                pair->items.push_back(Value(kv.first));
+                pair->items.push_back(kv.second);
+                out->items.push_back(Value(pair));
+            }
+            return Value(out);
+        }
         throw RuntimeError("map has no method '" + name + "'", loc);
     }
+
+    // ===========================================================================
+    // String methods
+    // ===========================================================================
 
     namespace {
         std::string toLower(const std::string& s) {
@@ -1622,6 +1738,244 @@ namespace vayu {
             if (i < 0) i += (long long)s.size();
             if (i < 0 || i >= (long long)s.size()) throw RuntimeError("char_at: index out of range", loc);
             return Value(std::string(1, s[(size_t)i]));
+        }
+        if (m == "capitalize") {
+            noArgs();
+            std::string r = s;
+            for (auto& c : r) c = (char)std::tolower((unsigned char)c);
+            if (!r.empty()) r[0] = (char)std::toupper((unsigned char)r[0]);
+            return Value(std::move(r));
+        }
+        if (m == "title") {
+            noArgs();
+            std::string r = s;
+            bool atStart = true;
+            for (auto& c : r) {
+                if (isWS(c)) { atStart = true; }
+                else if (atStart) {
+                    c = (char)std::toupper((unsigned char)c);
+                    atStart = false;
+                }
+                else c = (char)std::tolower((unsigned char)c);
+            }
+            return Value(std::move(r));
+        }
+        if (m == "swapcase") {
+            noArgs();
+            std::string r = s;
+            for (auto& c : r) {
+                if (std::islower((unsigned char)c))
+                    c = (char)std::toupper((unsigned char)c);
+                else if (std::isupper((unsigned char)c))
+                    c = (char)std::tolower((unsigned char)c);
+            }
+            return Value(std::move(r));
+        }
+        if (m == "center" || m == "ljust" || m == "rjust") {
+            if (args.empty() || !args[0].isInt())
+                throw RuntimeError(m + "(width[, fill]) takes an int argument", loc);
+            long long width = args[0].asInt();
+            std::string fill = " ";
+            if (args.size() >= 2) {
+                if (!args[1].isString())
+                    throw RuntimeError(m + ": fill must be a str", loc);
+                fill = args[1].asString();
+            }
+            if (fill.empty())
+                throw RuntimeError(m + ": fill must be non-empty", loc);
+            long long pad = width - (long long)s.size();
+            if (pad <= 0) return Value(s);
+            std::string left, right;
+            if (m == "ljust") {
+                for (long long i = 0; i < pad; ++i) right += fill;
+            }
+            else if (m == "rjust") {
+                for (long long i = 0; i < pad; ++i) left += fill;
+            }
+            else {
+                long long lp = pad / 2;
+                long long rp = pad - lp;
+                for (long long i = 0; i < lp; ++i) left += fill;
+                for (long long i = 0; i < rp; ++i) right += fill;
+            }
+            return Value(left + s + right);
+        }
+        if (m == "zfill") {
+            if (args.size() != 1 || !args[0].isInt())
+                throw RuntimeError("zfill(width) takes one int argument", loc);
+            long long width = args[0].asInt();
+            long long pad = width - (long long)s.size();
+            if (pad <= 0) return Value(s);
+            std::string sign, body = s;
+            if (!body.empty() && (body[0] == '-' || body[0] == '+')) {
+                sign = std::string(1, body[0]);
+                body = body.substr(1);
+            }
+            return Value(sign + std::string((size_t)pad, '0') + body);
+        }
+        if (m == "count") {
+            const std::string& sub = oneStr("substring");
+            if (sub.empty()) return Value((long long)(s.size() + 1));
+            long long c = 0;
+            size_t pos = 0, next;
+            while ((next = s.find(sub, pos)) != std::string::npos) {
+                ++c; pos = next + sub.size();
+            }
+            return Value(c);
+        }
+        if (m == "rfind") {
+            const std::string& sub = oneStr("substring");
+            auto p = s.rfind(sub);
+            return Value(p == std::string::npos ? (long long)-1 : (long long)p);
+        }
+        if (m == "partition" || m == "rpartition") {
+            const std::string& sep = oneStr("separator");
+            if (sep.empty())
+                throw RuntimeError(m + ": separator must be non-empty", loc);
+            auto lst = std::make_shared<ListValue>();
+            size_t p = (m == "partition") ? s.find(sep) : s.rfind(sep);
+            if (p == std::string::npos) {
+                if (m == "partition") {
+                    lst->items.push_back(Value(s));
+                    lst->items.push_back(Value(""));
+                    lst->items.push_back(Value(""));
+                }
+                else {
+                    lst->items.push_back(Value(""));
+                    lst->items.push_back(Value(""));
+                    lst->items.push_back(Value(s));
+                }
+                return Value(lst);
+            }
+            lst->items.push_back(Value(s.substr(0, p)));
+            lst->items.push_back(Value(sep));
+            lst->items.push_back(Value(s.substr(p + sep.size())));
+            return Value(lst);
+        }
+        if (m == "splitlines") {
+            noArgs();
+            auto lst = std::make_shared<ListValue>();
+            std::string cur;
+            for (size_t i = 0; i < s.size(); ++i) {
+                char c = s[i];
+                if (c == '\n') {
+                    lst->items.push_back(Value(cur)); cur.clear();
+                }
+                else if (c == '\r') {
+                    lst->items.push_back(Value(cur)); cur.clear();
+                    if (i + 1 < s.size() && s[i + 1] == '\n') ++i;
+                }
+                else {
+                    cur += c;
+                }
+            }
+            if (!cur.empty()) lst->items.push_back(Value(cur));
+            return Value(lst);
+        }
+        if (m == "rsplit") {
+            std::string sep;
+            long long maxsplit = -1;
+            if (args.size() >= 1) {
+                if (!args[0].isString())
+                    throw RuntimeError("rsplit: separator must be str", loc);
+                sep = args[0].asString();
+            }
+            if (args.size() >= 2) {
+                if (!args[1].isInt())
+                    throw RuntimeError("rsplit: maxsplit must be int", loc);
+                maxsplit = args[1].asInt();
+            }
+            auto lst = std::make_shared<ListValue>();
+            if (args.empty() || sep.empty()) {
+                if (maxsplit < 0) {
+                    if (args.empty()) {
+                        size_t i = 0;
+                        while (i < s.size()) {
+                            while (i < s.size() && isWS(s[i])) ++i;
+                            if (i >= s.size()) break;
+                            size_t st = i;
+                            while (i < s.size() && !isWS(s[i])) ++i;
+                            lst->items.push_back(Value(s.substr(st, i - st)));
+                        }
+                    }
+                    else {
+                        for (char c : s)
+                            lst->items.push_back(Value(std::string(1, c)));
+                    }
+                    return Value(lst);
+                }
+                std::vector<std::string> parts;
+                if (args.empty()) {
+                    size_t end = s.size();
+                    while (end > 0 && (long long)parts.size() < maxsplit) {
+                        while (end > 0 && isWS(s[end - 1])) --end;
+                        if (end == 0) break;
+                        size_t st = end;
+                        while (st > 0 && !isWS(s[st - 1])) --st;
+                        parts.push_back(s.substr(st, end - st));
+                        end = st;
+                    }
+                    if (end > 0) {
+                        size_t a = 0;
+                        while (a < end && isWS(s[a])) ++a;
+                        parts.push_back(s.substr(a, end - a));
+                    }
+                }
+                else {
+                    for (long long i = (long long)s.size() - 1;
+                        i >= 0 && (long long)parts.size() < maxsplit; --i)
+                        parts.push_back(std::string(1, s[(size_t)i]));
+                    if ((long long)parts.size() < (long long)s.size())
+                        parts.push_back(s.substr(0, s.size() - parts.size()));
+                }
+                for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+                    lst->items.push_back(Value(*it));
+                return Value(lst);
+            }
+            std::vector<std::string> parts;
+            size_t end = s.size();
+            while (maxsplit < 0 || (long long)parts.size() < maxsplit) {
+                size_t p = s.rfind(sep, end == 0 ? 0 : end - 1);
+                if (p == std::string::npos || p + sep.size() > end) break;
+                parts.push_back(s.substr(p + sep.size(),
+                    end - p - sep.size()));
+                end = p;
+            }
+            parts.push_back(s.substr(0, end));
+            for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+                lst->items.push_back(Value(*it));
+            return Value(lst);
+        }
+        if (m == "is_lower") {
+            noArgs();
+            bool any = false;
+            for (char c : s) {
+                if (std::isupper((unsigned char)c)) return Value(false);
+                if (std::islower((unsigned char)c)) any = true;
+            }
+            return Value(any);
+        }
+        if (m == "is_upper") {
+            noArgs();
+            bool any = false;
+            for (char c : s) {
+                if (std::islower((unsigned char)c)) return Value(false);
+                if (std::isupper((unsigned char)c)) any = true;
+            }
+            return Value(any);
+        }
+        if (m == "is_alnum") {
+            noArgs();
+            if (s.empty()) return Value(false);
+            for (char c : s)
+                if (!std::isalnum((unsigned char)c)) return Value(false);
+            return Value(true);
+        }
+        if (m == "is_ascii") {
+            noArgs();
+            for (char c : s)
+                if ((unsigned char)c > 127) return Value(false);
+            return Value(true);
         }
         throw RuntimeError("str has no method '" + m + "'", loc);
     }
@@ -1801,7 +2155,6 @@ namespace vayu {
             throw std::runtime_error("list(): cannot convert " + v.typeName());
         }
 
-        // ---- higher-order ----
         Value bi_map(const std::vector<Value>& args) {
             if (args.size() != 2) throw std::runtime_error("map() takes exactly 2 arguments");
             if (!args[0].isCallable()) throw std::runtime_error("map() first argument must be callable");
@@ -1970,6 +2323,44 @@ namespace vayu {
         Value m_isfinite(const std::vector<Value>& a) {
             if (a.at(0).isInt()) return Value(true);
             return Value(a.at(0).isFloat() && std::isfinite(a[0].asFloat()));
+        }
+        // ---- Phase 14.2: extended float math ----
+        Value m_cbrt(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.cbrt expects a number");
+            return Value(std::cbrt(a[0].asDouble()));
+        }
+        Value m_expm1(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.expm1 expects a number");
+            return Value(std::expm1(a[0].asDouble()));
+        }
+        Value m_log1p(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.log1p expects a number");
+            return Value(std::log1p(a[0].asDouble()));
+        }
+        Value m_copysign(const std::vector<Value>& a) {
+            if (a.size() != 2)
+                throw std::runtime_error("math.copysign takes 2 arguments");
+            return Value(std::copysign(a[0].asDouble(), a[1].asDouble()));
+        }
+        Value m_fabs(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.fabs expects a number");
+            return Value(std::fabs(a[0].asDouble()));
+        }
+        Value m_tgamma(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.tgamma expects a number");
+            return Value(std::tgamma(a[0].asDouble()));
+        }
+        Value m_lgamma(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.lgamma expects a number");
+            return Value(std::lgamma(a[0].asDouble()));
+        }
+        Value m_erf(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.erf expects a number");
+            return Value(std::erf(a[0].asDouble()));
+        }
+        Value m_erfc(const std::vector<Value>& a) {
+            if (a.empty()) throw std::runtime_error("math.erfc expects a number");
+            return Value(std::erfc(a[0].asDouble()));
         }
         // ---- Phase 13.0 — inspection & pure helpers ----
 
@@ -2296,6 +2687,52 @@ namespace vayu {
             a[0].asInstance()->fields.erase(a[1].asString());
             return Value();
         }
+        // ---- Phase 14.2: integer combinatorics ----
+        Value bi_comb(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isInt() || !a[1].isInt())
+                throw std::runtime_error("comb(n, k) requires two ints");
+            long long n = a[0].asInt(), k = a[1].asInt();
+            if (n < 0 || k < 0 || k > n)
+                throw std::runtime_error("comb(): invalid arguments");
+            if (k > n - k) k = n - k;
+            long long r = 1;
+            for (long long i = 1; i <= k; ++i)
+                r = r * (n - k + i) / i;
+            return Value(r);
+        }
+        Value bi_perm(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isInt() || !a[1].isInt())
+                throw std::runtime_error("perm(n, k) requires two ints");
+            long long n = a[0].asInt(), k = a[1].asInt();
+            if (n < 0 || k < 0 || k > n)
+                throw std::runtime_error("perm(): invalid arguments");
+            long long r = 1;
+            for (long long i = 0; i < k; ++i) r *= (n - i);
+            return Value(r);
+        }
+        Value bi_isqrt(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isInt())
+                throw std::runtime_error("isqrt(n) requires one int");
+            long long n = a[0].asInt();
+            if (n < 0)
+                throw std::runtime_error("isqrt() of negative number");
+            if (n < 2) return Value(n);
+            long long x = n, y = (x + 1) / 2;
+            while (y < x) { x = y; y = (x + n / x) / 2; }
+            return Value(x);
+        }
+        Value bi_factorial(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isInt())
+                throw std::runtime_error("factorial(n) requires one int");
+            long long n = a[0].asInt();
+            if (n < 0)
+                throw std::runtime_error("factorial() of negative number");
+            if (n > 20)
+                throw std::runtime_error("factorial() argument too large");
+            long long r = 1;
+            for (long long i = 2; i <= n; ++i) r *= i;
+            return Value(r);
+        }
     } // namespace
 
     namespace {
@@ -2338,7 +2775,6 @@ namespace vayu {
         add("any", bi_any);
         add("all", bi_all);
         add("sum", bi_sum);
-        // Phase 13.0 — inspection & pure helpers.
         add("hash", bi_hash);
         add("id", bi_id);
         add("callable", bi_callable);
@@ -2358,6 +2794,10 @@ namespace vayu {
         add("gcd", bi_gcd);
         add("lcm", bi_lcm);
         add("clamp", bi_clamp);
+        add("comb", bi_comb);
+        add("perm", bi_perm);
+        add("isqrt", bi_isqrt);
+        add("factorial", bi_factorial);
         add("setattr", bi_setattr);
         add("delattr", bi_delattr);
         add("next", bi_next);
@@ -2383,8 +2823,16 @@ namespace vayu {
         addFn("fmod", m_fmod);   addFn("trunc", m_trunc);
         addFn("is_nan", m_isnan); addFn("is_inf", m_isinf);
         addFn("is_finite", m_isfinite);
+        addFn("cbrt", m_cbrt);   addFn("expm1", m_expm1);
+        addFn("log1p", m_log1p); addFn("copysign", m_copysign);
+        addFn("fabs", m_fabs);   addFn("tgamma", m_tgamma);
+        addFn("lgamma", m_lgamma); addFn("erf", m_erf);
+        addFn("erfc", m_erfc);
         mod->members["pi"] = Value(3.14159265358979323846);
         mod->members["e"] = Value(2.71828182845904523536);
+        mod->members["tau"] = Value(6.28318530717958647692);
+        mod->members["inf"] = Value(std::numeric_limits<double>::infinity());
+        mod->members["nan"] = Value(std::numeric_limits<double>::quiet_NaN());
         globals_->define("math", Value(mod));
     }
 

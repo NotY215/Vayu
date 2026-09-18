@@ -1846,7 +1846,7 @@ namespace vayu {
             }
 
             // Phase 13.1: pure builtins with no runtime state.  All operate
-// on the i64 ABI directly.  Returns true if handled.
+            // on the i64 ABI directly.  Returns true if handled.
             bool tryPureBuiltin(const std::string& name, const CallExpr* n,
                 Val& r) {
                 if (name == "hash") {
@@ -2356,7 +2356,41 @@ namespace vayu {
                         "native: delattr() is not supported (object layout "
                         "is fixed at construction)");
                 }
-
+                // ---- Phase 14.2: integer combinatorics ----
+                if (name == "comb") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error("native: comb() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_comb(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return true;
+                }
+                if (name == "perm") {
+                    if (n->args.size() != 2)
+                        throw std::runtime_error("native: perm() takes 2 arguments");
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_perm(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return true;
+                }
+                if (name == "isqrt") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: isqrt() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_isqrt(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return true;
+                }
+                if (name == "factorial") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: factorial() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_factorial(l " + v.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return true;
+                }
                 return false;
             }
 
@@ -2400,6 +2434,48 @@ namespace vayu {
                         line("call $vayu_list_remove(l " + recv.ssa + ", l " + v.ssa + ")");
                         r.ssa = "0"; r.type = VType::Void; return true;
                     }
+                    if (recvName == "extend") {
+                        Val v = argV(0);
+                        line("call $vayu_list_extend(l " + recv.ssa +
+                            ", l " + v.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "count") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_list_count(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Int; return true;
+                    }
+                    if (recvName == "reverse") {
+                        line("call $vayu_list_reverse(l " + recv.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "sort") {
+                        line("call $vayu_list_sort(l " + recv.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "copy") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_list_copy(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = recv.elemType;
+                        r.elemCls = recv.elemCls;
+                        return true;
+                    }
+                    if (recvName == "first") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_list_first(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = recv.elemType;
+                        r.cls = recv.elemCls; return true;
+                    }
+                    if (recvName == "last") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_list_last(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = recv.elemType;
+                        r.cls = recv.elemCls; return true;
+                    }
                 }
                 if (recv.type == VType::Map) {
                     if (recvName == "put") {
@@ -2433,6 +2509,73 @@ namespace vayu {
                         std::string t = newTemp();
                         line(t + " =l call $vayu_map_keys(l " + recv.ssa + ")");
                         r.ssa = t; r.type = VType::List; r.elemType = VType::Str; return true;
+                    }
+                    if (recvName == "set") {
+                        Val k = argV(0), v = argV(1);
+                        line("call $vayu_map_put(l " + recv.ssa + ", l " +
+                            k.ssa + ", l " + v.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "get_or") {
+                        Val k = argV(0), d = argV(1);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_get_or(l " + recv.ssa +
+                            ", l " + k.ssa + ", l " + d.ssa + ")");
+                        r.ssa = t; r.type = recv.valType; return true;
+                    }
+                    if (recvName == "pop") {
+                        Val k = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_pop(l " + recv.ssa +
+                            ", l " + k.ssa + ")");
+                        r.ssa = t; r.type = recv.valType; return true;
+                    }
+                    if (recvName == "pop_or") {
+                        Val k = argV(0), d = argV(1);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_pop_or(l " + recv.ssa +
+                            ", l " + k.ssa + ", l " + d.ssa + ")");
+                        r.ssa = t; r.type = recv.valType; return true;
+                    }
+                    if (recvName == "update") {
+                        Val o = argV(0);
+                        line("call $vayu_map_update(l " + recv.ssa +
+                            ", l " + o.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "copy") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_copy(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Map;
+                        r.elemType = recv.elemType;
+                        r.elemCls = recv.elemCls;
+                        r.valType = recv.valType;
+                        return true;
+                    }
+                    if (recvName == "has_key") {
+                        Val k = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_has(l " + recv.ssa +
+                            ", l " + k.ssa + ")");
+                        r.ssa = t; r.type = VType::Bool; return true;
+                    }
+                    if (recvName == "values") {
+                        int64_t vt = tagOf(recv.valType);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_values(l " + recv.ssa +
+                            ", l " + std::to_string(vt) + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = recv.valType;
+                        return true;
+                    }
+                    if (recvName == "items") {
+                        int64_t vt = tagOf(recv.valType);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_map_items(l " + recv.ssa +
+                            ", l " + std::to_string(vt) + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = VType::List;
+                        return true;
                     }
                 }
                 if (recv.type == VType::Str) {
@@ -2534,6 +2677,103 @@ namespace vayu {
                         line(t + " =l call $vayu_str_join(l " + recv.ssa +
                             ", l " + lst.ssa + ")");
                         r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "capitalize") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_capitalize(l " +
+                            recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "title") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_title(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "swapcase") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_swapcase(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "center" || recvName == "ljust" ||
+                        recvName == "rjust") {
+                        Val w = argV(0);
+                        Val fill;
+                        if (call->args.size() >= 2) {
+                            fill = argV(1);
+                        }
+                        else {
+                            fill.ssa = internString(" ");
+                            fill.type = VType::Str;
+                        }
+                        const char* fn = (recvName == "center")
+                            ? "$vayu_str_center"
+                            : (recvName == "ljust")
+                            ? "$vayu_str_ljust"
+                            : "$vayu_str_rjust";
+                        std::string t = newTemp();
+                        line(t + " =l call " + std::string(fn) + "(l " +
+                            recv.ssa + ", l " + w.ssa + ", l " + fill.ssa + ")");
+                        r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "zfill") {
+                        Val w = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_zfill(l " + recv.ssa +
+                            ", l " + w.ssa + ")");
+                        r.ssa = t; r.type = VType::Str; return true;
+                    }
+                    if (recvName == "count" || recvName == "rfind") {
+                        Val sub = argV(0);
+                        const char* fn = (recvName == "count")
+                            ? "$vayu_str_count" : "$vayu_str_rfind";
+                        std::string t = newTemp();
+                        line(t + " =l call " + std::string(fn) + "(l " +
+                            recv.ssa + ", l " + sub.ssa + ")");
+                        r.ssa = t; r.type = VType::Int; return true;
+                    }
+                    if (recvName == "partition" || recvName == "rpartition") {
+                        Val sep = argV(0);
+                        int64_t right = (recvName == "rpartition") ? 1 : 0;
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_partition(l " + recv.ssa +
+                            ", l " + sep.ssa + ", l " +
+                            std::to_string(right) + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = VType::Str;
+                        return true;
+                    }
+                    if (recvName == "splitlines") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_splitlines(l " +
+                            recv.ssa + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = VType::Str;
+                        return true;
+                    }
+                    if (recvName == "rsplit") {
+                        Val sep; Val ms;
+                        if (call->args.size() >= 1) sep = argV(0);
+                        else { sep.ssa = internString(""); sep.type = VType::Str; }
+                        if (call->args.size() >= 2) ms = argV(1);
+                        else { ms.ssa = "-1"; ms.type = VType::Int; }
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_rsplit(l " + recv.ssa +
+                            ", l " + sep.ssa + ", l " + ms.ssa + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = VType::Str;
+                        return true;
+                    }
+                    if (recvName == "is_lower" || recvName == "is_upper" ||
+                        recvName == "is_alnum" || recvName == "is_ascii") {
+                        const char* fn =
+                            (recvName == "is_lower") ? "$vayu_str_is_lower" :
+                            (recvName == "is_upper") ? "$vayu_str_is_upper" :
+                            (recvName == "is_alnum") ? "$vayu_str_is_alnum" :
+                            "$vayu_str_is_ascii";
+                        std::string t = newTemp();
+                        line(t + " =l call " + std::string(fn) + "(l " +
+                            recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Bool; return true;
                     }
                 }
                 return false;
@@ -4727,6 +4967,12 @@ typedef struct { VayuStr* typeName; VayuStr* message; } VayuExc;
 void vayu_raise_str(VayuStr* typeName, VayuStr* msg);
 int64_t vayu_str_to_int(VayuStr* s);
 
+/* Forward declarations for list helpers used by the new string methods
+   (partition, splitlines, rsplit) that are defined before the list block. */
+VayuList* vayu_list_new(void);
+void vayu_list_push(VayuList* l, int64_t v);
+void vayu_list_push_tagged(VayuList* l, int64_t v, int64_t tag);
+
 static int    g_argc = 0;
 static char** g_argv = NULL;
 
@@ -4908,6 +5154,282 @@ VayuStr* vayu_str_substr(VayuStr* s, int64_t start, int64_t end) {
     if (end   > s->len) end = s->len;
     if (end < start) end = start;
     return vayu_mkstr(s->data + start, end - start);
+}
+VayuStr* vayu_str_capitalize(VayuStr* s) {
+    VayuStr* r = (VayuStr*)malloc(sizeof(VayuStr) + (size_t)s->len + 1);
+    r->len = s->len;
+    for (int64_t i = 0; i < s->len; ++i) {
+        char c = s->data[i];
+        r->data[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+    }
+    if (s->len > 0) {
+        char c = r->data[0];
+        if (c >= 'a' && c <= 'z') r->data[0] = (char)(c - 32);
+    }
+    r->data[s->len] = 0;
+    return r;
+}
+
+VayuStr* vayu_str_title(VayuStr* s) {
+    VayuStr* r = (VayuStr*)malloc(sizeof(VayuStr) + (size_t)s->len + 1);
+    r->len = s->len;
+    int atStart = 1;
+    for (int64_t i = 0; i < s->len; ++i) {
+        unsigned char c = (unsigned char)s->data[i];
+        int isWS = (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+                    c == '\f' || c == '\v');
+        if (isWS) { r->data[i] = (char)c; atStart = 1; }
+        else if (atStart) {
+            r->data[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : (char)c;
+            atStart = 0;
+        } else {
+            r->data[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : (char)c;
+        }
+    }
+    r->data[s->len] = 0;
+    return r;
+}
+
+VayuStr* vayu_str_swapcase(VayuStr* s) {
+    VayuStr* r = (VayuStr*)malloc(sizeof(VayuStr) + (size_t)s->len + 1);
+    r->len = s->len;
+    for (int64_t i = 0; i < s->len; ++i) {
+        char c = s->data[i];
+        if (c >= 'a' && c <= 'z')      r->data[i] = (char)(c - 32);
+        else if (c >= 'A' && c <= 'Z') r->data[i] = (char)(c + 32);
+        else                           r->data[i] = c;
+    }
+    r->data[s->len] = 0;
+    return r;
+}
+
+static VayuStr* vayu_str_pad_common(VayuStr* s, int64_t width,
+                                    VayuStr* fill, int mode) {
+    if (fill->len == 0) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("fill character must not be empty"));
+    }
+    int64_t pad = width - s->len;
+    if (pad <= 0) return vayu_mkstr(s->data, s->len);
+    VayuStr* r = (VayuStr*)malloc(sizeof(VayuStr) +
+                                  (size_t)(s->len + pad) + 1);
+    r->len = s->len + pad;
+    int64_t lp = 0, rp = 0;
+    if (mode == 1)      rp = pad;
+    else if (mode == 2) lp = pad;
+    else { lp = pad / 2; rp = pad - lp; }
+    int64_t op = 0;
+    for (int64_t i = 0; i < lp; ++i)
+        r->data[op++] = fill->data[i % fill->len];
+    if (s->len) memcpy(r->data + op, s->data, (size_t)s->len);
+    op += s->len;
+    for (int64_t i = 0; i < rp; ++i)
+        r->data[op++] = fill->data[i % fill->len];
+    r->data[op] = 0;
+    return r;
+}
+VayuStr* vayu_str_center(VayuStr* s, int64_t w, VayuStr* f) {
+    return vayu_str_pad_common(s, w, f, 0);
+}
+VayuStr* vayu_str_ljust(VayuStr* s, int64_t w, VayuStr* f) {
+    return vayu_str_pad_common(s, w, f, 1);
+}
+VayuStr* vayu_str_rjust(VayuStr* s, int64_t w, VayuStr* f) {
+    return vayu_str_pad_common(s, w, f, 2);
+}
+
+VayuStr* vayu_str_zfill(VayuStr* s, int64_t w) {
+    int64_t pad = w - s->len;
+    if (pad <= 0) return vayu_mkstr(s->data, s->len);
+    VayuStr* r = (VayuStr*)malloc(sizeof(VayuStr) + (size_t)w + 1);
+    r->len = w;
+    int64_t op = 0, start = 0;
+    if (s->len > 0 && (s->data[0] == '-' || s->data[0] == '+')) {
+        r->data[op++] = s->data[0];
+        start = 1;
+    }
+    for (int64_t i = 0; i < pad; ++i) r->data[op++] = '0';
+    if (s->len > start) {
+        memcpy(r->data + op, s->data + start, (size_t)(s->len - start));
+        op += s->len - start;
+    }
+    r->data[op] = 0;
+    return r;
+}
+
+int64_t vayu_str_count(VayuStr* s, VayuStr* sub) {
+    if (sub->len == 0) return s->len + 1;
+    int64_t count = 0;
+    for (int64_t i = 0; i + sub->len <= s->len; ) {
+        if (memcmp(s->data + i, sub->data, (size_t)sub->len) == 0) {
+            ++count; i += sub->len;
+        } else ++i;
+    }
+    return count;
+}
+
+int64_t vayu_str_rfind(VayuStr* s, VayuStr* sub) {
+    if (sub->len == 0) return s->len;
+    if (sub->len > s->len) return -1;
+    for (int64_t i = s->len - sub->len; i >= 0; --i) {
+        if (memcmp(s->data + i, sub->data, (size_t)sub->len) == 0) return i;
+    }
+    return -1;
+}
+
+VayuList* vayu_str_partition(VayuStr* s, VayuStr* sep, int64_t right) {
+    VayuList* out = vayu_list_new();
+    if (sep->len == 0) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("empty separator"));
+    }
+    int64_t p = -1;
+    if (right) {
+        for (int64_t i = s->len - sep->len; i >= 0; --i) {
+            if (memcmp(s->data + i, sep->data, (size_t)sep->len) == 0) {
+                p = i; break;
+            }
+        }
+    } else {
+        for (int64_t i = 0; i + sep->len <= s->len; ++i) {
+            if (memcmp(s->data + i, sep->data, (size_t)sep->len) == 0) {
+                p = i; break;
+            }
+        }
+    }
+    if (p < 0) {
+        if (right) {
+            vayu_list_push_tagged(out, (int64_t)vayu_mkstr("", 0), 2);
+            vayu_list_push_tagged(out, (int64_t)vayu_mkstr("", 0), 2);
+            vayu_list_push_tagged(out,
+                (int64_t)vayu_mkstr(s->data, s->len), 2);
+        } else {
+            vayu_list_push_tagged(out,
+                (int64_t)vayu_mkstr(s->data, s->len), 2);
+            vayu_list_push_tagged(out, (int64_t)vayu_mkstr("", 0), 2);
+            vayu_list_push_tagged(out, (int64_t)vayu_mkstr("", 0), 2);
+        }
+        return out;
+    }
+    vayu_list_push_tagged(out, (int64_t)vayu_mkstr(s->data, p), 2);
+    vayu_list_push_tagged(out, (int64_t)vayu_mkstr(sep->data, sep->len), 2);
+    vayu_list_push_tagged(out,
+        (int64_t)vayu_mkstr(s->data + p + sep->len,
+                            s->len - p - sep->len), 2);
+    return out;
+}
+
+VayuList* vayu_str_splitlines(VayuStr* s) {
+    VayuList* out = vayu_list_new();
+    int64_t start = 0;
+    for (int64_t i = 0; i < s->len; ++i) {
+        char c = s->data[i];
+        if (c == '\n') {
+            vayu_list_push_tagged(out,
+                (int64_t)vayu_mkstr(s->data + start, i - start), 2);
+            start = i + 1;
+        } else if (c == '\r') {
+            vayu_list_push_tagged(out,
+                (int64_t)vayu_mkstr(s->data + start, i - start), 2);
+            if (i + 1 < s->len && s->data[i + 1] == '\n') ++i;
+            start = i + 1;
+        }
+    }
+    if (start < s->len)
+        vayu_list_push_tagged(out,
+            (int64_t)vayu_mkstr(s->data + start, s->len - start), 2);
+    return out;
+}
+
+VayuList* vayu_str_rsplit(VayuStr* s, VayuStr* sep, int64_t maxsplit) {
+    VayuList* out = vayu_list_new();
+    VayuStr** parts = NULL;
+    int64_t n = 0, cap = 0;
+    if (sep->len == 0) {
+        int64_t end = s->len;
+        while (end > 0) {
+            if (maxsplit >= 0 && n >= maxsplit) break;
+            while (end > 0 && (s->data[end-1]==' ' || s->data[end-1]=='\t' ||
+                   s->data[end-1]=='\n' || s->data[end-1]=='\r' ||
+                   s->data[end-1]=='\f' || s->data[end-1]=='\v')) --end;
+            if (end == 0) break;
+            int64_t st = end;
+            while (st > 0 && !(s->data[st-1]==' ' || s->data[st-1]=='\t' ||
+                   s->data[st-1]=='\n' || s->data[st-1]=='\r' ||
+                   s->data[st-1]=='\f' || s->data[st-1]=='\v')) --st;
+            if (n == cap) { cap = cap ? cap*2 : 4;
+                parts = (VayuStr**)realloc(parts, sizeof(VayuStr*)*cap); }
+            parts[n++] = vayu_mkstr(s->data + st, end - st);
+            end = st;
+        }
+        if (end > 0) {
+            int64_t a = 0;
+            while (a < end && (s->data[a]==' ' || s->data[a]=='\t' ||
+                   s->data[a]=='\n' || s->data[a]=='\r' ||
+                   s->data[a]=='\f' || s->data[a]=='\v')) ++a;
+            if (n == cap) { cap = cap ? cap*2 : 4;
+                parts = (VayuStr**)realloc(parts, sizeof(VayuStr*)*cap); }
+            parts[n++] = vayu_mkstr(s->data + a, end - a);
+        }
+    } else {
+        int64_t end = s->len;
+        while (maxsplit < 0 || n < maxsplit) {
+            int64_t p = -1;
+            if (end >= sep->len) {
+                for (int64_t i = end - sep->len; i >= 0; --i) {
+                    if (memcmp(s->data + i, sep->data,
+                               (size_t)sep->len) == 0) { p = i; break; }
+                }
+            }
+            if (p < 0) break;
+            if (n == cap) { cap = cap ? cap*2 : 4;
+                parts = (VayuStr**)realloc(parts, sizeof(VayuStr*)*cap); }
+            parts[n++] = vayu_mkstr(s->data + p + sep->len,
+                                    end - p - sep->len);
+            end = p;
+        }
+        if (n == cap) { cap = cap ? cap*2 : 4;
+            parts = (VayuStr**)realloc(parts, sizeof(VayuStr*)*cap); }
+        parts[n++] = vayu_mkstr(s->data, end);
+    }
+    for (int64_t i = n - 1; i >= 0; --i)
+        vayu_list_push_tagged(out, (int64_t)parts[i], 2);
+    free(parts);
+    return out;
+}
+
+int64_t vayu_str_is_lower(VayuStr* s) {
+    int any = 0;
+    for (int64_t i = 0; i < s->len; ++i) {
+        unsigned char c = (unsigned char)s->data[i];
+        if (c >= 'A' && c <= 'Z') return 0;
+        if (c >= 'a' && c <= 'z') any = 1;
+    }
+    return any;
+}
+int64_t vayu_str_is_upper(VayuStr* s) {
+    int any = 0;
+    for (int64_t i = 0; i < s->len; ++i) {
+        unsigned char c = (unsigned char)s->data[i];
+        if (c >= 'a' && c <= 'z') return 0;
+        if (c >= 'A' && c <= 'Z') any = 1;
+    }
+    return any;
+}
+int64_t vayu_str_is_alnum(VayuStr* s) {
+    if (s->len == 0) return 0;
+    for (int64_t i = 0; i < s->len; ++i) {
+        unsigned char c = (unsigned char)s->data[i];
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'a' && c <= 'z') ||
+              (c >= 'A' && c <= 'Z'))) return 0;
+    }
+    return 1;
+}
+int64_t vayu_str_is_ascii(VayuStr* s) {
+    for (int64_t i = 0; i < s->len; ++i)
+        if ((unsigned char)s->data[i] > 127) return 0;
+    return 1;
 }
 VayuStr* vayu_str_replace(VayuStr* s, VayuStr* from, VayuStr* to) {
     if (from->len == 0) return vayu_mkstr(s->data, s->len);
@@ -5109,11 +5631,134 @@ void vayu_list_remove(VayuList* l, int64_t v) {
     }
 }
 
+void vayu_list_extend(VayuList* dst, VayuList* src) {
+    for (int64_t i = 0; i < src->len; ++i) {
+        vayu_list_grow(dst);
+        dst->items[dst->len] = src->items[i];
+        dst->tags[dst->len]  = src->tags[i];
+        dst->len++;
+    }
+}
+
+static int vayu_list_val_eq(int64_t a, int8_t at, int64_t b, int8_t bt) {
+    if ((at == 0 || at == 1) && (bt == 0 || bt == 1)) return a == b;
+    if (at != bt) return 0;
+    if (at == 2) return vayu_str_eq((VayuStr*)a, (VayuStr*)b);
+    return a == b;
+}
+
+int64_t vayu_list_count(VayuList* l, int64_t v, int64_t tag) {
+    int64_t c = 0;
+    for (int64_t i = 0; i < l->len; ++i)
+        if (vayu_list_val_eq(l->items[i], l->tags[i], v, (int8_t)tag)) ++c;
+    return c;
+}
+
+void vayu_list_reverse(VayuList* l) {
+    for (int64_t i = 0, j = l->len - 1; i < j; ++i, --j) {
+        int64_t t = l->items[i]; l->items[i] = l->items[j]; l->items[j] = t;
+        int8_t  s = l->tags[i];  l->tags[i]  = l->tags[j];  l->tags[j]  = s;
+    }
+}
+
+static int vayu_list_cmp_slot(VayuList* l, int64_t ia, int64_t ib, int allNum) {
+    if (allNum) {
+        int64_t a = l->items[ia], b = l->items[ib];
+        return (a < b) ? -1 : (a > b) ? 1 : 0;
+    }
+    VayuStr* sa = (VayuStr*)l->items[ia];
+    VayuStr* sb = (VayuStr*)l->items[ib];
+    int64_t n = sa->len < sb->len ? sa->len : sb->len;
+    int mc = memcmp(sa->data, sb->data, (size_t)n);
+    if (mc < 0) return -1;
+    if (mc > 0) return 1;
+    return (sa->len < sb->len) ? -1 : (sa->len > sb->len) ? 1 : 0;
+}
+
+static void vayu_list_merge(VayuList* l, int64_t* tmpI, int8_t* tmpT,
+                            int64_t lo, int64_t mid, int64_t hi, int allNum) {
+    int64_t i = lo, j = mid, k = lo;
+    while (i < mid && j < hi) {
+        if (vayu_list_cmp_slot(l, i, j, allNum) <= 0) {
+            tmpI[k] = l->items[i]; tmpT[k] = l->tags[i]; ++i;
+        } else {
+            tmpI[k] = l->items[j]; tmpT[k] = l->tags[j]; ++j;
+        }
+        ++k;
+    }
+    while (i < mid) { tmpI[k] = l->items[i]; tmpT[k] = l->tags[i]; ++i; ++k; }
+    while (j < hi)  { tmpI[k] = l->items[j]; tmpT[k] = l->tags[j]; ++j; ++k; }
+    for (int64_t p = lo; p < hi; ++p) {
+        l->items[p] = tmpI[p];
+        l->tags[p]  = tmpT[p];
+    }
+}
+
+void vayu_list_sort(VayuList* l) {
+    if (l->len <= 1) return;
+    int allNum = 1, allStr = 1;
+    for (int64_t i = 0; i < l->len; ++i) {
+        int8_t t = l->tags[i];
+        if (t == 3 || t == 4) { allNum = 0; allStr = 0; }
+        else if (t == 2)      { allNum = 0; }
+        else                  { allStr = 0; }
+        if (!allNum && !allStr) break;
+    }
+    if (!allNum && !allStr) {
+        vayu_raise_str(vayu_mkstr_c("TypeError"),
+                       vayu_mkstr_c("list.sort(): elements are not comparable"));
+    }
+    int64_t* tmpI = (int64_t*)malloc(sizeof(int64_t) * (size_t)l->len);
+    int8_t*  tmpT = (int8_t*)malloc((size_t)l->len);
+    int64_t width = 1;
+    while (width < l->len) {
+        for (int64_t i = 0; i < l->len; i += width * 2) {
+            int64_t mid = i + width;
+            int64_t hi  = i + width * 2;
+            if (mid > l->len) mid = l->len;
+            if (hi  > l->len) hi  = l->len;
+            if (mid < hi)
+                vayu_list_merge(l, tmpI, tmpT, i, mid, hi, allNum);
+        }
+        width *= 2;
+    }
+    free(tmpI);
+    free(tmpT);
+}
+
+VayuList* vayu_list_copy(VayuList* l) {
+    VayuList* r = (VayuList*)malloc(sizeof(VayuList));
+    r->len = l->len;
+    r->cap = l->len < 4 ? 4 : l->len;
+    r->items = (int64_t*)malloc(sizeof(int64_t) * (size_t)r->cap);
+    r->tags  = (int8_t*)malloc((size_t)r->cap);
+    if (l->len) {
+        memcpy(r->items, l->items, sizeof(int64_t) * (size_t)l->len);
+        memcpy(r->tags,  l->tags,  (size_t)l->len);
+    }
+    return r;
+}
+
+int64_t vayu_list_first(VayuList* l) {
+    if (l->len == 0) {
+        vayu_raise_str(vayu_mkstr_c("IndexError"),
+                       vayu_mkstr_c("first() on empty list"));
+    }
+    return l->items[0];
+}
+int64_t vayu_list_last(VayuList* l) {
+    if (l->len == 0) {
+        vayu_raise_str(vayu_mkstr_c("IndexError"),
+                       vayu_mkstr_c("last() on empty list"));
+    }
+    return l->items[l->len - 1];
+}
+
 VayuList* vayu_str_split(VayuStr* s, VayuStr* sep) {
     VayuList* out = vayu_list_new();
     if (sep->len == 0) {
         for (int64_t i = 0; i < s->len; ++i)
-            vayu_list_push(out, (int64_t)vayu_mkstr(s->data + i, 1));
+            vayu_list_push_tagged(out, (int64_t)vayu_mkstr(s->data + i, 1), 2);
         return out;
     }
     int64_t pos = 0;
@@ -5125,10 +5770,12 @@ VayuList* vayu_str_split(VayuStr* s, VayuStr* sep) {
             }
         }
         if (next < 0) {
-            vayu_list_push(out, (int64_t)vayu_mkstr(s->data + pos, s->len - pos));
+            vayu_list_push_tagged(out,
+                (int64_t)vayu_mkstr(s->data + pos, s->len - pos), 2);
             break;
         }
-        vayu_list_push(out, (int64_t)vayu_mkstr(s->data + pos, next - pos));
+        vayu_list_push_tagged(out,
+            (int64_t)vayu_mkstr(s->data + pos, next - pos), 2);
         pos = next + sep->len;
     }
     return out;
@@ -5216,11 +5863,73 @@ void vayu_map_clear(VayuMap* m) {
     memset(m->entries, 0, sizeof(VayuMapEntry) * (size_t)m->cap);
     m->len = 0;
 }
+VayuMap* vayu_map_copy(VayuMap* m) {
+    VayuMap* r = (VayuMap*)malloc(sizeof(VayuMap));
+    r->len = m->len;
+    r->cap = m->cap;
+    r->entries = (VayuMapEntry*)calloc((size_t)r->cap, sizeof(VayuMapEntry));
+    for (int64_t i = 0; i < m->cap; ++i) {
+        if (!m->entries[i].used) continue;
+        r->entries[i] = m->entries[i];
+    }
+    return r;
+}
+
+int64_t vayu_map_get_or(VayuMap* m, VayuStr* k, int64_t def) {
+    VayuMapEntry* e = map_find(m, k);
+    return e ? e->value : def;
+}
+
+int64_t vayu_map_pop(VayuMap* m, VayuStr* k) {
+    VayuMapEntry* e = map_find(m, k);
+    if (!e) vayu_raise_str(vayu_mkstr_c("KeyError"), k);
+    int64_t v = e->value;
+    e->used = 0;
+    m->len--;
+    return v;
+}
+
+int64_t vayu_map_pop_or(VayuMap* m, VayuStr* k, int64_t def) {
+    VayuMapEntry* e = map_find(m, k);
+    if (!e) return def;
+    int64_t v = e->value;
+    e->used = 0;
+    m->len--;
+    return v;
+}
+
+void vayu_map_update(VayuMap* dst, VayuMap* src) {
+    for (int64_t i = 0; i < src->cap; ++i) {
+        if (!src->entries[i].used) continue;
+        vayu_map_put(dst, src->entries[i].key, src->entries[i].value);
+    }
+}
+
+VayuList* vayu_map_values(VayuMap* m, int64_t valTag) {
+    VayuList* l = vayu_list_new();
+    for (int64_t i = 0; i < m->cap; ++i) {
+        if (!m->entries[i].used) continue;
+        vayu_list_push_tagged(l, m->entries[i].value, valTag);
+    }
+    return l;
+}
+
+VayuList* vayu_map_items(VayuMap* m, int64_t valTag) {
+    VayuList* l = vayu_list_new();
+    for (int64_t i = 0; i < m->cap; ++i) {
+        if (!m->entries[i].used) continue;
+        VayuList* pair = vayu_list_new();
+        vayu_list_push_tagged(pair, (int64_t)m->entries[i].key, 2);
+        vayu_list_push_tagged(pair, m->entries[i].value, valTag);
+        vayu_list_push_tagged(l, (int64_t)pair, 3);
+    }
+    return l;
+}
 VayuList* vayu_map_keys(VayuMap* m) {
     VayuList* l = vayu_list_new();
     for (int64_t i = 0; i < m->cap; ++i) {
         if (!m->entries[i].used) continue;
-        vayu_list_push(l, (int64_t)m->entries[i].key);
+        vayu_list_push_tagged(l, (int64_t)m->entries[i].key, 2);
     }
     return l;
 }
@@ -5370,6 +6079,53 @@ int64_t vayu_clamp_int(int64_t x, int64_t lo, int64_t hi) {
     if (x < lo) return lo;
     if (x > hi) return hi;
     return x;
+}
+int64_t vayu_comb(int64_t n, int64_t k) {
+    if (n < 0 || k < 0 || k > n) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("comb(): invalid arguments"));
+    }
+    if (k > n - k) k = n - k;
+    int64_t r = 1;
+    for (int64_t i = 1; i <= k; ++i) {
+        r = r * (n - k + i) / i;
+    }
+    return r;
+}
+
+int64_t vayu_perm(int64_t n, int64_t k) {
+    if (n < 0 || k < 0 || k > n) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("perm(): invalid arguments"));
+    }
+    int64_t r = 1;
+    for (int64_t i = 0; i < k; ++i) r *= (n - i);
+    return r;
+}
+
+int64_t vayu_isqrt(int64_t n) {
+    if (n < 0) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("isqrt() of negative number"));
+    }
+    if (n < 2) return n;
+    int64_t x = n, y = (x + 1) / 2;
+    while (y < x) { x = y; y = (x + n / x) / 2; }
+    return x;
+}
+
+int64_t vayu_factorial(int64_t n) {
+    if (n < 0) {
+        vayu_raise_str(vayu_mkstr_c("ValueError"),
+                       vayu_mkstr_c("factorial() of negative number"));
+    }
+    if (n > 20) {
+        vayu_raise_str(vayu_mkstr_c("OverflowError"),
+                       vayu_mkstr_c("factorial() argument too large"));
+    }
+    int64_t r = 1;
+    for (int64_t i = 2; i <= n; ++i) r *= i;
+    return r;
 }
 int64_t vayu_list_size(VayuList* l) { return l->len; }
 

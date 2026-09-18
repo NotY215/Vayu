@@ -1,0 +1,20 @@
+xs = [3, 1, 2]
+xs.append(5)
+print(xs)
+ys = [10, 20]
+xs.extend(ys)
+print(xs)
+print(xs.count(5))
+print(xs.count(99))
+print(xs.first())
+print(xs.last())
+zs = xs.copy()
+zs.reverse()
+print(zs)
+print(xs)
+nums = [3, 1, 4, 1, 5, 9, 2, 6]
+nums.sort()
+print(nums)
+words = ["banana", "apple", "cherry"]
+words.sort()
+print(words)

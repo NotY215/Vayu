@@ -1,0 +1,30 @@
+m = {"a": 1, "b": 2}
+m.set("c", 3)
+
+print(len(m))
+print(m.get_or("a", -1))
+print(m.get_or("zzz", -1))
+print(m.has_key("b"))
+print(m.has_key("zzz"))
+
+print(m.pop("a"))
+print(m.has_key("a"))
+print(m.pop_or("zzz", 99))
+print(len(m))
+
+n = {"x": 10, "y": 20}
+m.update(n)
+print(m.get("b"))
+print(m.get("c"))
+print(m.get("x"))
+print(m.get("y"))
+
+snapshot = m.copy()
+snapshot.set("fresh", 100)
+print(m.get_or("fresh", -1))
+print(snapshot.get_or("fresh", -1))
+print(len(m))
+print(len(snapshot))
+
+items = m.items()
+print(len(items))

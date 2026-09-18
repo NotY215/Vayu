@@ -111,7 +111,10 @@ namespace vayu {
         B("gcd", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("lcm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("clamp", Types::Function({ A, A, A }, A));
-
+        B("comb", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
+        B("perm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
+        B("isqrt", Types::Function({ Types::Int() }, Types::Int()));
+        B("factorial", Types::Function({ Types::Int() }, Types::Int()));
         B("math", Types::Any());
 
         B("read_file", Types::Function({ Types::Str() }, Types::Str()));
@@ -501,6 +504,27 @@ namespace vayu {
                 return Types::Function({ Types::Int() }, Types::Str());
             if (name == "to_int")
                 return Types::Function({}, Types::Int());
+            if (name == "capitalize" || name == "title" ||
+                name == "swapcase")
+                return Types::Function({}, Types::Str());
+            if (name == "center" || name == "ljust" || name == "rjust")
+                return Types::Function({ Types::Int(), Types::Str() },
+                    Types::Str());
+            if (name == "zfill")
+                return Types::Function({ Types::Int() }, Types::Str());
+            if (name == "count" || name == "rfind")
+                return Types::Function({ Types::Str() }, Types::Int());
+            if (name == "partition" || name == "rpartition")
+                return Types::Function({ Types::Str() },
+                    Types::List(Types::Str()));
+            if (name == "splitlines")
+                return Types::Function({}, Types::List(Types::Str()));
+            if (name == "rsplit")
+                return Types::Function({ Types::Str() },
+                    Types::List(Types::Str()));
+            if (name == "is_lower" || name == "is_upper" ||
+                name == "is_alnum" || name == "is_ascii")
+                return Types::Function({}, Types::Bool());
             error(loc, "str has no method '" + name + "'");
         }
 
@@ -513,6 +537,16 @@ namespace vayu {
             if (name == "remove")   return Types::Function({ E }, Types::None());
             if (name == "contains") return Types::Function({ E }, Types::Bool());
             if (name == "index")    return Types::Function({ E }, Types::Int());
+            if (name == "extend")
+                return Types::Function({ Types::List(E) }, Types::None());
+            if (name == "count")
+                return Types::Function({ E }, Types::Int());
+            if (name == "reverse" || name == "sort")
+                return Types::Function({}, Types::None());
+            if (name == "copy")
+                return Types::Function({}, Types::List(E));
+            if (name == "first" || name == "last")
+                return Types::Function({}, E);
             error(loc, "list has no method '" + name + "'");
         }
 
@@ -526,6 +560,24 @@ namespace vayu {
             if (name == "keys")     return Types::Function({}, Types::List(K));
             if (name == "values")   return Types::Function({}, Types::List(V));
             if (name == "clear")    return Types::Function({}, Types::None());
+            if (name == "set")
+                return Types::Function({ K, V }, Types::None());
+            if (name == "get_or")
+                return Types::Function({ K, Types::Any() }, V);
+            if (name == "pop")
+                return Types::Function({ K }, V);
+            if (name == "pop_or")
+                return Types::Function({ K, Types::Any() }, V);
+            if (name == "update")
+                return Types::Function({ target }, Types::None());
+            if (name == "copy")
+                return Types::Function({}, target);
+            if (name == "has_key")
+                return Types::Function({ K }, Types::Bool());
+            if (name == "items")
+                return Types::Function({}, Types::List(Types::Any()));
+            if (name == "values")
+                return Types::Function({}, Types::List(V));
             error(loc, "map has no method '" + name + "'");
         }
 
@@ -1419,6 +1471,15 @@ namespace vayu {
                         tname == "regex" || tname == "thread") {
                         fromBuiltinModule = true;
                     }
+                }
+                if (!fromBuiltinModule &&
+                    (attr->name == "center" || attr->name == "ljust" ||
+                        attr->name == "rjust" || attr->name == "rsplit" ||
+                        attr->name == "zfill")) {
+                    for (auto& a : n->args)
+                        checkExpr(a.value.get());
+                    return callee->returnType ? callee->returnType
+                        : Types::None();
                 }
                 if (!fromBuiltinModule &&
                     (attr->name == "split" || attr->name == "strip")) {
