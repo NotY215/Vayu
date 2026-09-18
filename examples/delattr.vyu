@@ -1,0 +1,21 @@
+class Bag:
+    a: int
+    b: int
+    def __init__(self) -> None:
+        self.a = 1
+        self.b = 2
+
+def main() -> None:
+    bag = Bag()
+    print(bag.a)
+    print(bag.b)
+
+    delattr(bag, "b")
+    print(hasattr(bag, "b"))
+    print(hasattr(bag, "a"))
+
+    # re-add via setattr
+    setattr(bag, "b", 99)
+    print(bag.b)
+
+main()

@@ -750,6 +750,17 @@ namespace vayu {
                 }
             }
 
+            static int tagOf(VType t) {
+                switch (t) {
+                case VType::Int:  return 0;
+                case VType::Bool: return 1;
+                case VType::Str:  return 2;
+                case VType::List: return 3;
+                case VType::Map:  return 4;
+                default:          return 0;
+                }
+            }
+
             void inferFromAnnotation(const Expr* e, Val& v) {
                 if (!e) return;
                 if (e->kind == ExprKind::NameRef) {
@@ -1131,6 +1142,11 @@ namespace vayu {
                         if (classes_.count(nm->name)) {
                             r.type = VType::Obj;
                             r.cls = nm->name;
+                            return r;
+                        }
+                        if (nm->name == "enumerate" || nm->name == "zip") {
+                            r.type = VType::List;
+                            r.elemType = VType::List;
                             return r;
                         }
                         auto fit = topFnDecls_.find(nm->name);
@@ -1762,7 +1778,8 @@ namespace vayu {
                             elemT = v.type;
                             elemC = v.cls;
                         }
-                        line("call $vayu_list_push(l " + lst + ", l " + v.ssa + ")");
+                        line("call $vayu_list_push_tagged(l " + lst + ", l " + v.ssa +
+                            ", l " + std::to_string(tagOf(v.type)) + ")");
                     }
                     r.ssa = lst; r.type = VType::List;
                     r.elemType = elemT; r.elemCls = elemC;
@@ -2012,9 +2029,10 @@ namespace vayu {
                             ", l " + i + ")");
                         std::string pair = newTemp();
                         line(pair + " =l call $vayu_list_new()");
-                        line("call $vayu_list_push(l " + pair + ", l " + i + ")");
-                        line("call $vayu_list_push(l " + pair + ", l " + elem + ")");
-                        line("call $vayu_list_push(l " + out + ", l " + pair + ")");
+                        line("call $vayu_list_push_tagged(l " + pair + ", l " + i + ", l 0)");
+                        line("call $vayu_list_push_tagged(l " + pair + ", l " + elem +
+                            ", l " + std::to_string(tagOf(src.elemType)) + ")");
+                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 3)");
                         std::string nx = newTemp();
                         line(nx + " =l add " + i + ", 1");
                         line("storel " + nx + ", " + idx);
@@ -2042,10 +2060,21 @@ namespace vayu {
                     line(la + " =l call $vayu_list_len(l " + a.ssa + ")");
                     std::string lb = newTemp();
                     line(lb + " =l call $vayu_list_len(l " + b.ssa + ")");
+                    // Compute min(la, lb) via arithmetic (this qbe.exe has
+                    // no `select` instruction):
+                    //   min = la * c + lb * (1 - c)   where c = (la < lb) ? 1 : 0
                     std::string lmin = newTemp();
                     line(lmin + " =w csltl " + la + ", " + lb);
+                    std::string cext = newTemp();
+                    line(cext + " =l extsw " + lmin);
+                    std::string notc = newTemp();
+                    line(notc + " =l xor " + cext + ", 1");
+                    std::string pa = newTemp();
+                    line(pa + " =l mul " + la + ", " + cext);
+                    std::string pb = newTemp();
+                    line(pb + " =l mul " + lb + ", " + notc);
                     std::string nlen = newTemp();
-                    line(nlen + " =l select " + lmin + ", " + la + ", " + lb);
+                    line(nlen + " =l add " + pa + ", " + pb);
                     std::string lLoop = newLabel("zip_loop_");
                     std::string lEnd = newLabel("zip_end_");
                     raw(lLoop);
@@ -2065,9 +2094,11 @@ namespace vayu {
                             ", l " + i + ")");
                         std::string pair = newTemp();
                         line(pair + " =l call $vayu_list_new()");
-                        line("call $vayu_list_push(l " + pair + ", l " + ea + ")");
-                        line("call $vayu_list_push(l " + pair + ", l " + eb + ")");
-                        line("call $vayu_list_push(l " + out + ", l " + pair + ")");
+                        line("call $vayu_list_push_tagged(l " + pair + ", l " + ea +
+                            ", l " + std::to_string(tagOf(a.elemType)) + ")");
+                        line("call $vayu_list_push_tagged(l " + pair + ", l " + eb +
+                            ", l " + std::to_string(tagOf(b.elemType)) + ")");
+                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 3)");
                         std::string nx = newTemp();
                         line(nx + " =l add " + i + ", 1");
                         line("storel " + nx + ", " + idx);
@@ -2114,7 +2145,8 @@ namespace vayu {
                         std::string e = newTemp();
                         line(e + " =l call $vayu_list_get(l " + src.ssa +
                             ", l " + iv + ")");
-                        line("call $vayu_list_push(l " + out + ", l " + e + ")");
+                        line("call $vayu_list_push_tagged(l " + out + ", l " + e +
+                            ", l " + std::to_string(tagOf(src.elemType)) + ")");
                         std::string nx = newTemp();
                         line(nx + " =l sub " + iv + ", 1");
                         line("storel " + nx + ", " + i);
@@ -2281,6 +2313,50 @@ namespace vayu {
                     r.elemType = VType::Str;
                     return true;
                 }
+
+                // ---- Phase 13.3: setattr on a declared field ----
+
+                if (name == "setattr") {
+                    if (n->args.size() != 3 ||
+                        n->args[1].value->kind != ExprKind::StringLit)
+                        throw std::runtime_error(
+                            "native: setattr(obj, \"field\", value) requires "
+                            "a string literal field name");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type != VType::Obj)
+                        throw std::runtime_error(
+                            "native: setattr() receiver must be an object");
+                    const std::string& attrName =
+                        static_cast<const StringLitExpr*>(
+                            n->args[1].value.get())->value;
+                    Val val = emitExpr(n->args[2].value.get());
+                    const ClassInfo* ci = findClass(v.cls);
+                    int off = -1;
+                    for (auto c = ci; c && off < 0; c = c->parent) {
+                        auto fit = c->fieldOffsets.find(attrName);
+                        if (fit != c->fieldOffsets.end()) off = fit->second;
+                    }
+                    if (off < 0)
+                        throw std::runtime_error(
+                            "native: setattr: class '" + v.cls +
+                            "' has no field '" + attrName + "'");
+                    std::string addr = newTemp();
+                    line(addr + " =l add " + v.ssa + ", " + std::to_string(off));
+                    line("storel " + val.ssa + ", " + addr);
+                    r.ssa = "0"; r.type = VType::Void;
+                    return true;
+                }
+
+                // ---- Phase 13.4: delattr is not meaningful in native ----
+                // The object layout is fixed at construction, so a field
+                // slot cannot be reclaimed.  Reject at compile time so the
+                // harness marks the test `(tree+vm)`.
+                if (name == "delattr") {
+                    throw std::runtime_error(
+                        "native: delattr() is not supported (object layout "
+                        "is fixed at construction)");
+                }
+
                 return false;
             }
 
@@ -2291,7 +2367,9 @@ namespace vayu {
                 if (recv.type == VType::List) {
                     if (recvName == "append") {
                         Val v = argV(0);
-                        line("call $vayu_list_push(l " + recv.ssa + ", l " + v.ssa + ")");
+                        line("call $vayu_list_push_tagged(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
                         r.ssa = "0"; r.type = VType::Void; return true;
                     }
                     if (recvName == "pop") {
@@ -2312,8 +2390,9 @@ namespace vayu {
                     }
                     if (recvName == "insert") {
                         Val i = argV(0), v = argV(1);
-                        line("call $vayu_list_insert(l " + recv.ssa + ", l " +
-                            i.ssa + ", l " + v.ssa + ")");
+                        line("call $vayu_list_insert_tagged(l " + recv.ssa +
+                            ", l " + i.ssa + ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
                         r.ssa = "0"; r.type = VType::Void; return true;
                     }
                     if (recvName == "remove") {
@@ -3267,8 +3346,7 @@ namespace vayu {
                             line("call $vayu_print_str_noln(l " + v.ssa + ")");
                             break;
                         case VType::List:
-                            line("call $vayu_print_list_noln(l " + v.ssa + ", l " +
-                                std::to_string(kindOf(v.elemType)) + ")");
+                            line("call $vayu_print_list_noln(l " + v.ssa + ")");
                             break;
                         case VType::Map:
                             line("call $vayu_print_map_noln(l " + v.ssa + ", l " +
@@ -3559,6 +3637,15 @@ namespace vayu {
                 r.ssa = t;
                 if (fit != topFnDecls_.end() && fit->second->returnType) {
                     bindTypeParamsFromCall(fit->second, n, r);
+
+                    // Phase 13.3 fix: inside the body of a generic function,
+                    // the type parameter `T` is erased to Obj, so list
+                    // elements produced by `return [x, y]` get tag 0 (int).
+                    // Here at the call site, T is concrete — retag the
+                    // returned list so printing dispatches correctly.
+                    if (r.type == VType::List && r.elemType != VType::Unknown)
+                        line("call $vayu_list_retag(l " + t + ", l " +
+                            std::to_string(tagOf(r.elemType)) + ")");
                 }
                 else {
                     r.type = VType::Unknown;
@@ -3681,8 +3768,9 @@ namespace vayu {
                         Val idx = emitExpr(ix->index.get());
                         Val v = emitExpr(n->value.get());
                         if (tgt.type == VType::List) {
-                            line("call $vayu_list_set(l " + tgt.ssa + ", l " +
-                                idx.ssa + ", l " + v.ssa + ")");
+                            line("call $vayu_list_set_tagged(l " + tgt.ssa +
+                                ", l " + idx.ssa + ", l " + v.ssa + ", l " +
+                                std::to_string(tagOf(v.type)) + ")");
                             return;
                         }
                         if (tgt.type == VType::Map) {
@@ -4626,7 +4714,12 @@ namespace vayu {
 #endif
 
 typedef struct { int64_t len; char data[]; } VayuStr;
-typedef struct { int64_t len; int64_t cap; int64_t* items; } VayuList;
+typedef struct {
+    int64_t len;
+    int64_t cap;
+    int64_t* items;
+    int8_t*  tags;   /* per-element kind: 0=int 1=bool 2=str 3=list 4=map */
+} VayuList;
 typedef struct { VayuStr* key; int64_t value; uint8_t used; } VayuMapEntry;
 typedef struct { int64_t len; int64_t cap; VayuMapEntry* entries; } VayuMap;
 typedef struct { VayuStr* typeName; VayuStr* message; } VayuExc;
@@ -4921,16 +5014,33 @@ VayuList* vayu_list_new() {
     VayuList* l = (VayuList*)malloc(sizeof(VayuList));
     l->len = 0; l->cap = 4;
     l->items = (int64_t*)malloc(sizeof(int64_t) * 4);
+    l->tags  = (int8_t*)malloc(4);
     return l;
 }
 static void vayu_list_grow(VayuList* l) {
     if (l->len < l->cap) return;
     l->cap *= 2;
     l->items = (int64_t*)realloc(l->items, sizeof(int64_t) * (size_t)l->cap);
+    l->tags  = (int8_t*)realloc(l->tags, (size_t)l->cap);
 }
 void vayu_list_push(VayuList* l, int64_t v) {
     vayu_list_grow(l);
-    l->items[l->len++] = v;
+    l->items[l->len] = v;
+    l->tags[l->len]  = 0;
+    l->len++;
+}
+/* Phase 13.3 fix: retag every element of a list.  Used at the boundary
+   of a generic function call, where the erasure of `T` inside the body
+   left the wrong tags on the result.  Caller-side code knows the actual
+   element type and can restore the correct tag. */
+void vayu_list_retag(VayuList* l, int64_t tag) {
+    for (int64_t i = 0; i < l->len; ++i) l->tags[i] = (int8_t)tag;
+}
+void vayu_list_push_tagged(VayuList* l, int64_t v, int64_t tag) {
+    vayu_list_grow(l);
+    l->items[l->len] = v;
+    l->tags[l->len]  = (int8_t)tag;
+    l->len++;
 }
 int64_t vayu_list_get(VayuList* l, int64_t i) {
     if (i < 0) i += l->len;
@@ -4947,6 +5057,16 @@ void vayu_list_set(VayuList* l, int64_t i, int64_t v) {
                        vayu_mkstr_c("list index out of range"));
     }
     l->items[i] = v;
+    l->tags[i]  = 0;
+}
+void vayu_list_set_tagged(VayuList* l, int64_t i, int64_t v, int64_t tag) {
+    if (i < 0) i += l->len;
+    if (i < 0 || i >= l->len) {
+        vayu_raise_str(vayu_mkstr_c("IndexError"),
+                       vayu_mkstr_c("list index out of range"));
+    }
+    l->items[i] = v;
+    l->tags[i]  = (int8_t)tag;
 }
 int64_t vayu_list_pop(VayuList* l) {
     if (l->len == 0) {
@@ -4961,20 +5081,28 @@ int64_t vayu_list_contains(VayuList* l, int64_t v) {
     for (int64_t i = 0; i < l->len; ++i) if (l->items[i] == v) return 1;
     return 0;
 }
-void vayu_list_insert(VayuList* l, int64_t i, int64_t v) {
+void vayu_list_insert_tagged(VayuList* l, int64_t i, int64_t v, int64_t tag) {
     if (i < 0) i = 0;
     if (i > l->len) i = l->len;
     vayu_list_grow(l);
     memmove(l->items + i + 1, l->items + i,
             sizeof(int64_t) * (size_t)(l->len - i));
+    memmove(l->tags + i + 1, l->tags + i,
+            sizeof(int8_t) * (size_t)(l->len - i));
     l->items[i] = v;
+    l->tags[i]  = (int8_t)tag;
     l->len++;
+}
+void vayu_list_insert(VayuList* l, int64_t i, int64_t v) {
+    vayu_list_insert_tagged(l, i, v, 0);
 }
 void vayu_list_remove(VayuList* l, int64_t v) {
     for (int64_t i = 0; i < l->len; ++i) {
         if (l->items[i] == v) {
             memmove(l->items + i, l->items + i + 1,
                     sizeof(int64_t) * (size_t)(l->len - i - 1));
+            memmove(l->tags + i, l->tags + i + 1,
+                    sizeof(int8_t) * (size_t)(l->len - i - 1));
             l->len--;
             return;
         }
@@ -5112,18 +5240,34 @@ void vayu_print_value(int64_t v, int64_t kind) {
         case 2: { VayuStr* s = (VayuStr*)v; fwrite(s->data, 1, (size_t)s->len, stdout); break; }
     }
 }
-void vayu_print_list_noln(VayuList* l, int64_t ek) {
+void vayu_print_list_noln(VayuList* l);
+void vayu_print_map_noln(VayuMap* m, int64_t vk);
+
+void vayu_print_list_noln(VayuList* l) {
     putchar('[');
     for (int64_t i = 0; i < l->len; ++i) {
         if (i) printf(", ");
-        if (ek == 2) putchar('"');
-        vayu_print_value(l->items[i], ek);
-        if (ek == 2) putchar('"');
+        int8_t t = l->tags[i];
+        if (t == 1) {
+            printf("%s", l->items[i] ? "true" : "false");
+        } else if (t == 2) {
+            VayuStr* s = (VayuStr*)l->items[i];
+            putchar('"');
+            fwrite(s->data, 1, (size_t)s->len, stdout);
+            putchar('"');
+        } else if (t == 3) {
+            vayu_print_list_noln((VayuList*)l->items[i]);
+        } else if (t == 4) {
+            vayu_print_map_noln((VayuMap*)l->items[i], 0);
+        } else {
+            printf("%lld", (long long)l->items[i]);
+        }
     }
     putchar(']');
 }
 void vayu_print_list(VayuList* l, int64_t ek) {
-    vayu_print_list_noln(l, ek); putchar('\n');
+    (void)ek;
+    vayu_print_list_noln(l); putchar('\n');
 }
 void vayu_print_map_noln(VayuMap* m, int64_t vk) {
     putchar('{');

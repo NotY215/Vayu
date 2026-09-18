@@ -1,0 +1,26 @@
+class Counter:
+    value: int
+    def __init__(self, v: int) -> None:
+        self.value = v
+
+class Box:
+    inner: Counter
+    def __init__(self, c: Counter) -> None:
+        self.inner = c
+
+def main() -> None:
+    c = Counter(10)
+    print(c.value)
+
+    setattr(c, "value", 42)
+    print(c.value)
+
+    setattr(c, "value", 100)
+    print(c.value)
+
+    b = Box(c)
+    print(b.inner.value)
+    setattr(b.inner, "value", 999)
+    print(b.inner.value)
+
+main()

@@ -2276,6 +2276,26 @@ namespace vayu {
             if (x > hi) return Value(hi);
             return Value(x);
         }
+        // ---- Phase 13.3 / 13.4: reflection ----
+
+        Value bi_setattr(const std::vector<Value>& a) {
+            if (a.size() != 3 || !a[1].isString())
+                throw std::runtime_error(
+                    "setattr(obj, name, value) takes (any, str, any)");
+            if (!a[0].isInstance())
+                throw std::runtime_error("setattr() receiver must be an object");
+            a[0].asInstance()->fields[a[1].asString()] = a[2];
+            return Value();
+        }
+        Value bi_delattr(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[1].isString())
+                throw std::runtime_error(
+                    "delattr(obj, name) takes (any, str)");
+            if (!a[0].isInstance())
+                throw std::runtime_error("delattr() receiver must be an object");
+            a[0].asInstance()->fields.erase(a[1].asString());
+            return Value();
+        }
     } // namespace
 
     namespace {
@@ -2338,6 +2358,8 @@ namespace vayu {
         add("gcd", bi_gcd);
         add("lcm", bi_lcm);
         add("clamp", bi_clamp);
+        add("setattr", bi_setattr);
+        add("delattr", bi_delattr);
         add("next", bi_next);
     }
 

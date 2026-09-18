@@ -88,6 +88,9 @@ namespace vayu {
         B("sum", Types::Function({ listAny }, A));
 
         B("next", Types::Function({ A }, A));
+        // Phase 13.3 / 13.4
+        B("setattr", Types::Function({ A, Types::Str(), A }, Types::None()));
+        B("delattr", Types::Function({ A, Types::Str() }, Types::None()));
         // Phase 13.0 — inspection & pure helpers.
         B("hash", Types::Function({ A }, Types::Int()));
         B("id", Types::Function({ A }, Types::Int()));
