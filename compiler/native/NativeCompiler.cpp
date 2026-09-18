@@ -500,6 +500,12 @@ namespace vayu {
                     if (n->exception) collectStringLiteralsExpr(n->exception.get());
                     break;
                 }
+                case StmtKind::Block: {
+                    auto* n = static_cast<const BlockStmt*>(s);
+                    collectStringLiterals(n->body);
+                    break;
+                }
+                case StmtKind::Extern: break;
                 default: break;
                 }
             }
@@ -560,6 +566,13 @@ namespace vayu {
                         collectStringLiteralsExpr(en.key.get());
                         collectStringLiteralsExpr(en.value.get());
                     }
+                    break;
+                }
+                case ExprKind::Slice: {
+                    auto* n = static_cast<const SliceExpr*>(e);
+                    collectStringLiteralsExpr(n->target.get());
+                    if (n->start) collectStringLiteralsExpr(n->start.get());
+                    if (n->end)   collectStringLiteralsExpr(n->end.get());
                     break;
                 }
                 default: break;
@@ -900,7 +913,13 @@ namespace vayu {
                     auto* n = static_cast<const LambdaExpr*>(e);
                     return exprEscapes(n->body.get(), varName);
                 }
-
+                case ExprKind::Slice: {
+                    auto* n = static_cast<const SliceExpr*>(e);
+                    if (exprEscapes(n->target.get(), varName)) return true;
+                    if (n->start && exprEscapes(n->start.get(), varName)) return true;
+                    if (n->end && exprEscapes(n->end.get(), varName)) return true;
+                    return false;
+                }
                 default:
                     return false;
                 }
@@ -1062,6 +1081,12 @@ namespace vayu {
                     if (n->finallyBody) findCandidates(*n->finallyBody, out, counts);
                     break;
                 }
+                case StmtKind::Block: {
+                    auto* n = static_cast<const BlockStmt*>(s);
+                    findCandidates(n->body, out, counts);
+                    break;
+                }
+                case StmtKind::Extern: break;
                 default: break;
                 }
             }
@@ -1160,6 +1185,9 @@ namespace vayu {
                 case ExprKind::Grouping:
                     return inferExprType(
                         static_cast<const GroupingExpr*>(e)->inner.get());
+                case ExprKind::Slice:
+                    return inferExprType(
+                        static_cast<const SliceExpr*>(e)->target.get());
                 default: break;
                 }
                 return r;
@@ -1476,6 +1504,18 @@ namespace vayu {
                             a.ssa + ", l " + b.ssa + ")");
                         r.ssa = t; r.type = VType::Bool; return r;
                     }
+                    if (n->op == BinOp::Add &&
+                        a.type == VType::Tuple && b.type == VType::Tuple) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_concat(l " + a.ssa +
+                            ", l " + b.ssa + ")");
+                        r.ssa = t; r.type = VType::Tuple;
+                        r.tupleElemTypes = a.tupleElemTypes;
+                        for (auto& et : b.tupleElemTypes) r.tupleElemTypes.push_back(et);
+                        r.tupleElemClsNames = a.tupleElemClsNames;
+                        for (auto& ec : b.tupleElemClsNames) r.tupleElemClsNames.push_back(ec);
+                        return r;
+                    }
                     switch (n->op) {
                     case BinOp::Add: {
                         std::string t = newTemp();
@@ -1628,6 +1668,10 @@ namespace vayu {
                         else {
                             r.type = tgt.elemType;
                             r.cls = tgt.elemCls;
+                            if (tgt.elemType == VType::Tuple) {
+                                r.tupleElemTypes = tgt.tupleElemTypes;
+                                r.tupleElemClsNames = tgt.tupleElemClsNames;
+                            }
                         }
                         return r;
                     }
@@ -1650,6 +1694,20 @@ namespace vayu {
                         line(t + " =l call $vayu_tuple_get(l " + tgt.ssa +
                             ", l " + idx.ssa + ")");
                         r.ssa = t;
+
+                        // Prefer element types carried on the Val itself
+                        // (works for chained indexes and for loop vars).
+                        if (n->index->kind == ExprKind::IntLit) {
+                            long long i = static_cast<const IntLitExpr*>(
+                                n->index.get())->value;
+                            if (i >= 0 &&
+                                (size_t)i < tgt.tupleElemTypes.size()) {
+                                r.type = tgt.tupleElemTypes[(size_t)i];
+                                r.cls = tgt.tupleElemClsNames[(size_t)i];
+                                return r;
+                            }
+                        }
+                        // Fall back to varInfo_ for a plain-name target.
                         if (n->target->kind == ExprKind::NameRef &&
                             n->index->kind == ExprKind::IntLit) {
                             const auto* nm = static_cast<const NameRefExpr*>(
@@ -1664,8 +1722,7 @@ namespace vayu {
                                 if (g != globalVarInfo_.end()) vi = &g->second;
                             }
                             if (vi && lit->value >= 0 &&
-                                (size_t)lit->value <
-                                vi->tupleElemTypes.size()) {
+                                (size_t)lit->value < vi->tupleElemTypes.size()) {
                                 r.type = vi->tupleElemTypes[(size_t)lit->value];
                                 r.cls = vi->tupleElemClsNames[(size_t)lit->value];
                                 return r;
@@ -1818,17 +1875,25 @@ namespace vayu {
                     line(lst + " =l call $vayu_list_new()");
                     VType elemT = VType::Unknown;
                     std::string elemC;
+                    std::vector<VType> elemTT;
+                    std::vector<std::string> elemTC;
                     for (auto& el : n->elements) {
                         Val v = emitExpr(el.get());
                         if (elemT == VType::Unknown) {
                             elemT = v.type;
                             elemC = v.cls;
+                            elemTT = v.tupleElemTypes;
+                            elemTC = v.tupleElemClsNames;
                         }
                         line("call $vayu_list_push_tagged(l " + lst + ", l " + v.ssa +
                             ", l " + std::to_string(tagOf(v.type)) + ")");
                     }
                     r.ssa = lst; r.type = VType::List;
                     r.elemType = elemT; r.elemCls = elemC;
+                    if (elemT == VType::Tuple) {
+                        r.tupleElemTypes = elemTT;
+                        r.tupleElemClsNames = elemTC;
+                    }
                     return r;
                 }
 
@@ -1874,6 +1939,52 @@ namespace vayu {
                             v.ssa + ", l " + std::to_string(tagOf(v.type)) + ")");
                     }
                     r.ssa = set; r.type = VType::Set;
+                    return r;
+                }
+                case ExprKind::Slice: {
+                    auto* n = static_cast<const SliceExpr*>(e);
+                    Val tgt = emitExpr(n->target.get());
+                    bool hasStart = (n->start != nullptr);
+                    bool hasEnd = (n->end != nullptr);
+                    Val start; Val end;
+                    if (hasStart) start = emitExpr(n->start.get());
+                    else { start.ssa = "0"; start.type = VType::Int; }
+                    if (hasEnd) end = emitExpr(n->end.get());
+                    else { end.ssa = "0"; end.type = VType::Int; }
+
+                    int64_t sliceTag = 0;
+                    VType resultType = VType::Int;
+                    if (tgt.type == VType::List) {
+                        sliceTag = 1; resultType = VType::List;
+                    }
+                    else if (tgt.type == VType::Tuple) {
+                        sliceTag = 5; resultType = VType::Tuple;
+                    }
+                    else if (tgt.type == VType::Str) {
+                        sliceTag = 2; resultType = VType::Str;
+                    }
+                    else {
+                        throw std::runtime_error(
+                            "native: cannot slice value of type " +
+                            std::to_string((int)tgt.type));
+                    }
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_slice(l " + tgt.ssa +
+                        ", l " + start.ssa + ", l " + end.ssa +
+                        ", l " + (hasStart ? "1" : "0") +
+                        ", l " + (hasEnd ? "1" : "0") +
+                        ", l " + std::to_string(sliceTag) + ")");
+                    r.ssa = t; r.type = resultType;
+                    if (resultType == VType::List) {
+                        r.elemType = tgt.elemType;
+                        r.elemCls = tgt.elemCls;
+                        r.tupleElemTypes = tgt.tupleElemTypes;
+                        r.tupleElemClsNames = tgt.tupleElemClsNames;
+                    }
+                    else if (resultType == VType::Tuple) {
+                        r.tupleElemTypes = tgt.tupleElemTypes;
+                        r.tupleElemClsNames = tgt.tupleElemClsNames;
+                    }
                     return r;
                 }
                 case ExprKind::FloatLit:
@@ -2106,7 +2217,9 @@ namespace vayu {
                     }
                     raw(lEnd);
                     r.ssa = out; r.type = VType::List;
-                    r.elemType = VType::List;
+                    r.elemType = VType::Tuple;
+                    r.tupleElemTypes = { VType::Int, src.elemType };
+                    r.tupleElemClsNames = { "", src.elemCls };
                     return true;
                 }
                 if (name == "zip") {
@@ -2169,7 +2282,9 @@ namespace vayu {
                     }
                     raw(lEnd);
                     r.ssa = out; r.type = VType::List;
-                    r.elemType = VType::List;
+                    r.elemType = VType::Tuple;
+                    r.tupleElemTypes = { a.elemType, b.elemType };
+                    r.tupleElemClsNames = { a.elemCls, b.elemCls };
                     return true;
                 }
                 if (name == "reversed") {
@@ -4349,6 +4464,13 @@ namespace vayu {
                     line("jmp " + loopStack_.back().first);
                     return;
 
+                case StmtKind::Block: {
+                    auto* n = static_cast<const BlockStmt*>(s);
+                    emitBlock(n->body);
+                    return;
+                }
+
+                case StmtKind::Extern: return;
                 case StmtKind::Pass:   return;
                 case StmtKind::Struct: return;
                 case StmtKind::Enum:   return;
@@ -4570,6 +4692,8 @@ namespace vayu {
 
                 VarInfo lv;
                 lv.type = iter.elemType;
+                lv.tupleElemTypes = iter.tupleElemTypes;
+                lv.tupleElemClsNames = iter.tupleElemClsNames;
                 varInfo_[n->targetName] = lv;
 
                 line(varSlot + " =l alloc8 8");
@@ -5084,6 +5208,12 @@ namespace vayu {
                 if (n->finallyBody) collectVarsBlock(*n->finallyBody, out);
                 break;
             }
+            case StmtKind::Block: {
+                auto* n = static_cast<const BlockStmt*>(s);
+                collectVarsBlock(n->body, out);
+                break;
+            }
+            case StmtKind::Extern: break;
             default: break;
             }
         }
@@ -6031,7 +6161,64 @@ VayuSet* vayu_set_from_list(VayuList* l) {
         vayu_set_push_tagged(r, l->items[i], l->tags[i]);
     return r;
 }
+/* ---- Phase 14.4: slicing ---- */
+int64_t vayu_slice(int64_t target, int64_t start, int64_t end,
+                   int64_t hasStart, int64_t hasEnd, int64_t tag) {
+    if (tag == 1) {  /* list */
+        VayuList* src = (VayuList*)target;
+        int64_t len = src->len;
+        if (!hasStart) start = 0;
+        else { if (start < 0) start += len; if (start < 0) start = 0;
+               if (start > len) start = len; }
+        if (!hasEnd) end = len;
+        else { if (end < 0) end += len; if (end < 0) end = 0;
+               if (end > len) end = len; }
+        if (end < start) end = start;
+        VayuList* out = vayu_list_new();
+        for (int64_t i = start; i < end; ++i)
+            vayu_list_push_tagged(out, src->items[i], src->tags[i]);
+        return (int64_t)out;
+    }
+    if (tag == 5) {  /* tuple */
+        VayuList* src = (VayuList*)target;
+        int64_t len = src->len;
+        if (!hasStart) start = 0;
+        else { if (start < 0) start += len; if (start < 0) start = 0;
+               if (start > len) start = len; }
+        if (!hasEnd) end = len;
+        else { if (end < 0) end += len; if (end < 0) end = 0;
+               if (end > len) end = len; }
+        if (end < start) end = start;
+        VayuList* out = vayu_list_new();
+        for (int64_t i = start; i < end; ++i)
+            vayu_list_push_tagged(out, src->items[i], src->tags[i]);
+        return (int64_t)out;
+    }
+    if (tag == 2) {  /* str */
+        VayuStr* s = (VayuStr*)target;
+        int64_t len = s->len;
+        if (!hasStart) start = 0;
+        else { if (start < 0) start += len; if (start < 0) start = 0;
+               if (start > len) start = len; }
+        if (!hasEnd) end = len;
+        else { if (end < 0) end += len; if (end < 0) end = 0;
+               if (end > len) end = len; }
+        if (end < start) end = start;
+        return (int64_t)vayu_mkstr(s->data + start, end - start);
+    }
+    vayu_raise_str(vayu_mkstr_c("TypeError"),
+                   vayu_mkstr_c("cannot slice value"));
+    return 0;
+}
 
+VayuTuple* vayu_tuple_concat(VayuTuple* a, VayuTuple* b) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < a->len; ++i)
+        vayu_list_push_tagged(r, a->items[i], a->tags[i]);
+    for (int64_t i = 0; i < b->len; ++i)
+        vayu_list_push_tagged(r, b->items[i], b->tags[i]);
+    return r;
+}
 int64_t vayu_list_first(VayuList* l) {
     if (l->len == 0) {
         vayu_raise_str(vayu_mkstr_c("IndexError"),

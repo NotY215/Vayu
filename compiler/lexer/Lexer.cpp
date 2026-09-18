@@ -41,6 +41,7 @@ namespace vayu {
 
             // Phase 11.1b — hard keyword only.
             {"const", TokenType::Const},
+            {"extern", TokenType::Extern},
         };
         return kw;
     }

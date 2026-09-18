@@ -284,6 +284,13 @@ namespace vayu {
             emitJumpTo(loopStack_.back().continueTarget, line);
             return;
 
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            compileBlock(n->body);
+            return;
+        }
+        case StmtKind::Extern:
+            return;
         case StmtKind::Pass: return;
 
         case StmtKind::Struct:
@@ -806,6 +813,17 @@ namespace vayu {
             int cnt = (int)n->elements.size();
             chunk_->emit((uint8_t)((cnt >> 8) & 0xFF), line);
             chunk_->emit((uint8_t)(cnt & 0xFF), line);
+            return;
+        }
+
+        case ExprKind::Slice: {
+            auto* n = static_cast<const SliceExpr*>(e);
+            compileExpr(n->target.get());
+            if (n->start) compileExpr(n->start.get());
+            else          chunk_->emitOp(OpCode::NONE, line);
+            if (n->end)   compileExpr(n->end.get());
+            else          chunk_->emitOp(OpCode::NONE, line);
+            chunk_->emitOp(OpCode::SLICE, line);
             return;
         }
 

@@ -242,6 +242,7 @@ namespace vayu {
         if (check(TokenType::Enum))   return parseEnum();
         if (check(TokenType::With))   return parseWith();
         if (check(TokenType::Yield))  return parseYield();
+        if (check(TokenType::Extern)) return parseExtern();
 
         // Soft keyword `match`.  Try to parse as a match statement first,
         // and fall back to a normal expression statement (e.g. `match(x)`)
@@ -321,10 +322,8 @@ namespace vayu {
                             eqTok.location),
                         eqTok.location));
                 }
-                return std::make_unique<IfStmt>(
-                    std::make_unique<BoolLitExpr>(true, eqTok.location),
-                    std::move(blk),
-                    eqTok.location);
+                return std::make_unique<BlockStmt>(
+                    std::move(blk), eqTok.location);
             }
         }
 
@@ -970,6 +969,65 @@ namespace vayu {
         }
         return std::make_unique<ImportStmt>(name.lexeme, alias, imp.location);
     }
+    // Phase 15.0: extern "C":
+    //     def puts(s: str) -> int
+    //     def strlen(s: str) -> int
+    StmtPtr Parser::parseExtern() {
+        Token eTok = advance();
+        if (check(TokenType::String)) {
+            advance();
+        }
+        else {
+            throw ParseError("expected string ABI name after 'extern'",
+                peek().location);
+        }
+        expect(TokenType::Colon, "':' after extern ABI");
+        expect(TokenType::Newline, "newline after ':'");
+        expect(TokenType::Indent, "indented extern block");
+
+        auto node = std::make_unique<ExternBlockStmt>("C", eTok.location);
+
+        for (;;) {
+            skipNewlines();
+            if (isAtEnd() || check(TokenType::Dedent)) break;
+
+            if (!check(TokenType::Def))
+                throw ParseError(
+                    "expected 'def' inside extern block", peek().location);
+            Token defTok = advance();
+            Token nameTok = expect(TokenType::Identifier, "function name");
+
+            ExternFnDecl fn;
+            fn.name = nameTok.lexeme;
+            fn.loc = defTok.location;
+
+            expect(TokenType::LParen, "'(' after function name");
+            if (!check(TokenType::RParen)) {
+                fn.params.push_back(parseParam());
+                while (match(TokenType::Comma)) {
+                    if (check(TokenType::RParen)) break;
+                    fn.params.push_back(parseParam());
+                }
+            }
+            expect(TokenType::RParen, "')' to close parameter list");
+
+            if (match(TokenType::Arrow))
+                fn.returnType = parseTypeExpr();
+            else
+                fn.returnType = std::make_unique<NameRefExpr>("None",
+                    defTok.location);
+
+            node->funcs.push_back(std::move(fn));
+            if (!check(TokenType::Newline) && !check(TokenType::Dedent) &&
+                !isAtEnd())
+                throw ParseError("unexpected token after extern declaration",
+                    peek().location);
+        }
+        match(TokenType::Dedent);
+        if (node->funcs.empty())
+            throw ParseError("extern block has no declarations", eTok.location);
+        return node;
+    }
 
     StmtPtr Parser::parseFromImport() {
         Token fromTok = advance();
@@ -1310,10 +1368,30 @@ namespace vayu {
             }
             else if (check(TokenType::LBracket)) {
                 Token open = advance();
-                ExprPtr idx = parseExpression();
-                expect(TokenType::RBracket, "']' to close index");
-                e = std::make_unique<IndexExpr>(std::move(e), std::move(idx),
-                    open.location);
+                ExprPtr startE;
+                ExprPtr endE;
+                bool isSlice = false;
+
+                if (!check(TokenType::Colon) && !check(TokenType::RBracket)) {
+                    startE = parseExpression();
+                }
+                if (match(TokenType::Colon)) {
+                    isSlice = true;
+                    if (!check(TokenType::RBracket))
+                        endE = parseExpression();
+                }
+                expect(TokenType::RBracket, "']' to close index/slice");
+
+                if (isSlice) {
+                    e = std::make_unique<SliceExpr>(std::move(e),
+                        std::move(startE), std::move(endE), open.location);
+                }
+                else {
+                    if (!startE)
+                        throw ParseError("empty [] index", open.location);
+                    e = std::make_unique<IndexExpr>(std::move(e),
+                        std::move(startE), open.location);
+                }
             }
             else break;
         }

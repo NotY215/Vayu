@@ -55,6 +55,8 @@ namespace vayu {
         // ---- Phase 14.0 / 14.1 ----
         TUPLE_NEW,          // <count:u16>    pop count elems -> tuple
         SET_NEW,            // <count:u16>    pop count elems -> set (dedup'd)
+        SLICE,              // [target, start, end] -> sliced container.
+        // start or end may be NONE to mean "default".
         IN,                 // [lhs, rhs] -> bool
         // ---- Exceptions ----
         TRY_BEGIN,          // <offset:i16>   push handler

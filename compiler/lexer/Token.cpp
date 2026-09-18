@@ -63,6 +63,7 @@ namespace vayu {
         case TokenType::Shared:    return "Shared";
         case TokenType::Weak:      return "Weak";
         case TokenType::Const:     return "Const";
+        case TokenType::Extern:    return "Extern";
 
         case TokenType::Plus:        return "Plus";
         case TokenType::Minus:       return "Minus";

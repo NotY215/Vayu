@@ -177,6 +177,17 @@ namespace vayu {
                 prExpr(n->elements[i].get(), cp, i + 1 == n->elements.size());
             break;
         }
+        case ExprKind::Slice: {
+            auto* n = static_cast<const SliceExpr*>(e);
+            putLabel(prefix, isLast, "Slice");
+            std::string cp = childPrefix(prefix, isLast);
+            prExpr(n->target.get(), cp, false);
+            if (n->start) prExpr(n->start.get(), cp, false);
+            else          putLabel(cp, false, "start: <none>");
+            if (n->end)   prExpr(n->end.get(), cp, true);
+            else          putLabel(cp, true, "end: <none>");
+            break;
+        }
         case ExprKind::GenericType: {
             auto* n = static_cast<const GenericTypeExpr*>(e);
             std::string s = "GenericType(" + n->name + "<";
@@ -421,6 +432,28 @@ namespace vayu {
             putLabel(prefix, isLast, n->value ? "Yield" : "Yield (None)");
             if (n->value)
                 prExpr(n->value.get(), childPrefix(prefix, isLast), true);
+            break;
+        }
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            putLabel(prefix, isLast, "Block");
+            prBlock(n->body, childPrefix(prefix, isLast));
+            break;
+        }
+        case StmtKind::Extern: {
+            auto* n = static_cast<const ExternBlockStmt*>(s);
+            putLabel(prefix, isLast, "Extern(\"" + n->abi + "\")");
+            std::string cp = childPrefix(prefix, isLast);
+            for (size_t i = 0; i < n->funcs.size(); ++i) {
+                bool last = (i + 1 == n->funcs.size());
+                std::string hdr = "fn " + n->funcs[i].name + "(";
+                for (size_t j = 0; j < n->funcs[i].params.size(); ++j) {
+                    if (j) hdr += ", ";
+                    hdr += n->funcs[i].params[j].name;
+                }
+                hdr += ")";
+                putLabel(cp, last, hdr);
+            }
             break;
         }
         case StmtKind::Pass:     putLabel(prefix, isLast, "Pass"); break;

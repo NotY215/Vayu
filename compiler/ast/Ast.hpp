@@ -19,9 +19,9 @@ namespace vayu {
         ListLit, MapLit,
         Lambda,
         GenericType,
-        // Phase 14.0 / 14.1
         TupleLit,
         SetLit,
+        Slice,
     };
 
     enum class BinOp {
@@ -144,6 +144,18 @@ namespace vayu {
         explicit SetLitExpr(SourceLocation l) : Expr(ExprKind::SetLit, l) {}
     };
 
+    // Phase 14.4: `t[a:b]` / `t[a:]` / `t[:b]` / `t[:]`.
+    // `start` and `end` may each be null.
+    struct SliceExpr : Expr {
+        ExprPtr target;
+        ExprPtr start;
+        ExprPtr end;
+        SliceExpr(ExprPtr t, ExprPtr s, ExprPtr e, SourceLocation l)
+            : Expr(ExprKind::Slice, l), target(std::move(t)),
+            start(std::move(s)), end(std::move(e)) {
+        }
+    };
+
     struct LambdaExpr : Expr {
         std::vector<std::string> params;
         ExprPtr                  body;
@@ -176,6 +188,8 @@ namespace vayu {
         Const,
         Enum,
         Yield,
+        Block,
+        Extern,
     };
 
     struct Stmt {
@@ -365,6 +379,30 @@ namespace vayu {
         }
     };
 
+    // Phase 14.0b: inline statement block.  Used by the tuple-unpack desugar
+    // so that names bound inside stay visible in the enclosing scope (matches
+    // tree-walk and VM behavior; no new environment is created).
+    struct BlockStmt : Stmt {
+        Block body;
+        BlockStmt(Block b, SourceLocation l)
+            : Stmt(StmtKind::Block, l), body(std::move(b)) {
+        }
+    };
+    // Phase 15.0: extern "C" declarations.
+    struct ExternFnDecl {
+        std::string name;
+        std::vector<Param> params;
+        ExprPtr returnType;
+        SourceLocation loc;
+    };
+
+    struct ExternBlockStmt : Stmt {
+        std::string abi;              // "C" for now
+        std::vector<ExternFnDecl> funcs;
+        ExternBlockStmt(std::string a, SourceLocation l)
+            : Stmt(StmtKind::Extern, l), abi(std::move(a)) {
+        }
+    };
     const char* binOpName(BinOp op);
     const char* unOpName(UnOp  op);
     void printProgram(const Block& program);

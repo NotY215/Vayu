@@ -349,6 +349,79 @@ namespace vayu {
                     stack_.emplace_back(std::move(s));
                     break;
                 }
+                case OpCode::SLICE: {
+                    Value endV = std::move(stack_.back()); stack_.pop_back();
+                    Value startV = std::move(stack_.back()); stack_.pop_back();
+                    Value tgt = std::move(stack_.back()); stack_.pop_back();
+
+                    bool hasStart = !startV.isNone();
+                    bool hasEnd = !endV.isNone();
+                    long long start = 0, end = 0;
+
+                    auto resolve = [&](const Value& v) -> long long {
+                        if (!v.isInt())
+                            runtimeError("slice index must be int, got " +
+                                v.typeName());
+                        return v.asInt();
+                        };
+
+                    if (tgt.isList()) {
+                        auto lst = tgt.asList();
+                        long long len = (long long)lst->items.size();
+                        if (hasStart) start = resolve(startV);
+                        if (hasEnd)   end = resolve(endV);
+                        else          end = len;
+                        if (start < 0) start += len;
+                        if (end < 0) end += len;
+                        if (start < 0) start = 0;
+                        if (end < 0) end = 0;
+                        if (start > len) start = len;
+                        if (end > len) end = len;
+                        if (end < start) end = start;
+                        auto out = std::make_shared<ListValue>();
+                        for (long long i = start; i < end; ++i)
+                            out->items.push_back(lst->items[(size_t)i]);
+                        stack_.emplace_back(std::move(out));
+                        break;
+                    }
+                    if (tgt.isTuple()) {
+                        auto tup = tgt.asTuple();
+                        long long len = (long long)tup->items.size();
+                        if (hasStart) start = resolve(startV);
+                        if (hasEnd)   end = resolve(endV);
+                        else          end = len;
+                        if (start < 0) start += len;
+                        if (end < 0) end += len;
+                        if (start < 0) start = 0;
+                        if (end < 0) end = 0;
+                        if (start > len) start = len;
+                        if (end > len) end = len;
+                        if (end < start) end = start;
+                        auto out = std::make_shared<TupleValue>();
+                        for (long long i = start; i < end; ++i)
+                            out->items.push_back(tup->items[(size_t)i]);
+                        stack_.emplace_back(std::move(out));
+                        break;
+                    }
+                    if (tgt.isString()) {
+                        const std::string& s = tgt.asString();
+                        long long len = (long long)s.size();
+                        if (hasStart) start = resolve(startV);
+                        if (hasEnd)   end = resolve(endV);
+                        else          end = len;
+                        if (start < 0) start += len;
+                        if (end < 0) end += len;
+                        if (start < 0) start = 0;
+                        if (end < 0) end = 0;
+                        if (start > len) start = len;
+                        if (end > len) end = len;
+                        if (end < start) end = start;
+                        stack_.emplace_back(
+                            s.substr((size_t)start, (size_t)(end - start)));
+                        break;
+                    }
+                    runtimeError("cannot slice value of type " + tgt.typeName());
+                }
 
                                      // ---------- Functions ----------
                 case OpCode::MAKE_FN:
@@ -838,6 +911,13 @@ namespace vayu {
                 auto out = std::make_shared<ListValue>();
                 out->items = l.asList()->items;
                 for (auto& v : r.asList()->items) out->items.push_back(v);
+                stack_.emplace_back(std::move(out));
+                return;
+            }
+            if (l.isTuple() && r.isTuple()) {
+                auto out = std::make_shared<TupleValue>();
+                out->items = l.asTuple()->items;
+                for (auto& v : r.asTuple()->items) out->items.push_back(v);
                 stack_.emplace_back(std::move(out));
                 return;
             }

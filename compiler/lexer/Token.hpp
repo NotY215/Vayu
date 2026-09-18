@@ -24,7 +24,8 @@ namespace vayu {
         And, Or, Not, In, Is, Lambda, Yield,
         IntKw, FloatKw, BoolKw, StrKw, CharKw, BytesKw,
         Ptr, Ref, Unique, Shared, Weak,
-        Const,          // Phase 11.1b — hard keyword
+        Const,
+        Extern,
 
         // --- Operators / punctuation ---
         Plus, Minus, Star, Slash, Percent, StarStar, SlashSlash,

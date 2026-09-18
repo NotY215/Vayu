@@ -102,6 +102,8 @@ namespace vayu {
                 std::printf(" %d", cnt);
                 break;
             }
+            case OpCode::SLICE:
+                break;
             case OpCode::MAKE_FN: {
                 int idx = chunk.readU16(i); i += 2;
                 std::printf(" %d", idx);

@@ -404,6 +404,12 @@ namespace vayu {
 
         case StmtKind::Struct:
         case StmtKind::Enum: return;
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            execBlock(n->body);
+            return;
+        }
+        case StmtKind::Extern: return;
         case StmtKind::Pass:     return;
         case StmtKind::Break:    throw BreakSignal{};
         case StmtKind::Continue: throw ContinueSignal{};
@@ -979,6 +985,77 @@ namespace vayu {
             return Value(s);
         }
 
+        case ExprKind::Slice: {
+            auto* n = static_cast<const SliceExpr*>(e);
+            Value tgt = eval(n->target.get());
+            bool hasStart = (n->start != nullptr);
+            bool hasEnd = (n->end != nullptr);
+            long long start = 0, end = 0;
+
+            auto resolve = [](const Value& v) -> long long {
+                if (!v.isInt())
+                    throw std::runtime_error("slice index must be int");
+                return v.asInt();
+                };
+
+            if (tgt.isList()) {
+                auto lst = tgt.asList();
+                long long len = (long long)lst->items.size();
+                if (hasStart) start = resolve(eval(n->start.get()));
+                else          start = 0;
+                if (hasEnd)   end = resolve(eval(n->end.get()));
+                else          end = len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                if (start < 0) start = 0;
+                if (end < 0) end = 0;
+                if (start > len) start = len;
+                if (end > len) end = len;
+                if (end < start) end = start;
+                auto out = std::make_shared<ListValue>();
+                for (long long i = start; i < end; ++i)
+                    out->items.push_back(lst->items[(size_t)i]);
+                return Value(out);
+            }
+            if (tgt.isTuple()) {
+                auto tup = tgt.asTuple();
+                long long len = (long long)tup->items.size();
+                if (hasStart) start = resolve(eval(n->start.get()));
+                else          start = 0;
+                if (hasEnd)   end = resolve(eval(n->end.get()));
+                else          end = len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                if (start < 0) start = 0;
+                if (end < 0) end = 0;
+                if (start > len) start = len;
+                if (end > len) end = len;
+                if (end < start) end = start;
+                auto out = std::make_shared<TupleValue>();
+                for (long long i = start; i < end; ++i)
+                    out->items.push_back(tup->items[(size_t)i]);
+                return Value(out);
+            }
+            if (tgt.isString()) {
+                const std::string& s = tgt.asString();
+                long long len = (long long)s.size();
+                if (hasStart) start = resolve(eval(n->start.get()));
+                else          start = 0;
+                if (hasEnd)   end = resolve(eval(n->end.get()));
+                else          end = len;
+                if (start < 0) start += len;
+                if (end < 0) end += len;
+                if (start < 0) start = 0;
+                if (end < 0) end = 0;
+                if (start > len) start = len;
+                if (end > len) end = len;
+                if (end < start) end = start;
+                return Value(s.substr((size_t)start, (size_t)(end - start)));
+            }
+            throw RuntimeError(
+                "cannot slice value of type " + tgt.typeName(), e->loc);
+        }
+
         case ExprKind::Lambda: {
             auto* n = static_cast<const LambdaExpr*>(e);
             auto fn = std::make_shared<Callable>();
@@ -1338,6 +1415,12 @@ namespace vayu {
                 auto out = std::make_shared<ListValue>();
                 out->items = l.asList()->items;
                 for (auto& v : r.asList()->items) out->items.push_back(v);
+                return Value(out);
+            }
+            if (l.isTuple() && r.isTuple()) {
+                auto out = std::make_shared<TupleValue>();
+                out->items = l.asTuple()->items;
+                for (auto& v : r.asTuple()->items) out->items.push_back(v);
                 return Value(out);
             }
             numFail();

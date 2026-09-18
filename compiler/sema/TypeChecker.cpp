@@ -390,6 +390,26 @@ namespace vayu {
             default: break;
             }
         }
+        // ---- Phase 15.0: extern "C" ----
+        for (auto& s : program.stmts) {
+            if (s->kind != StmtKind::Extern) continue;
+            auto* ex = static_cast<const ExternBlockStmt*>(s.get());
+            for (auto& fn : ex->funcs) {
+                std::vector<TypePtr> params;
+                for (auto& p : fn.params)
+                    params.push_back(p.type ? resolveTypeExpr(p.type.get())
+                        : Types::Any());
+                TypePtr ret = fn.returnType
+                    ? resolveTypeExpr(fn.returnType.get())
+                    : Types::None();
+                auto sig = Types::Function(std::move(params), ret);
+                if (functions_.count(fn.name))
+                    error(fn.loc, "extern function '" + fn.name +
+                        "' conflicts with an existing definition");
+                functions_[fn.name] = sig;
+                defineVar(fn.name, sig);
+            }
+        }
     }
 
     // ===========================================================================
@@ -1029,6 +1049,16 @@ namespace vayu {
             return;
         }
 
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            for (auto& st : n->body.stmts) checkStmt(st.get());
+            return;
+        }
+
+        case StmtKind::Extern:
+            // Phase 15.0: signatures already collected by collectSignatures.
+            return;
+
         case StmtKind::Pass:
             return;
 
@@ -1116,7 +1146,18 @@ namespace vayu {
             }
             return Types::Set(elem);
         }
-
+        case ExprKind::Slice: {
+            auto* n = static_cast<const SliceExpr*>(e);
+            TypePtr tgt = checkExpr(n->target.get());
+            if (n->start) checkExpr(n->start.get());
+            if (n->end)   checkExpr(n->end.get());
+            if (tgt->kind == TypeKind::List || tgt->kind == TypeKind::Str ||
+                tgt->kind == TypeKind::Tuple)
+                return tgt;
+            if (tgt->kind == TypeKind::Any || tgt->kind == TypeKind::Error)
+                return tgt;
+            error(n->loc, "cannot slice value of type " + tgt->toString());
+        }
         case ExprKind::Lambda: {
             auto* n = static_cast<const LambdaExpr*>(e);
             pushScope();
@@ -1214,6 +1255,11 @@ namespace vayu {
                             lt->toString() + " and " +
                             rt->toString());
                     return lt;
+                }
+                if (lt->kind == TypeKind::Tuple && rt->kind == TypeKind::Tuple) {
+                    std::vector<TypePtr> elems = lt->params;
+                    for (auto& p : rt->params) elems.push_back(p);
+                    return Types::Tuple(std::move(elems));
                 }
                 error(n->loc, "cannot add " + lt->toString() +
                     " and " + rt->toString());

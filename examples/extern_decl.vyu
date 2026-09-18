@@ -1,0 +1,7 @@
+extern "C":
+    def puts(s: str) -> int
+    def strlen(s: str) -> int
+    def abs(x: int) -> int
+
+print("extern C declarations parsed and type-checked")
+print(1 + 2)

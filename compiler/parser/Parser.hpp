@@ -57,6 +57,7 @@ namespace vayu {
         StmtPtr  parseMatch();
         StmtPtr  parseWith();
         StmtPtr  parseYield();
+        StmtPtr  parseExtern();
         StmtPtr  buildCompoundAssign(ExprPtr target, BinOp op,
             ExprPtr rhs, SourceLocation loc);
         Param    parseParam();
