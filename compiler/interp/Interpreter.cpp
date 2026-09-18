@@ -1971,6 +1971,311 @@ namespace vayu {
             if (a.at(0).isInt()) return Value(true);
             return Value(a.at(0).isFloat() && std::isfinite(a[0].asFloat()));
         }
+        // ---- Phase 13.0 — inspection & pure helpers ----
+
+        uint64_t fnv1a64(const std::string& s) {
+            uint64_t h = 1469598103934665603ULL;
+            for (unsigned char c : s) { h ^= c; h *= 1099511628211ULL; }
+            return h;
+        }
+        long long mixInt64(long long x) {
+            uint64_t h = (uint64_t)x;
+            h ^= h >> 33; h *= 0xff51afd7ed558ccdULL;
+            h ^= h >> 33; h *= 0xc4ceb9fe1a85ec53ULL;
+            h ^= h >> 33;
+            return (long long)h;
+        }
+
+        Value bi_hash(const std::vector<Value>& a) {
+            if (a.size() != 1) throw std::runtime_error("hash() takes 1 argument");
+            const Value& v = a[0];
+            if (v.isInt())    return Value(mixInt64(v.asInt()));
+            if (v.isFloat())  return Value(mixInt64((long long)v.asFloat()));
+            if (v.isBool())   return Value((long long)(v.asBool() ? 1 : 0));
+            if (v.isNone())   return Value((long long)0);
+            if (v.isString()) return Value((long long)fnv1a64(v.asString()));
+            if (v.isList())   return Value((long long)(uintptr_t)v.asList().get());
+            if (v.isMap())    return Value((long long)(uintptr_t)v.asMap().get());
+            if (v.isInstance()) return Value((long long)(uintptr_t)v.asInstance().get());
+            if (v.isCallable()) return Value((long long)(uintptr_t)v.asCallable().get());
+            if (v.isClass())  return Value((long long)(uintptr_t)v.asClass().get());
+            if (v.isModule()) return Value((long long)(uintptr_t)v.asModule().get());
+            if (v.isGenerator()) return Value((long long)(uintptr_t)v.asGenerator().get());
+            return Value((long long)0);
+        }
+        Value bi_id(const std::vector<Value>& a) {
+            if (a.size() != 1) throw std::runtime_error("id() takes 1 argument");
+            const Value& v = a[0];
+            if (v.isInt())    return Value((long long)v.asInt());
+            if (v.isFloat())  return Value((long long)v.asFloat());
+            if (v.isBool())   return Value((long long)(v.asBool() ? 1 : 0));
+            if (v.isNone())   return Value((long long)0);
+            if (v.isString()) return Value((long long)(uintptr_t)&v);
+            if (v.isList())   return Value((long long)(uintptr_t)v.asList().get());
+            if (v.isMap())    return Value((long long)(uintptr_t)v.asMap().get());
+            if (v.isInstance()) return Value((long long)(uintptr_t)v.asInstance().get());
+            if (v.isCallable()) return Value((long long)(uintptr_t)v.asCallable().get());
+            if (v.isClass())  return Value((long long)(uintptr_t)v.asClass().get());
+            if (v.isModule()) return Value((long long)(uintptr_t)v.asModule().get());
+            if (v.isGenerator()) return Value((long long)(uintptr_t)v.asGenerator().get());
+            return Value((long long)0);
+        }
+        Value bi_callable(const std::vector<Value>& a) {
+            if (a.size() != 1) throw std::runtime_error("callable() takes 1 argument");
+            return Value(a[0].isCallable());
+        }
+
+        bool nameMatchesClass(Interpreter* I, const Value& v, const std::string& n) {
+            if (n == "int")   return v.isInt();
+            if (n == "float") return v.isFloat();
+            if (n == "bool")  return v.isBool();
+            if (n == "str")   return v.isString();
+            if (n == "None")  return v.isNone();
+            if (n == "list")  return v.isList();
+            if (n == "map")   return v.isMap();
+            if (v.isInstance() && v.asInstance()->cls) {
+                for (auto c = v.asInstance()->cls; c; c = c->parent)
+                    if (c->name == n) return true;
+            }
+            (void)I;
+            return false;
+        }
+        Value bi_isinstance(const std::vector<Value>& a) {
+            if (a.size() != 2) throw std::runtime_error("isinstance() takes 2 arguments");
+            const Value& v = a[0];
+            const Value& t = a[1];
+            if (t.isString())
+                return Value(nameMatchesClass(Interpreter::current_, v, t.asString()));
+            if (t.isClass()) {
+                if (!v.isInstance()) return Value(false);
+                for (auto c = v.asInstance()->cls; c; c = c->parent)
+                    if (c == t.asClass() || c->name == t.asClass()->name)
+                        return Value(true);
+                return Value(false);
+            }
+            if (t.isCallable() && t.asCallable()->kind == Callable::Kind::ClassCtor) {
+                auto cls = t.asCallable()->classObj;
+                if (!v.isInstance()) return Value(false);
+                for (auto c = v.asInstance()->cls; c; c = c->parent)
+                    if (c == cls || c->name == cls->name) return Value(true);
+                return Value(false);
+            }
+            return Value(false);
+        }
+        Value bi_issubclass(const std::vector<Value>& a) {
+            if (a.size() != 2) throw std::runtime_error("issubclass() takes 2 arguments");
+            auto asCls = [](const Value& v) -> std::shared_ptr<ClassObject> {
+                if (v.isClass()) return v.asClass();
+                if (v.isCallable() &&
+                    v.asCallable()->kind == Callable::Kind::ClassCtor)
+                    return v.asCallable()->classObj;
+                return nullptr;
+                };
+            auto A = asCls(a[0]);
+            auto B = asCls(a[1]);
+            if (!A || !B) return Value(false);
+            for (auto c = A; c; c = c->parent)
+                if (c == B || c->name == B->name) return Value(true);
+            return Value(false);
+        }
+        Value bi_getattr(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[1].isString())
+                throw std::runtime_error("getattr(obj, name) takes (any, str)");
+            return Interpreter::current_->vmGetAttr(a[0], a[1].asString(),
+                SourceLocation{});
+        }
+        Value bi_hasattr(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[1].isString())
+                throw std::runtime_error("hasattr(obj, name) takes (any, str)");
+            try {
+                (void)Interpreter::current_->vmGetAttr(a[0], a[1].asString(),
+                    SourceLocation{});
+                return Value(true);
+            }
+            catch (...) { return Value(false); }
+        }
+        Value bi_dir(const std::vector<Value>& a) {
+            if (a.size() != 1) throw std::runtime_error("dir() takes 1 argument");
+            std::vector<std::string> names;
+            const Value& v = a[0];
+            if (v.isInstance()) {
+                auto si = v.asInstance();
+                for (auto& kv : si->fields) names.push_back(kv.first);
+                for (auto c = si->cls; c; c = c->parent) {
+                    auto it = Interpreter::current_->classDecls_.find(c->name);
+                    if (it == Interpreter::current_->classDecls_.end()) continue;
+                    for (auto& m : it->second->methods)
+                        names.push_back(m->name);
+                }
+            }
+            else if (v.isModule()) {
+                for (auto& kv : v.asModule()->members) names.push_back(kv.first);
+            }
+            else if (v.isString()) {
+                names = { "upper", "lower", "strip", "split", "join",
+                          "replace", "find", "contains", "starts_with",
+                          "ends_with", "is_digit", "is_alpha", "is_space",
+                          "char_at", "to_int", "substr", "lstrip", "rstrip" };
+            }
+            else if (v.isList()) {
+                names = { "append", "pop", "clear", "insert", "remove",
+                          "contains", "index" };
+            }
+            else if (v.isMap()) {
+                names = { "put", "get", "remove", "contains", "keys",
+                          "values", "clear" };
+            }
+            std::sort(names.begin(), names.end());
+            names.erase(std::unique(names.begin(), names.end()), names.end());
+            auto out = std::make_shared<ListValue>();
+            for (auto& n : names) out->items.push_back(Value(n));
+            return Value(out);
+        }
+        Value bi_repr(const std::vector<Value>& a) {
+            if (a.size() != 1) throw std::runtime_error("repr() takes 1 argument");
+            return Value(a[0].toString());
+        }
+        Value bi_enumerate(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isList())
+                throw std::runtime_error("enumerate() takes a list");
+            auto out = std::make_shared<ListValue>();
+            auto src = a[0].asList();
+            for (size_t i = 0; i < src->items.size(); ++i) {
+                auto pair = std::make_shared<ListValue>();
+                pair->items.push_back(Value((long long)i));
+                pair->items.push_back(src->items[i]);
+                out->items.push_back(Value(pair));
+            }
+            return Value(out);
+        }
+        Value bi_zip(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isList() || !a[1].isList())
+                throw std::runtime_error("zip(a, b) takes two lists");
+            auto out = std::make_shared<ListValue>();
+            auto x = a[0].asList();
+            auto y = a[1].asList();
+            size_t n = std::min(x->items.size(), y->items.size());
+            for (size_t i = 0; i < n; ++i) {
+                auto pair = std::make_shared<ListValue>();
+                pair->items.push_back(x->items[i]);
+                pair->items.push_back(y->items[i]);
+                out->items.push_back(Value(pair));
+            }
+            return Value(out);
+        }
+        Value bi_reversed(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isList())
+                throw std::runtime_error("reversed() takes a list");
+            auto out = std::make_shared<ListValue>();
+            auto src = a[0].asList();
+            out->items.assign(src->items.rbegin(), src->items.rend());
+            return Value(out);
+        }
+        Value bi_round(const std::vector<Value>& a) {
+            if (a.empty() || a.size() > 2)
+                throw std::runtime_error("round() takes 1 or 2 arguments");
+            double x = a[0].isInt() ? (double)a[0].asInt() : a[0].asFloat();
+            if (a.size() == 1) {
+                return Value((long long)std::llround(x));
+            }
+            if (!a[1].isInt()) throw std::runtime_error("round() digits must be int");
+            long long d = a[1].asInt();
+            double scale = std::pow(10.0, (double)d);
+            double r = std::round(x * scale) / scale;
+            if (d <= 0) return Value((long long)r);
+            return Value(r);
+        }
+        Value bi_pow(const std::vector<Value>& a) {
+            if (a.size() < 2 || a.size() > 3)
+                throw std::runtime_error("pow() takes 2 or 3 arguments");
+            if (a.size() == 3) {
+                if (!a[0].isInt() || !a[1].isInt() || !a[2].isInt())
+                    throw std::runtime_error("3-arg pow() requires ints");
+                long long b = a[0].asInt(), e = a[1].asInt(), m = a[2].asInt();
+                long long r = 1 % m;
+                b %= m;
+                while (e > 0) {
+                    if (e & 1) r = (r * b) % m;
+                    b = (b * b) % m;
+                    e >>= 1;
+                }
+                return Value(r);
+            }
+            if (a[0].isInt() && a[1].isInt() && a[1].asInt() >= 0) {
+                long long b = a[0].asInt(), e = a[1].asInt(), r = 1;
+                while (e > 0) {
+                    if (e & 1) r *= b;
+                    b *= b;
+                    e >>= 1;
+                }
+                return Value(r);
+            }
+            double b = a[0].isInt() ? (double)a[0].asInt() : a[0].asFloat();
+            double e = a[1].isInt() ? (double)a[1].asInt() : a[1].asFloat();
+            return Value(std::pow(b, e));
+        }
+        Value bi_divmod(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isNumber() || !a[1].isNumber())
+                throw std::runtime_error("divmod(a, b) requires numbers");
+            auto out = std::make_shared<ListValue>();
+            if (a[0].isInt() && a[1].isInt()) {
+                long long x = a[0].asInt(), y = a[1].asInt();
+                if (y == 0) throw std::runtime_error("divmod: division by zero");
+                long long q = x / y;
+                long long r = x % y;
+                if (r != 0 && ((r < 0) != (y < 0))) { q--; r += y; }
+                out->items.push_back(Value(q));
+                out->items.push_back(Value(r));
+            }
+            else {
+                double x = a[0].asDouble(), y = a[1].asDouble();
+                if (y == 0.0) throw std::runtime_error("divmod: division by zero");
+                double q = std::floor(x / y);
+                double r = x - q * y;
+                out->items.push_back(Value(q));
+                out->items.push_back(Value(r));
+            }
+            return Value(out);
+        }
+        Value bi_sign(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isNumber())
+                throw std::runtime_error("sign() requires a number");
+            double x = a[0].asDouble();
+            return Value((long long)((x > 0) - (x < 0)));
+        }
+        long long igcd(long long a, long long b) {
+            if (a < 0) a = -a;
+            if (b < 0) b = -b;
+            while (b) { long long t = a % b; a = b; b = t; }
+            return a;
+        }
+        Value bi_gcd(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isInt() || !a[1].isInt())
+                throw std::runtime_error("gcd(a, b) requires two ints");
+            return Value(igcd(a[0].asInt(), a[1].asInt()));
+        }
+        Value bi_lcm(const std::vector<Value>& a) {
+            if (a.size() != 2 || !a[0].isInt() || !a[1].isInt())
+                throw std::runtime_error("lcm(a, b) requires two ints");
+            long long x = a[0].asInt(), y = a[1].asInt();
+            if (x == 0 || y == 0) return Value((long long)0);
+            long long g = igcd(x, y);
+            return Value((x / g) * y);
+        }
+        Value bi_clamp(const std::vector<Value>& a) {
+            if (a.size() != 3 || !a[0].isNumber() || !a[1].isNumber() || !a[2].isNumber())
+                throw std::runtime_error("clamp(x, lo, hi) requires three numbers");
+            if (a[0].isInt() && a[1].isInt() && a[2].isInt()) {
+                long long x = a[0].asInt(), lo = a[1].asInt(), hi = a[2].asInt();
+                if (x < lo) return Value(lo);
+                if (x > hi) return Value(hi);
+                return Value(x);
+            }
+            double x = a[0].asDouble(), lo = a[1].asDouble(), hi = a[2].asDouble();
+            if (x < lo) return Value(lo);
+            if (x > hi) return Value(hi);
+            return Value(x);
+        }
     } // namespace
 
     namespace {
@@ -2013,6 +2318,26 @@ namespace vayu {
         add("any", bi_any);
         add("all", bi_all);
         add("sum", bi_sum);
+        // Phase 13.0 — inspection & pure helpers.
+        add("hash", bi_hash);
+        add("id", bi_id);
+        add("callable", bi_callable);
+        add("isinstance", bi_isinstance);
+        add("issubclass", bi_issubclass);
+        add("getattr", bi_getattr);
+        add("hasattr", bi_hasattr);
+        add("dir", bi_dir);
+        add("repr", bi_repr);
+        add("enumerate", bi_enumerate);
+        add("zip", bi_zip);
+        add("reversed", bi_reversed);
+        add("round", bi_round);
+        add("pow", bi_pow);
+        add("divmod", bi_divmod);
+        add("sign", bi_sign);
+        add("gcd", bi_gcd);
+        add("lcm", bi_lcm);
+        add("clamp", bi_clamp);
         add("next", bi_next);
     }
 

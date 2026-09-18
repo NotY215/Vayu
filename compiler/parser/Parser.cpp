@@ -4,7 +4,7 @@
 
 namespace vayu {
 
-    // Python-style precedence (higher = binds tighter):
+    // Precedence, from loosest to tightest:
     //   1  or
     //   2  and
     //   3  ==  !=  <  >  <=  >=  in  is
@@ -34,7 +34,35 @@ namespace vayu {
         default: return -1;
         }
     }
-    // Phase 11.1i: parse integer literal text with base prefix.
+    static BinOp tokenToBinOp(TokenType t) {
+        switch (t) {
+        case TokenType::Plus: return BinOp::Add;
+        case TokenType::Minus: return BinOp::Sub;
+        case TokenType::Star: return BinOp::Mul;
+        case TokenType::Slash: return BinOp::Div;
+        case TokenType::SlashSlash: return BinOp::FloorDiv;
+        case TokenType::Percent: return BinOp::Mod;
+        case TokenType::StarStar: return BinOp::Pow;
+        case TokenType::Eq: return BinOp::Eq;
+        case TokenType::NotEq: return BinOp::NotEq;
+        case TokenType::Lt: return BinOp::Lt;
+        case TokenType::Gt: return BinOp::Gt;
+        case TokenType::LtEq: return BinOp::LtEq;
+        case TokenType::GtEq: return BinOp::GtEq;
+        case TokenType::And: return BinOp::And;
+        case TokenType::Or: return BinOp::Or;
+        case TokenType::In: return BinOp::In;
+        case TokenType::Is: return BinOp::Is;
+        case TokenType::Amp: return BinOp::BAnd;
+        case TokenType::Pipe: return BinOp::BOr;
+        case TokenType::Caret: return BinOp::BXor;
+        case TokenType::Shl: return BinOp::Shl;
+        case TokenType::Shr: return BinOp::Shr;
+        default: return BinOp::Add;
+        }
+    }
+
+    // Parse an integer literal with optional 0b/0o/0x prefix.
     static long long parseIntLiteralText(const std::string& s, SourceLocation loc) {
         try {
             if (s.size() >= 2 && s[0] == '0') {
@@ -50,27 +78,8 @@ namespace vayu {
         }
     }
 
-    static BinOp tokenToBinOp(TokenType t) {
-        switch (t) {
-        case TokenType::Plus: return BinOp::Add; case TokenType::Minus: return BinOp::Sub;
-        case TokenType::Star: return BinOp::Mul; case TokenType::Slash: return BinOp::Div;
-        case TokenType::SlashSlash: return BinOp::FloorDiv; case TokenType::Percent: return BinOp::Mod;
-        case TokenType::StarStar: return BinOp::Pow; case TokenType::Eq: return BinOp::Eq;
-        case TokenType::NotEq: return BinOp::NotEq; case TokenType::Lt: return BinOp::Lt;
-        case TokenType::Gt: return BinOp::Gt; case TokenType::LtEq: return BinOp::LtEq;
-        case TokenType::GtEq: return BinOp::GtEq; case TokenType::And: return BinOp::And;
-        case TokenType::Or: return BinOp::Or; case TokenType::In: return BinOp::In;
-        case TokenType::Is: return BinOp::Is;
-        case TokenType::Amp: return BinOp::BAnd;
-        case TokenType::Pipe: return BinOp::BOr;
-        case TokenType::Caret: return BinOp::BXor;
-        case TokenType::Shl: return BinOp::Shl;
-        case TokenType::Shr: return BinOp::Shr;
-        default: return BinOp::Add;
-        }
-    }
-
     Parser::Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
+
     const Token& Parser::peek(int ahead) const {
         size_t i = pos_ + static_cast<size_t>(ahead);
         return i >= tokens_.size() ? tokens_.back() : tokens_[i];
@@ -78,8 +87,14 @@ namespace vayu {
     const Token& Parser::previous() const { return tokens_[pos_ - 1]; }
     bool Parser::isAtEnd() const { return peek().type == TokenType::EndOfFile; }
     bool Parser::check(TokenType t) const { return peek().type == t; }
-    bool Parser::match(TokenType t) { if (check(t)) { advance(); return true; } return false; }
-    const Token& Parser::advance() { if (!isAtEnd()) ++pos_; return tokens_[pos_ - 1]; }
+    bool Parser::match(TokenType t) {
+        if (check(t)) { advance(); return true; }
+        return false;
+    }
+    const Token& Parser::advance() {
+        if (!isAtEnd()) ++pos_;
+        return tokens_[pos_ - 1];
+    }
     const Token& Parser::expect(TokenType t, const char* what) {
         if (check(t)) return advance();
         throw ParseError(std::string("expected ") + what + ", found '" +
@@ -87,16 +102,17 @@ namespace vayu {
     }
     void Parser::skipNewlines() { while (check(TokenType::Newline)) advance(); }
 
-    // ---------------------------------------------------------------------
-    // Phase 11.1h — namespace
-    // ---------------------------------------------------------------------
+    // =========================================================================
+    // Phase 11.1h — namespace detection & splicing
+    // =========================================================================
+
     bool Parser::isNamespaceAhead() const {
         return check(TokenType::Identifier) && peek().lexeme == "namespace" &&
             peek(1).type == TokenType::Identifier;
     }
 
     Block Parser::parseNamespaceBody() {
-        advance();
+        advance();   // 'namespace'
         Token nameTok = expect(TokenType::Identifier, "namespace name");
         std::string nsName = nameTok.lexeme;
 
@@ -105,6 +121,7 @@ namespace vayu {
         expect(TokenType::Colon, "':' after namespace name");
         Block body = parseBlock();
 
+        // Prefix every top-level named definition with "Ns.".
         for (auto& st : body.stmts) {
             switch (st->kind) {
             case StmtKind::Def:
@@ -156,6 +173,7 @@ namespace vayu {
             skipNewlines();
             if (isAtEnd() || check(TokenType::Dedent)) break;
 
+            // Phase 11.1h: namespace body spliced inline.
             if (isNamespaceAhead()) {
                 Block nsBody = parseNamespaceBody();
                 for (auto& st : nsBody.stmts) {
@@ -165,7 +183,7 @@ namespace vayu {
                 continue;
             }
 
-            // Phase 11.1g: `defer expr`
+            // Phase 11.1g: `defer expr` — soft keyword, block-top only.
             if (check(TokenType::Identifier) && peek().lexeme == "defer" &&
                 peek(1).type != TokenType::Assign &&
                 peek(1).type != TokenType::PlusAssign &&
@@ -190,6 +208,7 @@ namespace vayu {
         match(TokenType::Dedent);
 
         if (!defers.empty()) {
+            // Wrap the body with nested try/finally so that defers run LIFO.
             Block result = std::move(b);
             for (int i = (int)defers.size() - 1; i >= 0; --i) {
                 Block fin;
@@ -224,7 +243,9 @@ namespace vayu {
         if (check(TokenType::With))   return parseWith();
         if (check(TokenType::Yield))  return parseYield();
 
-        // Soft keyword `match`, with rollback if parse fails.
+        // Soft keyword `match`.  Try to parse as a match statement first,
+        // and fall back to a normal expression statement (e.g. `match(x)`)
+        // if it doesn't work out.
         if (check(TokenType::Identifier) && peek().lexeme == "match" &&
             peek(1).type != TokenType::Assign &&
             peek(1).type != TokenType::PlusAssign &&
@@ -244,13 +265,16 @@ namespace vayu {
         }
 
         if (check(TokenType::Pass)) {
-            Token t = advance(); return std::make_unique<PassStmt>(t.location);
+            Token t = advance();
+            return std::make_unique<PassStmt>(t.location);
         }
         if (check(TokenType::Break)) {
-            Token t = advance(); return std::make_unique<BreakStmt>(t.location);
+            Token t = advance();
+            return std::make_unique<BreakStmt>(t.location);
         }
         if (check(TokenType::Continue)) {
-            Token t = advance(); return std::make_unique<ContinueStmt>(t.location);
+            Token t = advance();
+            return std::make_unique<ContinueStmt>(t.location);
         }
 
         if (check(TokenType::Identifier) && peek(1).type == TokenType::Colon)
@@ -261,6 +285,7 @@ namespace vayu {
     // =========================================================================
     // Phase 11.1e — match / case
     // =========================================================================
+
     StmtPtr Parser::parseMatch() {
         Token mTok = advance();
         ExprPtr subject = parseExpression();
@@ -283,7 +308,8 @@ namespace vayu {
             if (isAtEnd() || check(TokenType::Dedent)) break;
 
             if (!(check(TokenType::Identifier) && peek().lexeme == "case"))
-                throw ParseError("expected 'case' in match body", peek().location);
+                throw ParseError("expected 'case' in match body",
+                    peek().location);
             Token cTok = advance();
 
             RawCase rc;
@@ -304,7 +330,8 @@ namespace vayu {
                 advance();
                 if (!check(TokenType::RParen)) {
                     for (;;) {
-                        Token n = expect(TokenType::Identifier, "tuple pattern name");
+                        Token n = expect(TokenType::Identifier,
+                            "tuple pattern name");
                         rc.tupleNames.push_back(n.lexeme);
                         if (!match(TokenType::Comma)) break;
                         if (check(TokenType::RParen)) break;
@@ -327,8 +354,10 @@ namespace vayu {
         if (cases.empty())
             throw ParseError("match requires at least one case", mTok.location);
 
-        std::string subjName = "__match_subject_" + std::to_string(matchCounter_++);
-        std::string doneName = "__match_done_" + std::to_string(matchCounter_++);
+        std::string subjName = "__match_subject_" +
+            std::to_string(matchCounter_++);
+        std::string doneName = "__match_done_" +
+            std::to_string(matchCounter_++);
 
         Block result;
         result.stmts.push_back(std::make_unique<AssignStmt>(
@@ -401,22 +430,13 @@ namespace vayu {
             std::move(result),
             mTok.location);
     }
-    // =========================================================================
-    // Phase 11.1k1 — yield
-    // =========================================================================
-    StmtPtr Parser::parseYield() {
-        Token yTok = advance();   // 'yield'
-        ExprPtr value = nullptr;
-        if (!check(TokenType::Newline) && !check(TokenType::Dedent) && !isAtEnd())
-            value = parseExpression();
-        return std::make_unique<YieldStmt>(std::move(value), yTok.location);
-    }
 
     // =========================================================================
     // Phase 11.1f — with statement
     // =========================================================================
+
     StmtPtr Parser::parseWith() {
-        Token wTok = advance();
+        Token wTok = advance();   // 'with'
         ExprPtr res = parseExpression();
         std::string name;
         if (match(TokenType::As)) {
@@ -473,8 +493,22 @@ namespace vayu {
     }
 
     // =========================================================================
+    // Phase 11.1k1 — yield
+    // =========================================================================
+
+    StmtPtr Parser::parseYield() {
+        Token yTok = advance();
+        ExprPtr value = nullptr;
+        if (!check(TokenType::Newline) && !check(TokenType::Dedent) &&
+            !isAtEnd())
+            value = parseExpression();
+        return std::make_unique<YieldStmt>(std::move(value), yTok.location);
+    }
+
+    // =========================================================================
     // Phase 11.1i — compound assign desugar
     // =========================================================================
+
     StmtPtr Parser::buildCompoundAssign(ExprPtr target, BinOp op,
         ExprPtr rhs, SourceLocation loc) {
         if (target->kind == ExprKind::NameRef) {
@@ -484,29 +518,36 @@ namespace vayu {
             auto b = std::make_unique<BinaryExpr>(op, std::move(read),
                 std::move(rhs), loc);
             auto write = std::make_unique<NameRefExpr>(name, loc);
-            return std::make_unique<AssignStmt>(std::move(write), std::move(b), loc);
+            return std::make_unique<AssignStmt>(std::move(write),
+                std::move(b), loc);
         }
         if (target->kind == ExprKind::Attr) {
             auto* a = static_cast<const AttrExpr*>(target.get());
             if (a->target->kind == ExprKind::NameRef) {
-                const auto* base = static_cast<const NameRefExpr*>(a->target.get());
+                const auto* base =
+                    static_cast<const NameRefExpr*>(a->target.get());
                 std::string baseName = base->name;
                 std::string attrName = a->name;
                 auto read = std::make_unique<AttrExpr>(
-                    std::make_unique<NameRefExpr>(baseName, loc), attrName, loc);
+                    std::make_unique<NameRefExpr>(baseName, loc),
+                    attrName, loc);
                 auto b = std::make_unique<BinaryExpr>(op, std::move(read),
                     std::move(rhs), loc);
                 auto write = std::make_unique<AttrExpr>(
-                    std::make_unique<NameRefExpr>(baseName, loc), attrName, loc);
-                return std::make_unique<AssignStmt>(std::move(write), std::move(b), loc);
+                    std::make_unique<NameRefExpr>(baseName, loc),
+                    attrName, loc);
+                return std::make_unique<AssignStmt>(std::move(write),
+                    std::move(b), loc);
             }
         }
         if (target->kind == ExprKind::Index) {
             auto* ix = static_cast<const IndexExpr*>(target.get());
             if (ix->target->kind == ExprKind::NameRef &&
                 ix->index->kind == ExprKind::NameRef) {
-                const auto* base = static_cast<const NameRefExpr*>(ix->target.get());
-                const auto* idx = static_cast<const NameRefExpr*>(ix->index.get());
+                const auto* base =
+                    static_cast<const NameRefExpr*>(ix->target.get());
+                const auto* idx =
+                    static_cast<const NameRefExpr*>(ix->index.get());
                 std::string baseName = base->name;
                 std::string idxName = idx->name;
                 auto read = std::make_unique<IndexExpr>(
@@ -517,7 +558,8 @@ namespace vayu {
                 auto write = std::make_unique<IndexExpr>(
                     std::make_unique<NameRefExpr>(baseName, loc),
                     std::make_unique<NameRefExpr>(idxName, loc), loc);
-                return std::make_unique<AssignStmt>(std::move(write), std::move(b), loc);
+                return std::make_unique<AssignStmt>(std::move(write),
+                    std::move(b), loc);
             }
         }
         throw ParseError(
@@ -529,21 +571,20 @@ namespace vayu {
         SourceLocation start = peek().location;
         ExprPtr expr = parseExpression();
 
-        // Phase 11.1i — compound assigns.
         BinOp compoundOp = BinOp::Add;
         bool isCompound = false;
-        if (match(TokenType::PlusAssign)) { compoundOp = BinOp::Add;      isCompound = true; }
-        else if (match(TokenType::MinusAssign)) { compoundOp = BinOp::Sub;      isCompound = true; }
-        else if (match(TokenType::StarAssign)) { compoundOp = BinOp::Mul;      isCompound = true; }
-        else if (match(TokenType::SlashAssign)) { compoundOp = BinOp::Div;      isCompound = true; }
-        else if (match(TokenType::PercentAssign)) { compoundOp = BinOp::Mod;      isCompound = true; }
-        else if (match(TokenType::StarStarAssign)) { compoundOp = BinOp::Pow;      isCompound = true; }
+        if (match(TokenType::PlusAssign)) { compoundOp = BinOp::Add; isCompound = true; }
+        else if (match(TokenType::MinusAssign)) { compoundOp = BinOp::Sub; isCompound = true; }
+        else if (match(TokenType::StarAssign)) { compoundOp = BinOp::Mul; isCompound = true; }
+        else if (match(TokenType::SlashAssign)) { compoundOp = BinOp::Div; isCompound = true; }
+        else if (match(TokenType::PercentAssign)) { compoundOp = BinOp::Mod; isCompound = true; }
+        else if (match(TokenType::StarStarAssign)) { compoundOp = BinOp::Pow; isCompound = true; }
         else if (match(TokenType::SlashSlashAssign)) { compoundOp = BinOp::FloorDiv; isCompound = true; }
-        else if (match(TokenType::AmpAssign)) { compoundOp = BinOp::BAnd;     isCompound = true; }
-        else if (match(TokenType::PipeAssign)) { compoundOp = BinOp::BOr;      isCompound = true; }
-        else if (match(TokenType::CaretAssign)) { compoundOp = BinOp::BXor;     isCompound = true; }
-        else if (match(TokenType::ShlAssign)) { compoundOp = BinOp::Shl;      isCompound = true; }
-        else if (match(TokenType::ShrAssign)) { compoundOp = BinOp::Shr;      isCompound = true; }
+        else if (match(TokenType::AmpAssign)) { compoundOp = BinOp::BAnd; isCompound = true; }
+        else if (match(TokenType::PipeAssign)) { compoundOp = BinOp::BOr; isCompound = true; }
+        else if (match(TokenType::CaretAssign)) { compoundOp = BinOp::BXor; isCompound = true; }
+        else if (match(TokenType::ShlAssign)) { compoundOp = BinOp::Shl; isCompound = true; }
+        else if (match(TokenType::ShrAssign)) { compoundOp = BinOp::Shr; isCompound = true; }
 
         if (isCompound) {
             ExprPtr rhs = parseExpression();
@@ -553,30 +594,36 @@ namespace vayu {
 
         if (match(TokenType::Assign)) {
             ExprPtr value = parseExpression();
-            return std::make_unique<AssignStmt>(std::move(expr), std::move(value), start);
+            return std::make_unique<AssignStmt>(std::move(expr),
+                std::move(value), start);
         }
         return std::make_unique<ExprStmt>(std::move(expr), start);
     }
 
     StmtPtr Parser::parseAnnotatedAssign() {
-        Token name = advance(); advance();
+        Token name = advance();
+        advance();   // ':'
         ExprPtr type = parseTypeExpr();
         ExprPtr value = nullptr;
         if (match(TokenType::Assign)) value = parseExpression();
         return std::make_unique<AnnotAssignStmt>(name.lexeme, std::move(type),
             std::move(value), name.location);
     }
+
     StmtPtr Parser::parseReturn() {
         Token t = advance();
         ExprPtr value = nullptr;
-        if (!check(TokenType::Newline) && !check(TokenType::Dedent) && !isAtEnd())
+        if (!check(TokenType::Newline) && !check(TokenType::Dedent) &&
+            !isAtEnd())
             value = parseExpression();
         return std::make_unique<ReturnStmt>(std::move(value), t.location);
     }
+
     StmtPtr Parser::parseRaise() {
         Token t = advance();
         ExprPtr exc = nullptr;
-        if (!check(TokenType::Newline) && !check(TokenType::Dedent) && !isAtEnd())
+        if (!check(TokenType::Newline) && !check(TokenType::Dedent) &&
+            !isAtEnd())
             exc = parseExpression();
         return std::make_unique<RaiseStmt>(std::move(exc), t.location);
     }
@@ -615,7 +662,8 @@ namespace vayu {
             if (match(TokenType::Assign)) {
                 it.value = parseExpression();
                 if (it.value->kind == ExprKind::IntLit) {
-                    nextVal = static_cast<const IntLitExpr*>(it.value.get())->value + 1;
+                    nextVal = static_cast<const IntLitExpr*>(
+                        it.value.get())->value + 1;
                     autoIncrementOK = true;
                 }
                 else {
@@ -655,7 +703,8 @@ namespace vayu {
         Token tryTok = advance();
         expect(TokenType::Colon, "':' after try");
         Block tryBody = parseBlock();
-        auto stmt = std::make_unique<TryStmt>(std::move(tryBody), tryTok.location);
+        auto stmt = std::make_unique<TryStmt>(std::move(tryBody),
+            tryTok.location);
         bool sawExcept = false;
         while (check(TokenType::Except)) {
             sawExcept = true;
@@ -664,7 +713,8 @@ namespace vayu {
             if (!check(TokenType::Colon)) {
                 clause.exceptionType = parseExpression();
                 if (match(TokenType::As)) {
-                    Token var = expect(TokenType::Identifier, "variable name after 'as'");
+                    Token var = expect(TokenType::Identifier,
+                        "variable name after 'as'");
                     clause.varName = var.lexeme;
                 }
             }
@@ -681,18 +731,21 @@ namespace vayu {
                 tryTok.location);
         return stmt;
     }
+
     StmtPtr Parser::parseIf() {
         Token ifTok = advance();
         ExprPtr cond = parseExpression();
         expect(TokenType::Colon, "':' after if condition");
         Block thenBody = parseBlock();
-        auto stmt = std::make_unique<IfStmt>(std::move(cond), std::move(thenBody), ifTok.location);
+        auto stmt = std::make_unique<IfStmt>(std::move(cond),
+            std::move(thenBody), ifTok.location);
         while (check(TokenType::Elif)) {
             advance();
             ExprPtr econd = parseExpression();
             expect(TokenType::Colon, "':' after elif condition");
             Block ebody = parseBlock();
-            stmt->elifs.push_back(ElifClause{ std::move(econd), std::move(ebody) });
+            stmt->elifs.push_back(ElifClause{ std::move(econd),
+                                              std::move(ebody) });
         }
         if (check(TokenType::Else)) {
             advance();
@@ -701,13 +754,16 @@ namespace vayu {
         }
         return stmt;
     }
+
     StmtPtr Parser::parseWhile() {
         Token wTok = advance();
         ExprPtr cond = parseExpression();
         expect(TokenType::Colon, "':' after while condition");
         Block body = parseBlock();
-        return std::make_unique<WhileStmt>(std::move(cond), std::move(body), wTok.location);
+        return std::make_unique<WhileStmt>(std::move(cond), std::move(body),
+            wTok.location);
     }
+
     StmtPtr Parser::parseFor() {
         Token fTok = advance();
         Token varName = expect(TokenType::Identifier, "loop variable name");
@@ -718,25 +774,29 @@ namespace vayu {
         return std::make_unique<ForStmt>(varName.lexeme, std::move(iterable),
             std::move(body), fTok.location);
     }
+
     Param Parser::parseParam() {
         Token name = expect(TokenType::Identifier, "parameter name");
         Param p; p.name = name.lexeme;
         if (match(TokenType::Colon)) p.type = parseTypeExpr();
         return p;
     }
+
     std::unique_ptr<DefStmt> Parser::parseDef() {
         Token defTok = advance();
         Token name = expect(TokenType::Identifier, "function name");
 
-        // Phase 11.2: optional type parameter list `<T: C, U, ...>`.
+        // Phase 11.2: optional type parameter list `<T, U: Constraint, ...>`.
         std::vector<std::string> typeParams;
         std::vector<std::string> typeParamConstraints;
         if (match(TokenType::Lt)) {
             for (;;) {
-                Token tp = expect(TokenType::Identifier, "type parameter name");
+                Token tp = expect(TokenType::Identifier,
+                    "type parameter name");
                 std::string constraint;
                 if (match(TokenType::Colon)) {
-                    Token c = expect(TokenType::Identifier, "constraint name");
+                    Token c = expect(TokenType::Identifier,
+                        "constraint name");
                     constraint = c.lexeme;
                 }
                 typeParams.push_back(tp.lexeme);
@@ -760,14 +820,15 @@ namespace vayu {
         if (match(TokenType::Arrow)) retType = parseTypeExpr();
         expect(TokenType::Colon, "':' before function body");
         Block body = parseBlock();
+
         auto def = std::make_unique<DefStmt>(name.lexeme, std::move(params),
             std::move(retType), std::move(body),
             defTok.location);
         def->typeParams = std::move(typeParams);
         def->typeParamConstraints = std::move(typeParamConstraints);
 
-        // Phase 11.1k1: walk the body for a top-level `yield`.  If found,
-        // this function is a generator.
+        // Phase 11.1k1: mark generator functions by scanning the body for
+        // a top-level `yield`.
         std::function<bool(const Block&)> blockHasYield =
             [&](const Block& b) -> bool {
             for (auto& s : b.stmts) {
@@ -782,11 +843,13 @@ namespace vayu {
                     break;
                 }
                 case StmtKind::While:
-                    if (blockHasYield(static_cast<const WhileStmt*>(s.get())->body))
+                    if (blockHasYield(
+                        static_cast<const WhileStmt*>(s.get())->body))
                         return true;
                     break;
                 case StmtKind::For:
-                    if (blockHasYield(static_cast<const ForStmt*>(s.get())->body))
+                    if (blockHasYield(
+                        static_cast<const ForStmt*>(s.get())->body))
                         return true;
                     break;
                 case StmtKind::Try: {
@@ -794,7 +857,8 @@ namespace vayu {
                     if (blockHasYield(n->tryBody)) return true;
                     for (auto& h : n->handlers)
                         if (blockHasYield(h.body)) return true;
-                    if (n->finallyBody && blockHasYield(*n->finallyBody)) return true;
+                    if (n->finallyBody && blockHasYield(*n->finallyBody))
+                        return true;
                     break;
                 }
                 default: break;
@@ -834,15 +898,16 @@ namespace vayu {
             items.push_back(std::move(it));
             if (!match(TokenType::Comma)) break;
         }
-        return std::make_unique<FromImportStmt>(module.lexeme, std::move(items), fromTok.location);
+        return std::make_unique<FromImportStmt>(module.lexeme,
+            std::move(items), fromTok.location);
     }
 
-    // Phase 11.1j: peek for `public`/`private`/`protected` soft keywords.
+    // Phase 11.1j: `public` / `private` / `protected` soft keywords.
     bool Parser::consumeVisibility(Visibility& out) {
         if (!check(TokenType::Identifier)) return false;
         const std::string& w = peek().lexeme;
-        if (w == "public") { advance(); out = Visibility::Public;    return true; }
-        if (w == "private") { advance(); out = Visibility::Private;   return true; }
+        if (w == "public") { advance(); out = Visibility::Public; return true; }
+        if (w == "private") { advance(); out = Visibility::Private; return true; }
         if (w == "protected") { advance(); out = Visibility::Protected; return true; }
         return false;
     }
@@ -851,9 +916,14 @@ namespace vayu {
         Token name = expect(TokenType::Identifier, "field name");
         expect(TokenType::Colon, "':' after field name");
         ExprPtr type = parseTypeExpr();
-        FieldDef f; f.name = name.lexeme; f.type = std::move(type); f.loc = name.location;
-        if (!check(TokenType::Newline) && !check(TokenType::Dedent) && !isAtEnd())
-            throw ParseError("unexpected token after field type", peek().location);
+        FieldDef f;
+        f.name = name.lexeme;
+        f.type = std::move(type);
+        f.loc = name.location;
+        if (!check(TokenType::Newline) && !check(TokenType::Dedent) &&
+            !isAtEnd())
+            throw ParseError("unexpected token after field type",
+                peek().location);
         return f;
     }
 
@@ -871,22 +941,27 @@ namespace vayu {
         }
         match(TokenType::Dedent);
         if (fields.empty())
-            throw ParseError("struct '" + name.lexeme + "' has no fields", stTok.location);
-        return std::make_unique<StructStmt>(name.lexeme, std::move(fields), stTok.location);
+            throw ParseError("struct '" + name.lexeme + "' has no fields",
+                stTok.location);
+        return std::make_unique<StructStmt>(name.lexeme, std::move(fields),
+            stTok.location);
     }
 
     StmtPtr Parser::parseClass() {
         Token cTok = advance();
         Token name = expect(TokenType::Identifier, "class name");
 
+        // Phase 11.2b: optional type parameter list on classes.
         std::vector<std::string> typeParams;
         std::vector<std::string> typeParamConstraints;
         if (match(TokenType::Lt)) {
             for (;;) {
-                Token tp = expect(TokenType::Identifier, "type parameter name");
+                Token tp = expect(TokenType::Identifier,
+                    "type parameter name");
                 std::string constraint;
                 if (match(TokenType::Colon)) {
-                    Token c = expect(TokenType::Identifier, "constraint name");
+                    Token c = expect(TokenType::Identifier,
+                        "constraint name");
                     constraint = c.lexeme;
                 }
                 typeParams.push_back(tp.lexeme);
@@ -906,7 +981,8 @@ namespace vayu {
         expect(TokenType::Newline, "newline after ':'");
         expect(TokenType::Indent, "indented class body");
 
-        auto cls = std::make_unique<ClassStmt>(name.lexeme, parentName, cTok.location);
+        auto cls = std::make_unique<ClassStmt>(name.lexeme, parentName,
+            cTok.location);
         cls->typeParams = std::move(typeParams);
         cls->typeParamConstraints = std::move(typeParamConstraints);
 
@@ -918,7 +994,7 @@ namespace vayu {
             Visibility vis = Visibility::Public;
             consumeVisibility(vis);
 
-            // Phase 11.1c: static member.
+            // Phase 11.1c: static member declaration.
             if (check(TokenType::Identifier) && peek().lexeme == "static" &&
                 peek(1).type == TokenType::Identifier) {
                 advance();
@@ -944,7 +1020,8 @@ namespace vayu {
                 m->vis = vis;
                 cls->methods.push_back(std::move(m));
             }
-            else if (check(TokenType::Identifier) && peek(1).type == TokenType::Colon) {
+            else if (check(TokenType::Identifier) &&
+                peek(1).type == TokenType::Colon) {
                 FieldDef f = parseFieldDef();
                 f.vis = vis;
                 cls->fields.push_back(std::move(f));
@@ -957,7 +1034,8 @@ namespace vayu {
         match(TokenType::Dedent);
         if (cls->fields.empty() && cls->staticFields.empty() &&
             cls->methods.empty())
-            throw ParseError("class '" + name.lexeme + "' is empty", cTok.location);
+            throw ParseError("class '" + name.lexeme + "' is empty",
+                cTok.location);
         for (auto& f : cls->fields)
             for (auto& m : cls->methods)
                 if (f.name == m->name)
@@ -965,6 +1043,10 @@ namespace vayu {
                         "' declared as both field and method", f.loc);
         return cls;
     }
+
+    // =========================================================================
+    // Type expressions
+    // =========================================================================
 
     static bool isTypeStart(TokenType t) {
         switch (t) {
@@ -977,32 +1059,34 @@ namespace vayu {
         default: return false;
         }
     }
-    static bool isPrimitiveTypeName(TokenType t) {
-        switch (t) {
-        case TokenType::IntKw: case TokenType::FloatKw: case TokenType::BoolKw:
-        case TokenType::StrKw: case TokenType::CharKw:  case TokenType::BytesKw:
-        case TokenType::Ptr:   case TokenType::Ref:
-        case TokenType::Unique:case TokenType::Shared:  case TokenType::Weak:
-            return true;
-        default: return false;
-        }
-    }
+
     ExprPtr Parser::parseTypeExpr() {
         const Token& t = peek();
         if (!isTypeStart(t.type))
-            throw ParseError(std::string("expected type name, found '") + t.lexeme + "'",
-                t.location);
+            throw ParseError(std::string("expected type name, found '") +
+                t.lexeme + "'", t.location);
         Token name = advance();
-        if (isPrimitiveTypeName(name.type) || !check(TokenType::Lt))
+
+        // If the next token isn't '<', this is a bare type name.  Otherwise
+        // it's a generic instantiation.  We must not short-circuit on
+        // "primitive type name", because `unique`, `shared`, and `weak` are
+        // keyword tokens that legitimately take a type argument.
+        if (!check(TokenType::Lt))
             return std::make_unique<NameRefExpr>(name.lexeme, name.location);
-        advance();
-        auto node = std::make_unique<GenericTypeExpr>(name.lexeme, name.location);
+
+        advance();   // '<'
+        auto node = std::make_unique<GenericTypeExpr>(name.lexeme,
+            name.location);
         node->typeArgs.push_back(parseTypeExpr());
         while (match(TokenType::Comma))
             node->typeArgs.push_back(parseTypeExpr());
         expect(TokenType::Gt, "'>' to close type argument list");
         return node;
     }
+
+    // =========================================================================
+    // Expressions
+    // =========================================================================
 
     ExprPtr Parser::parseExpression() {
         if (check(TokenType::Lambda)) return parseLambda();
@@ -1034,29 +1118,36 @@ namespace vayu {
             BinOp op = tokenToBinOp(opTok.type);
             int nextMin = (op == BinOp::Pow) ? prec : prec + 1;
             ExprPtr right = parseBinary(nextMin);
-            left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right), opTok.location);
+            left = std::make_unique<BinaryExpr>(op, std::move(left),
+                std::move(right), opTok.location);
         }
         return left;
     }
+
     ExprPtr Parser::parseUnary() {
         if (match(TokenType::Minus)) {
             Token t = previous();
-            return std::make_unique<UnaryExpr>(UnOp::Neg, parseUnary(), t.location);
+            return std::make_unique<UnaryExpr>(UnOp::Neg, parseUnary(),
+                t.location);
         }
         if (match(TokenType::Plus)) {
             Token t = previous();
-            return std::make_unique<UnaryExpr>(UnOp::Pos, parseUnary(), t.location);
+            return std::make_unique<UnaryExpr>(UnOp::Pos, parseUnary(),
+                t.location);
         }
         if (match(TokenType::Not)) {
             Token t = previous();
-            return std::make_unique<UnaryExpr>(UnOp::Not, parseUnary(), t.location);
+            return std::make_unique<UnaryExpr>(UnOp::Not, parseUnary(),
+                t.location);
         }
         if (match(TokenType::Tilde)) {
             Token t = previous();
-            return std::make_unique<UnaryExpr>(UnOp::BNot, parseUnary(), t.location);
+            return std::make_unique<UnaryExpr>(UnOp::BNot, parseUnary(),
+                t.location);
         }
         return parsePostfix();
     }
+
     CallArg Parser::parseCallArg() {
         CallArg a; a.loc = peek().location;
         if (check(TokenType::Identifier) && peek(1).type == TokenType::Assign) {
@@ -1068,26 +1159,39 @@ namespace vayu {
         a.value = parseExpression();
         return a;
     }
+
     ExprPtr Parser::parsePostfix() {
         ExprPtr e = parsePrimary();
         for (;;) {
             if (match(TokenType::Dot)) {
                 Token name = peek();
-                if (name.lexeme.empty()) {
+                if (name.lexeme.empty())
                     throw ParseError("expected attribute name after '.'",
                         name.location);
-                }
                 char c0 = name.lexeme[0];
                 bool identish = (c0 == '_' ||
                     (c0 >= 'a' && c0 <= 'z') ||
                     (c0 >= 'A' && c0 <= 'Z'));
-                if (!identish) {
+                if (!identish)
                     throw ParseError(
-                        std::string("expected attribute name after '.', found '") +
-                        name.lexeme + "'", name.location);
-                }
+                        std::string("expected attribute name after '.', "
+                            "found '") + name.lexeme + "'",
+                        name.location);
                 advance();
 
+                // Phase 12.1: `x.upgrade()` on a weak<T> is erased to `x`.
+                // weak<T> shares the same runtime representation as T, so
+                // the desugar here makes `.upgrade()` a total no-op that
+                // every backend understands without any new opcodes.
+                if (name.lexeme == "upgrade" &&
+                    check(TokenType::LParen) &&
+                    peek(1).type == TokenType::RParen) {
+                    advance();   // '('
+                    advance();   // ')'
+                    continue;
+                }
+
+                // Phase 11.1h: `Namespace.member` -> NameRef("Ns.member").
                 if (e->kind == ExprKind::NameRef) {
                     auto* nre = static_cast<NameRefExpr*>(e.get());
                     if (namespaceNames_.count(nre->name)) {
@@ -1097,7 +1201,8 @@ namespace vayu {
                     }
                 }
 
-                e = std::make_unique<AttrExpr>(std::move(e), name.lexeme, name.location);
+                e = std::make_unique<AttrExpr>(std::move(e), name.lexeme,
+                    name.location);
             }
             else if (check(TokenType::LParen)) {
                 Token open = advance();
@@ -1110,18 +1215,21 @@ namespace vayu {
                     }
                 }
                 expect(TokenType::RParen, "')' to close argument list");
-                e = std::make_unique<CallExpr>(std::move(e), std::move(args), open.location);
+                e = std::make_unique<CallExpr>(std::move(e),
+                    std::move(args), open.location);
             }
             else if (check(TokenType::LBracket)) {
                 Token open = advance();
                 ExprPtr idx = parseExpression();
                 expect(TokenType::RBracket, "']' to close index");
-                e = std::make_unique<IndexExpr>(std::move(e), std::move(idx), open.location);
+                e = std::make_unique<IndexExpr>(std::move(e), std::move(idx),
+                    open.location);
             }
             else break;
         }
         return e;
     }
+
     ExprPtr Parser::parseListLit() {
         Token open = advance();
         auto node = std::make_unique<ListLitExpr>(open.location);
@@ -1135,6 +1243,7 @@ namespace vayu {
         expect(TokenType::RBracket, "']' to close list literal");
         return node;
     }
+
     ExprPtr Parser::parseMapLit() {
         Token open = advance();
         auto node = std::make_unique<MapLitExpr>(open.location);
@@ -1154,6 +1263,7 @@ namespace vayu {
         expect(TokenType::RBrace, "'}' to close map literal");
         return node;
     }
+
     ExprPtr Parser::parsePrimary() {
         const Token& t = peek();
         switch (t.type) {
@@ -1166,8 +1276,11 @@ namespace vayu {
             Token tok = advance();
             double v = 0;
             try { v = std::stod(tok.lexeme); }
-            catch (...) { throw ParseError("bad float literal", tok.location); }
-            return std::make_unique<FloatLitExpr>(v, tok.lexeme, tok.location);
+            catch (...) {
+                throw ParseError("bad float literal", tok.location);
+            }
+            return std::make_unique<FloatLitExpr>(v, tok.lexeme,
+                tok.location);
         }
         case TokenType::String: {
             Token tok = advance();
@@ -1190,8 +1303,10 @@ namespace vayu {
             return std::make_unique<NoneLitExpr>(tok.location);
         }
         case TokenType::Identifier:
-        case TokenType::IntKw: case TokenType::FloatKw: case TokenType::BoolKw:
-        case TokenType::StrKw: case TokenType::CharKw: case TokenType::BytesKw:
+        case TokenType::IntKw: case TokenType::FloatKw:
+        case TokenType::BoolKw:
+        case TokenType::StrKw: case TokenType::CharKw:
+        case TokenType::BytesKw:
         case TokenType::Ptr: case TokenType::Ref: case TokenType::Unique:
         case TokenType::Shared: case TokenType::Weak: {
             Token tok = advance();
@@ -1201,6 +1316,7 @@ namespace vayu {
             Token open = advance();
             ExprPtr first = parseExpression();
             if (check(TokenType::Comma)) {
+                // Tuple literal — desugared to a list literal.
                 auto lst = std::make_unique<ListLitExpr>(open.location);
                 lst->elements.push_back(std::move(first));
                 while (match(TokenType::Comma)) {
@@ -1211,7 +1327,8 @@ namespace vayu {
                 return lst;
             }
             expect(TokenType::RParen, "')' to close group");
-            return std::make_unique<GroupingExpr>(std::move(first), open.location);
+            return std::make_unique<GroupingExpr>(std::move(first),
+                open.location);
         }
         case TokenType::LBracket: return parseListLit();
         case TokenType::LBrace:   return parseMapLit();

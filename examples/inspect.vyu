@@ -1,0 +1,71 @@
+class Point:
+    x: int
+    y: int
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+    def dist2(self) -> int:
+        return self.x * self.x + self.y * self.y
+
+class Animal:
+    name: str
+    def __init__(self, n: str) -> None:
+        self.name = n
+
+class Dog(Animal):
+    def __init__(self) -> None:
+        self.name = "rex"
+
+def main() -> None:
+    print(callable(print))
+    print(callable(3))
+
+    p = Point(3, 4)
+    print(isinstance(p, Point))
+    print(isinstance(p, Animal))
+
+    d = Dog()
+    print(isinstance(d, Animal))
+    print(isinstance(d, Dog))
+
+    print(issubclass(Dog, Animal))
+    print(issubclass(Animal, Dog))
+    print(issubclass(Point, Exception))
+
+    print(hasattr(p, "x"))
+    print(hasattr(p, "dist2"))
+    print(hasattr(p, "zzz"))
+
+    print(getattr(p, "x"))
+    print(getattr(p, "y"))
+
+    h1 = hash("hello")
+    h2 = hash("hello")
+    print(h1 == h2)
+    print(hash(42) == hash(42))
+
+    print(repr("abc"))
+    print(repr(42))
+
+    print(enumerate(["a", "b", "c"]))
+    print(zip([1, 2, 3], ["x", "y", "z"]))
+    print(reversed([1, 2, 3, 4]))
+
+    print(round(3.14159))
+    print(round(3.14159, 2))
+    print(pow(2, 10))
+    print(pow(2, 10, 1000))
+    print(divmod(17, 5))
+    print(sign(-7))
+    print(sign(0))
+    print(sign(42))
+    print(gcd(12, 18))
+    print(lcm(4, 6))
+    print(clamp(15, 0, 10))
+    print(clamp(-3, 0, 10))
+    print(clamp(5, 0, 10))
+
+    names = dir(p)
+    print(len(names) > 0)
+
+main()

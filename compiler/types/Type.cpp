@@ -157,35 +157,11 @@ namespace vayu {
         if (to->kind == TypeKind::Error || from->kind == TypeKind::Error) return true;
         if (to->kind == TypeKind::Unknown || from->kind == TypeKind::Unknown) return true;
         if (to->kind == TypeKind::Float && from->kind == TypeKind::Int) return true;
-        // Phase 12.0: unique<T> semantics.
-        if (to->kind == TypeKind::Unique && from->kind == TypeKind::Unique) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        // Phase 12.1: shared<T> / weak<T> semantics.
-        if (to->kind == TypeKind::Shared && from->kind == TypeKind::Shared) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        if (to->kind == TypeKind::Weak && from->kind == TypeKind::Weak) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        // weak<T> -> shared<T>: only via .upgrade().  shared<T> -> weak<T>:
-        // only via explicit conversion.  None are implicit.
-        if (to->kind == TypeKind::Unique || from->kind == TypeKind::Unique ||
-            to->kind == TypeKind::Shared || from->kind == TypeKind::Shared ||
-            to->kind == TypeKind::Weak || from->kind == TypeKind::Weak)
-            return false;
 
-        // Phase 11.2: a bare type parameter is only assignable from itself.
         if (to->kind == TypeKind::TypeParam)
             return from->kind == TypeKind::TypeParam && to->name == from->name;
-        if (from->kind == TypeKind::TypeParam) {
-            // from is T#N, to is concrete — only allow when to is Any
-            // (handled above) or a matching TypeParam (handled above).
+        if (from->kind == TypeKind::TypeParam)
             return false;
-        }
 
         if (to->kind == TypeKind::Struct && from->kind == TypeKind::Struct) {
             if (to->name == from->name) return true;
@@ -196,12 +172,60 @@ namespace vayu {
         if (to->kind == TypeKind::Named && from->kind == TypeKind::Named)
             return to->name == from->name;
 
+        // Phase 12.0: unique<T>
+        if (to->kind == TypeKind::Unique && from->kind == TypeKind::Unique) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
+        // Phase 12.1: shared<T>
+        if (to->kind == TypeKind::Shared && from->kind == TypeKind::Shared) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
+        // Phase 12.1: weak<T>
+        if (to->kind == TypeKind::Weak && from->kind == TypeKind::Weak) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
+        // shared<T> -> weak<T> (non-owning view)
+        if (to->kind == TypeKind::Weak && from->kind == TypeKind::Shared) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
+        // weak<T> -> shared<T>.  In the current erasure model, the parser
+        // desugars `w.upgrade()` to bare `w`; this rule makes the resulting
+        // bare-name expression assignable to a `shared<T>` slot.
+        if (to->kind == TypeKind::Shared && from->kind == TypeKind::Weak) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
+        // Wrap sites: plain T initialises a unique<T> / shared<T> slot.
+        if (to->kind == TypeKind::Unique && from->kind != TypeKind::Unique) {
+            if (to->params.empty()) return true;
+            return isAssignable(to->params[0], from);
+        }
+        if (to->kind == TypeKind::Shared && from->kind != TypeKind::Shared) {
+            if (to->params.empty()) return true;
+            return isAssignable(to->params[0], from);
+        }
+
+        // Nothing else crosses the ownership boundary.
+        if (from->kind == TypeKind::Unique || from->kind == TypeKind::Shared ||
+            from->kind == TypeKind::Weak ||
+            to->kind == TypeKind::Unique || to->kind == TypeKind::Shared ||
+            to->kind == TypeKind::Weak)
+            return false;
+
+        // Collections.
         if (to->kind == TypeKind::List && from->kind == TypeKind::List) {
             TypePtr a = to->params.empty() ? Types::Any() : to->params[0];
             TypePtr b = from->params.empty() ? Types::Any() : from->params[0];
             if (a->kind == TypeKind::Any || b->kind == TypeKind::Any) return true;
-            if (a->kind == TypeKind::TypeParam || b->kind == TypeKind::TypeParam)
-                return a->equals(b);
             return a->equals(b);
         }
         if (to->kind == TypeKind::Map && from->kind == TypeKind::Map) {

@@ -61,13 +61,13 @@ namespace vayu {
         static std::string exceptionTypeName(const Value& v);
         static std::string exceptionMessage(const Value& v);
 
+        std::unordered_map<std::string, std::shared_ptr<ClassObject>> classes_;
+        std::unordered_map<std::string, const ClassStmt*>             classDecls_;
+
     private:
         std::shared_ptr<Environment> globals_;
         std::shared_ptr<Environment> env_;
         std::string                  sourceDir_;
-
-        std::unordered_map<std::string, std::shared_ptr<ClassObject>> classes_;
-        std::unordered_map<std::string, const ClassStmt*>             classDecls_;
 
         std::unordered_map<std::string, std::shared_ptr<ModuleValue>> moduleCache_;
         std::vector<std::unique_ptr<Block>> moduleAsts_;

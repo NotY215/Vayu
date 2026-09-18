@@ -88,6 +88,26 @@ namespace vayu {
         B("sum", Types::Function({ listAny }, A));
 
         B("next", Types::Function({ A }, A));
+        // Phase 13.0 — inspection & pure helpers.
+        B("hash", Types::Function({ A }, Types::Int()));
+        B("id", Types::Function({ A }, Types::Int()));
+        B("callable", Types::Function({ A }, Types::Bool()));
+        B("isinstance", Types::Function({ A, A }, Types::Bool()));
+        B("issubclass", Types::Function({ A, A }, Types::Bool()));
+        B("getattr", Types::Function({ A, Types::Str() }, A));
+        B("hasattr", Types::Function({ A, Types::Str() }, Types::Bool()));
+        B("dir", Types::Function({ A }, Types::List(Types::Str())));
+        B("repr", Types::Function({ A }, Types::Str()));
+        B("enumerate", Types::Function({ listAny }, Types::List(listAny)));
+        B("zip", Types::Function({ listAny, listAny }, Types::List(listAny)));
+        B("reversed", Types::Function({ listAny }, listAny));
+        B("round", Types::Function({ A }, Types::Int()));
+        B("pow", Types::Function({ A, A }, A));
+        B("divmod", Types::Function({ A, A }, Types::List(A)));
+        B("sign", Types::Function({ A }, Types::Int()));
+        B("gcd", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
+        B("lcm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
+        B("clamp", Types::Function({ A, A, A }, A));
 
         B("math", Types::Any());
 
@@ -832,10 +852,27 @@ namespace vayu {
             if (!currentReturnType_)
                 error(n->loc, "'return' outside function");
             TypePtr v = n->value ? checkExpr(n->value.get()) : Types::None();
-            if (!isAssignable(currentReturnType_, v))
-                error(n->loc, "returning " + v->toString() +
-                    " from function declared to return " +
-                    currentReturnType_->toString());
+
+            if (!isAssignable(currentReturnType_, v)) {
+                // Phase 12.1: `return u` inside a function declared to
+                // return `T` where `u: unique<T>` — a move-out.  The value
+                // is unwrapped, and the source name is marked moved so it
+                // can't be used again in this scope.
+                bool unwrapOK = false;
+                if (currentReturnType_ && v &&
+                    v->kind == TypeKind::Unique && !v->params.empty() &&
+                    isAssignable(currentReturnType_, v->params[0]))
+                    unwrapOK = true;
+
+                if (!unwrapOK)
+                    error(n->loc, "returning " + v->toString() +
+                        " from function declared to return " +
+                        currentReturnType_->toString());
+
+                if (n->value->kind == ExprKind::NameRef && !moved_.empty())
+                    moved_.back().insert(
+                        static_cast<const NameRefExpr*>(n->value.get())->name);
+            }
             return;
         }
 
@@ -1198,14 +1235,15 @@ namespace vayu {
                 TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
                 return Types::Function({}, Types::Shared(inner));
             }
-            // Phase 12.1: shared<T> — delegate field/method access to T.
-            if (t->kind == TypeKind::Shared) {
+            // Phase 12.1: shared<T> and unique<T> both delegate field/method
+            // access straight through to T.  Ownership is a compile-time
+            // discipline; at runtime these are T.
+            if (t->kind == TypeKind::Shared || t->kind == TypeKind::Unique) {
                 TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
                 if (inner->kind == TypeKind::Error || inner->kind == TypeKind::Any)
                     return Types::Any();
                 TypePtr saved = t;
                 t = inner;
-                // Fall through with t = inner for the rest of this case.
                 if (t->kind != TypeKind::Struct)
                     error(n->loc, "cannot read field or method '" + n->name +
                         "' on value of type " + saved->toString());
@@ -1419,7 +1457,9 @@ namespace vayu {
             if (nm && (nm->name == "print" || nm->name == "min" ||
                 nm->name == "max" || nm->name == "range" ||
                 nm->name == "list" || nm->name == "sorted" ||
-                nm->name == "input" || nm->name == "next"))
+                nm->name == "input" || nm->name == "next" ||
+                nm->name == "round" || nm->name == "pow" ||
+                nm->name == "divmod"))
                 return callee->returnType ? callee->returnType : Types::None();
 
             if (argTypes.size() != callee->params.size())

@@ -61,10 +61,6 @@ namespace vayu {
             ExprPtr rhs, SourceLocation loc);
         Param    parseParam();
         FieldDef parseFieldDef();
-
-        // Phase 11.1j: peek for a visibility modifier. Returns false if
-        // nothing matched, otherwise advances past the soft keyword and
-        // writes its value to `out`.
         bool     consumeVisibility(Visibility& out);
 
         ExprPtr  parseExpression();
