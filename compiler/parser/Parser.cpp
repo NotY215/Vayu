@@ -279,6 +279,55 @@ namespace vayu {
 
         if (check(TokenType::Identifier) && peek(1).type == TokenType::Colon)
             return parseAnnotatedAssign();
+
+        // Phase 14.0b: `a, b, c = expr` — desugared to
+        //   __unpack_N = expr
+        //   a = __unpack_N[0]
+        //   b = __unpack_N[1]
+        //   ...
+        // wrapped in a trivially-true `if` so parseStatement can return
+        // a single StmtPtr.
+        if (check(TokenType::Identifier) &&
+            peek(1).type == TokenType::Comma) {
+            size_t save = pos_;
+            std::vector<std::string> names;
+            names.push_back(advance().lexeme);
+            bool ok = true;
+            while (match(TokenType::Comma)) {
+                if (!check(TokenType::Identifier)) { ok = false; break; }
+                names.push_back(advance().lexeme);
+            }
+            if (!ok || names.size() < 2 || !check(TokenType::Assign)) {
+                pos_ = save;
+            }
+            else {
+                Token eqTok = advance();
+                ExprPtr value = parseExpression();
+                std::string tmpName = "__unpack_" +
+                    std::to_string(matchCounter_++);
+                Block blk;
+                blk.stmts.push_back(std::make_unique<AssignStmt>(
+                    std::make_unique<NameRefExpr>(tmpName, eqTok.location),
+                    std::move(value),
+                    eqTok.location));
+                for (size_t i = 0; i < names.size(); ++i) {
+                    blk.stmts.push_back(std::make_unique<AssignStmt>(
+                        std::make_unique<NameRefExpr>(names[i], eqTok.location),
+                        std::make_unique<IndexExpr>(
+                            std::make_unique<NameRefExpr>(tmpName,
+                                eqTok.location),
+                            std::make_unique<IntLitExpr>((long long)i,
+                                std::to_string(i), eqTok.location),
+                            eqTok.location),
+                        eqTok.location));
+                }
+                return std::make_unique<IfStmt>(
+                    std::make_unique<BoolLitExpr>(true, eqTok.location),
+                    std::move(blk),
+                    eqTok.location);
+            }
+        }
+
         return parseExprOrAssign();
     }
 
@@ -766,13 +815,54 @@ namespace vayu {
 
     StmtPtr Parser::parseFor() {
         Token fTok = advance();
-        Token varName = expect(TokenType::Identifier, "loop variable name");
+        std::vector<std::string> names;
+        if (check(TokenType::LParen)) {
+            advance();
+            names.push_back(expect(TokenType::Identifier,
+                "loop variable").lexeme);
+            while (match(TokenType::Comma)) {
+                if (check(TokenType::RParen)) break;
+                names.push_back(expect(TokenType::Identifier,
+                    "loop variable").lexeme);
+            }
+            expect(TokenType::RParen, "')' after loop variables");
+        }
+        else {
+            names.push_back(expect(TokenType::Identifier,
+                "loop variable").lexeme);
+        }
         expect(TokenType::In, "'in' after loop variable");
         ExprPtr iterable = parseExpression();
         expect(TokenType::Colon, "':' after iterable");
         Block body = parseBlock();
-        return std::make_unique<ForStmt>(varName.lexeme, std::move(iterable),
-            std::move(body), fTok.location);
+
+        if (names.size() == 1) {
+            return std::make_unique<ForStmt>(names[0], std::move(iterable),
+                std::move(body), fTok.location);
+        }
+
+        // Phase 14.0b: `for (k, v) in xs:` desugars to
+        //   for __for_item_N in xs:
+        //       k = __for_item_N[0]
+        //       v = __for_item_N[1]
+        //       <original body>
+        std::string tmpName = "__for_item_" +
+            std::to_string(matchCounter_++);
+        Block newBody;
+        for (size_t i = 0; i < names.size(); ++i) {
+            newBody.stmts.push_back(std::make_unique<AssignStmt>(
+                std::make_unique<NameRefExpr>(names[i], fTok.location),
+                std::make_unique<IndexExpr>(
+                    std::make_unique<NameRefExpr>(tmpName, fTok.location),
+                    std::make_unique<IntLitExpr>((long long)i,
+                        std::to_string(i), fTok.location),
+                    fTok.location),
+                fTok.location));
+        }
+        for (auto& st : body.stmts) newBody.stmts.push_back(std::move(st));
+
+        return std::make_unique<ForStmt>(tmpName, std::move(iterable),
+            std::move(newBody), fTok.location);
     }
 
     Param Parser::parseParam() {

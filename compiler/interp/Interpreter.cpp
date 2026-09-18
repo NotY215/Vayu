@@ -2354,6 +2354,11 @@ namespace vayu {
             if (a.size() != 1) throw std::runtime_error("list() takes 1 argument");
             const Value& v = a[0];
             if (v.isList()) return v;
+            if (v.isTuple()) {
+                auto lst = std::make_shared<ListValue>();
+                lst->items = v.asTuple()->items;
+                return Value(lst);
+            }
             if (v.isString()) {
                 auto lst = std::make_shared<ListValue>();
                 for (char c : v.asString()) lst->items.push_back(Value(std::string(1, c)));
@@ -2739,7 +2744,7 @@ namespace vayu {
             auto out = std::make_shared<ListValue>();
             auto src = a[0].asList();
             for (size_t i = 0; i < src->items.size(); ++i) {
-                auto pair = std::make_shared<ListValue>();
+                auto pair = std::make_shared<TupleValue>();
                 pair->items.push_back(Value((long long)i));
                 pair->items.push_back(src->items[i]);
                 out->items.push_back(Value(pair));
@@ -2754,7 +2759,7 @@ namespace vayu {
             auto y = a[1].asList();
             size_t n = std::min(x->items.size(), y->items.size());
             for (size_t i = 0; i < n; ++i) {
-                auto pair = std::make_shared<ListValue>();
+                auto pair = std::make_shared<TupleValue>();
                 pair->items.push_back(x->items[i]);
                 pair->items.push_back(y->items[i]);
                 out->items.push_back(Value(pair));

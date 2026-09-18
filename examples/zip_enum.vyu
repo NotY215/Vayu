@@ -1,0 +1,28 @@
+print("--- enumerate ---")
+for (i, x) in enumerate([10, 20, 30]):
+    print(i)
+    print(x)
+
+print("--- zip ---")
+a = [1, 2, 3]
+b = ["x", "y", "z"]
+for (k, v) in zip(a, b):
+    print(k)
+    print(v)
+
+print("--- zip direct index ---")
+pairs = zip([1, 2], ["a", "b"])
+print(pairs[0][0])
+print(pairs[0][1])
+print(pairs[1][0])
+print(pairs[1][1])
+
+print("--- len of zip result ---")
+print(len(zip([1, 2, 3], [4, 5, 6])))
+
+print("--- enumerate indexable ---")
+e = enumerate(["foo", "bar"])
+print(e[0][0])
+print(e[0][1])
+print(e[1][0])
+print(e[1][1])

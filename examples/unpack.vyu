@@ -1,0 +1,27 @@
+t = (1, 2, 3)
+a, b, c = t
+print(a)
+print(b)
+print(c)
+print(a + b + c)
+
+s = ("hello", "world")
+x, y = s
+print(x)
+print(y)
+print(x + " " + y)
+
+one = (42,)
+z = one[0]
+print(z)
+
+pairs = [(1, 2), (3, 4), (5, 6)]
+total = 0
+for (k, v) in pairs:
+    print(k)
+    print(v)
+    total = total + k + v
+print(total)
+
+for item in [10, 20, 30]:
+    print(item)

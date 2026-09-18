@@ -1308,6 +1308,12 @@ namespace vayu {
             if (tgt->kind == TypeKind::Tuple) {
                 if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
                     error(n->loc, "tuple index must be int, got " + idx->toString());
+                if (n->index->kind == ExprKind::IntLit) {
+                    long long i =
+                        static_cast<const IntLitExpr*>(n->index.get())->value;
+                    if (i >= 0 && (size_t)i < tgt->params.size())
+                        return tgt->params[(size_t)i];
+                }
                 return Types::Any();
             }
             error(n->loc, "cannot index value of type " + tgt->toString());

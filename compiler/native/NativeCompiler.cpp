@@ -53,6 +53,8 @@ namespace vayu {
             VType       elemType = VType::Unknown;
             std::string elemClsName;
             VType       valType = VType::Unknown;
+            std::vector<VType>       tupleElemTypes;
+            std::vector<std::string> tupleElemClsNames;
         };
 
         struct ClassInfo {
@@ -742,6 +744,8 @@ namespace vayu {
                 VType       elemType = VType::Unknown;
                 std::string elemCls;
                 VType       valType = VType::Unknown;
+                std::vector<VType>       tupleElemTypes;
+                std::vector<std::string> tupleElemClsNames;
             };
 
             static int kindOf(VType t) {
@@ -807,9 +811,6 @@ namespace vayu {
                         }
                         return;
                     }
-                    // Phase 12.1 fix: `unique<T>` / `shared<T>` / `weak<T>`
-                    // are erased to `T` at runtime.  Unwrap for type
-                    // inference so native method dispatch works.
                     if (g->name == "unique" || g->name == "shared" ||
                         g->name == "weak") {
                         if (!g->typeArgs.empty())
@@ -1083,9 +1084,6 @@ namespace vayu {
                 }
             }
 
-            // Phase 11.2 fix: infer the type of an expression without
-// emitting any IL.  Used at generic call sites to bind type
-// parameters to concrete VTypes.
             Val inferExprType(const Expr* e) {
                 Val r;
                 if (!e) return r;
@@ -1142,8 +1140,6 @@ namespace vayu {
                     if (c->callee->kind == ExprKind::NameRef) {
                         const auto* nm = static_cast<const NameRefExpr*>(
                             c->callee.get());
-                        // Phase 11.2c fix: direct class-ctor call yields Obj
-                        // with the class name, so we can drill into it later.
                         if (classes_.count(nm->name)) {
                             r.type = VType::Obj;
                             r.cls = nm->name;
@@ -1169,11 +1165,6 @@ namespace vayu {
                 return r;
             }
 
-            // Phase 11.2c: bind a generic function's type params from the
-            // actual argument types, then apply the resulting substitution
-            // to the return type.  Handles the case where an argument is a
-            // direct constructor call to a generic class, so `T` can flow
-            // through a class field like `Box<T>.value`.
             void bindTypeParamsFromCall(const DefStmt* def,
                 const CallExpr* call,
                 Val& r) {
@@ -1279,7 +1270,6 @@ namespace vayu {
                                 out.elemType = it->second.elemType;
                                 out.elemCls = it->second.elemCls;
                                 out.valType = it->second.valType;
-                                // Do NOT copy ssa — the caller already set it.
                             }
                             return;
                         }
@@ -1405,6 +1395,8 @@ namespace vayu {
                         r.elemType = viPtr->elemType;
                         r.elemCls = viPtr->elemClsName;
                         r.valType = viPtr->valType;
+                        r.tupleElemTypes = viPtr->tupleElemTypes;
+                        r.tupleElemClsNames = viPtr->tupleElemClsNames;
                     }
                     return r;
                 }
@@ -1513,10 +1505,6 @@ namespace vayu {
                         r.ssa = t; r.type = VType::Int; return r;
                     }
                     case BinOp::Pow: {
-                        // Native only ever produces an int for `**`.  Reject
-                        // any exponent we can't prove is a non-negative int
-                        // literal, since tree-walk/VM would produce a float
-                        // for a negative or non-integer exponent.
                         if (n->rhs->kind != ExprKind::IntLit)
                             throw std::runtime_error(
                                 "native: '**' requires a non-negative integer "
@@ -1661,7 +1649,29 @@ namespace vayu {
                         std::string t = newTemp();
                         line(t + " =l call $vayu_tuple_get(l " + tgt.ssa +
                             ", l " + idx.ssa + ")");
-                        r.ssa = t; r.type = VType::Int;
+                        r.ssa = t;
+                        if (n->target->kind == ExprKind::NameRef &&
+                            n->index->kind == ExprKind::IntLit) {
+                            const auto* nm = static_cast<const NameRefExpr*>(
+                                n->target.get());
+                            const auto* lit = static_cast<const IntLitExpr*>(
+                                n->index.get());
+                            const VarInfo* vi = nullptr;
+                            auto it = varInfo_.find(nm->name);
+                            if (it != varInfo_.end()) vi = &it->second;
+                            if (!vi) {
+                                auto g = globalVarInfo_.find(nm->name);
+                                if (g != globalVarInfo_.end()) vi = &g->second;
+                            }
+                            if (vi && lit->value >= 0 &&
+                                (size_t)lit->value <
+                                vi->tupleElemTypes.size()) {
+                                r.type = vi->tupleElemTypes[(size_t)lit->value];
+                                r.cls = vi->tupleElemClsNames[(size_t)lit->value];
+                                return r;
+                            }
+                        }
+                        r.type = VType::Int;
                         return r;
                     }
                     throw std::runtime_error("native: index on unsupported type");
@@ -1773,10 +1783,6 @@ namespace vayu {
                             fieldOff = fit->second;
                     }
                     if (fieldOff < 0) {
-                        // Phase 11.2c fallback: type-erased param, look the
-                        // field up by name in the global field table.  Field
-                        // offsets are class-independent in this ABI, so any
-                        // class declaring `name` will read the right slot.
                         auto git = fieldGlobals_.find(n->name);
                         if (git != fieldGlobals_.end()) fieldOff = git->second;
                     }
@@ -1850,7 +1856,10 @@ namespace vayu {
                     for (auto& el : n->elements) {
                         Val v = emitExpr(el.get());
                         line("call $vayu_tuple_push_tagged(l " + tup + ", l " +
-                            v.ssa + ", l " + std::to_string(tagOf(v.type)) + ")");
+                            v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.tupleElemTypes.push_back(v.type);
+                        r.tupleElemClsNames.push_back(v.cls);
                     }
                     r.ssa = tup; r.type = VType::Tuple;
                     return r;
@@ -1908,8 +1917,6 @@ namespace vayu {
                 return {};
             }
 
-            // Phase 13.1: pure builtins with no runtime state.  All operate
-            // on the i64 ABI directly.  Returns true if handled.
             bool tryPureBuiltin(const std::string& name, const CallExpr* n,
                 Val& r) {
                 if (name == "hash") {
@@ -1927,8 +1934,6 @@ namespace vayu {
                 if (name == "id") {
                     if (n->args.size() != 1)
                         throw std::runtime_error("native: id() takes 1 argument");
-                    // Best-effort: for primitives return the value itself;
-                    // for objects return the pointer.
                     Val v = emitExpr(n->args[0].value.get());
                     r = v;
                     r.type = VType::Int;
@@ -1937,8 +1942,6 @@ namespace vayu {
                 if (name == "callable") {
                     if (n->args.size() != 1)
                         throw std::runtime_error("native: callable() takes 1 argument");
-                    // Native has no first-class closures.  A bare name that
-                    // refers to a top-level function or a class counts.
                     bool isCallable = false;
                     if (n->args[0].value->kind == ExprKind::NameRef) {
                         const std::string& argName =
@@ -2091,11 +2094,11 @@ namespace vayu {
                         line(elem + " =l call $vayu_list_get(l " + src.ssa +
                             ", l " + i + ")");
                         std::string pair = newTemp();
-                        line(pair + " =l call $vayu_list_new()");
-                        line("call $vayu_list_push_tagged(l " + pair + ", l " + i + ", l 0)");
-                        line("call $vayu_list_push_tagged(l " + pair + ", l " + elem +
+                        line(pair + " =l call $vayu_tuple_new()");
+                        line("call $vayu_tuple_push_tagged(l " + pair + ", l " + i + ", l 0)");
+                        line("call $vayu_tuple_push_tagged(l " + pair + ", l " + elem +
                             ", l " + std::to_string(tagOf(src.elemType)) + ")");
-                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 3)");
+                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 5)");
                         std::string nx = newTemp();
                         line(nx + " =l add " + i + ", 1");
                         line("storel " + nx + ", " + idx);
@@ -2123,9 +2126,6 @@ namespace vayu {
                     line(la + " =l call $vayu_list_len(l " + a.ssa + ")");
                     std::string lb = newTemp();
                     line(lb + " =l call $vayu_list_len(l " + b.ssa + ")");
-                    // Compute min(la, lb) via arithmetic (this qbe.exe has
-                    // no `select` instruction):
-                    //   min = la * c + lb * (1 - c)   where c = (la < lb) ? 1 : 0
                     std::string lmin = newTemp();
                     line(lmin + " =w csltl " + la + ", " + lb);
                     std::string cext = newTemp();
@@ -2156,12 +2156,12 @@ namespace vayu {
                         line(eb + " =l call $vayu_list_get(l " + b.ssa +
                             ", l " + i + ")");
                         std::string pair = newTemp();
-                        line(pair + " =l call $vayu_list_new()");
-                        line("call $vayu_list_push_tagged(l " + pair + ", l " + ea +
+                        line(pair + " =l call $vayu_tuple_new()");
+                        line("call $vayu_tuple_push_tagged(l " + pair + ", l " + ea +
                             ", l " + std::to_string(tagOf(a.elemType)) + ")");
-                        line("call $vayu_list_push_tagged(l " + pair + ", l " + eb +
+                        line("call $vayu_tuple_push_tagged(l " + pair + ", l " + eb +
                             ", l " + std::to_string(tagOf(b.elemType)) + ")");
-                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 3)");
+                        line("call $vayu_list_push_tagged(l " + out + ", l " + pair + ", l 5)");
                         std::string nx = newTemp();
                         line(nx + " =l add " + i + ", 1");
                         line("storel " + nx + ", " + idx);
@@ -2220,7 +2220,6 @@ namespace vayu {
                     r.elemType = src.elemType;
                     return true;
                 }
-                // ---- Phase 13.2: compile-time reflection ----
 
                 if (name == "isinstance") {
                     if (n->args.size() != 2)
@@ -2248,13 +2247,10 @@ namespace vayu {
                             if (c->name == tn) { ok = true; break; }
                     }
                     else if (v.type == VType::Exc) {
-                        // Exception objects are heap pointers tagged Exc;
-                        // check the interned type name.
                         std::string typeLbl = internString(tn);
                         std::string et = newTemp();
                         line(et + " =l call $vayu_get_exc_type()");
-                        (void)typeLbl;   // handled below with explicit compare
-                        // Simple: just compare against the name string.
+                        (void)typeLbl;
                         std::string cond = newTemp();
                         line(cond + " =w call $vayu_str_eq(l " + et +
                             ", l " + typeLbl + ")");
@@ -2377,8 +2373,6 @@ namespace vayu {
                     return true;
                 }
 
-                // ---- Phase 13.3: setattr on a declared field ----
-
                 if (name == "setattr") {
                     if (n->args.size() != 3 ||
                         n->args[1].value->kind != ExprKind::StringLit)
@@ -2410,16 +2404,11 @@ namespace vayu {
                     return true;
                 }
 
-                // ---- Phase 13.4: delattr is not meaningful in native ----
-                // The object layout is fixed at construction, so a field
-                // slot cannot be reclaimed.  Reject at compile time so the
-                // harness marks the test `(tree+vm)`.
                 if (name == "delattr") {
                     throw std::runtime_error(
                         "native: delattr() is not supported (object layout "
                         "is fixed at construction)");
                 }
-                // ---- Phase 14.2: integer combinatorics ----
                 if (name == "comb") {
                     if (n->args.size() != 2)
                         throw std::runtime_error("native: comb() takes 2 arguments");
@@ -2453,6 +2442,27 @@ namespace vayu {
                     std::string t = newTemp();
                     line(t + " =l call $vayu_factorial(l " + v.ssa + ")");
                     r.ssa = t; r.type = VType::Int; return true;
+                }
+                if (name == "list") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: list() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type == VType::List) { r = v; return true; }
+                    if (v.type == VType::Tuple) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_from_list(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::List;
+                        r.elemType = VType::Unknown;
+                        return true;
+                    }
+                    if (v.type == VType::Str) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_split(l " + v.ssa +
+                            ", l " + internString("") + ")");
+                        r.ssa = t; r.type = VType::List; r.elemType = VType::Str;
+                        return true;
+                    }
+                    throw std::runtime_error("native: list() unsupported arg");
                 }
                 if (name == "tuple") {
                     if (n->args.size() != 1)
@@ -2877,81 +2887,60 @@ namespace vayu {
                             std::to_string(tagOf(v.type)) + ")");
                         r.ssa = t; r.type = VType::Int; return true;
                     }
-                }
-                if (recv.type == VType::Set) {
-                    if (recvName == "add") {
-                        Val v = argV(0);
-                        line("call $vayu_set_push_tagged(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "contains") {
+                    if (recvName == "index") {
                         Val v = argV(0);
                         std::string t = newTemp();
-                        line(t + " =l call $vayu_set_has(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = t; r.type = VType::Bool; return true;
-                    }
-                    if (recvName == "remove" || recvName == "discard") {
-                        Val v = argV(0);
-                        line("call $vayu_set_remove(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "clear") {
-                        line("call $vayu_set_clear(l " + recv.ssa + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "copy") {
-                        std::string t = newTemp();
-                        line(t + " =l call $vayu_set_copy(l " + recv.ssa + ")");
-                        r.ssa = t; r.type = VType::Set; return true;
-                    }
-                }
-                if (recv.type == VType::Set) {
-                    if (recvName == "add") {
-                        Val v = argV(0);
-                        line("call $vayu_set_push_tagged(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "contains") {
-                        Val v = argV(0);
-                        std::string t = newTemp();
-                        line(t + " =l call $vayu_set_has(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = t; r.type = VType::Bool; return true;
-                    }
-                    if (recvName == "remove" || recvName == "discard") {
-                        Val v = argV(0);
-                        line("call $vayu_set_remove(l " + recv.ssa +
-                            ", l " + v.ssa + ", l " +
-                            std::to_string(tagOf(v.type)) + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "clear") {
-                        line("call $vayu_set_clear(l " + recv.ssa + ")");
-                        r.ssa = "0"; r.type = VType::Void; return true;
-                    }
-                    if (recvName == "copy") {
-                        std::string t = newTemp();
-                        line(t + " =l call $vayu_set_copy(l " + recv.ssa + ")");
-                        r.ssa = t; r.type = VType::Set; return true;
-                    }
-                }
-                if (recv.type == VType::Tuple) {
-                    if (recvName == "count") {
-                        Val v = argV(0);
-                        std::string t = newTemp();
-                        line(t + " =l call $vayu_tuple_count(l " + recv.ssa +
+                        line(t + " =l call $vayu_tuple_index(l " + recv.ssa +
                             ", l " + v.ssa + ", l " +
                             std::to_string(tagOf(v.type)) + ")");
                         r.ssa = t; r.type = VType::Int; return true;
+                    }
+                }
+                if (recv.type == VType::Set) {
+                    if (recvName == "add") {
+                        Val v = argV(0);
+                        line("call $vayu_set_push_tagged(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "contains") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_has(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Bool; return true;
+                    }
+                    if (recvName == "remove" || recvName == "discard") {
+                        Val v = argV(0);
+                        line("call $vayu_set_remove(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "clear") {
+                        line("call $vayu_set_clear(l " + recv.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "copy") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_copy(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Set; return true;
+                    }
+                    if (recvName == "union" ||
+                        recvName == "intersection" ||
+                        recvName == "difference") {
+                        Val other = argV(0);
+                        const char* fn =
+                            (recvName == "union") ? "$vayu_set_union" :
+                            (recvName == "intersection") ? "$vayu_set_intersection" :
+                            "$vayu_set_difference";
+                        std::string t = newTemp();
+                        line(t + " =l call " + std::string(fn) + "(l " +
+                            recv.ssa + ", l " + other.ssa + ")");
+                        r.ssa = t; r.type = VType::Set;
+                        return true;
                     }
                 }
                 return false;
@@ -3847,7 +3836,6 @@ namespace vayu {
                     return r;
                 }
 
-                // Phase 13.1: pure builtins.
                 if (tryPureBuiltin(name, n, r)) return r;
 
                 if (name == "ord") {
@@ -4004,7 +3992,6 @@ namespace vayu {
                     return r;
                 }
 
-                // Phase 11.1k4: `next(generator)`.
                 if (name == "next") {
                     if (n->args.size() != 1)
                         throw std::runtime_error(
@@ -4016,7 +4003,6 @@ namespace vayu {
                     return r;
                 }
 
-                // Phase 11.1k4: generator construction.
                 if (generatorFunctions_.count(name)) {
                     size_t argCount = n->args.size();
                     std::string argsStruct = newTemp();
@@ -4064,11 +4050,6 @@ namespace vayu {
                 if (fit != topFnDecls_.end() && fit->second->returnType) {
                     bindTypeParamsFromCall(fit->second, n, r);
 
-                    // Phase 13.3 fix: inside the body of a generic function,
-                    // the type parameter `T` is erased to Obj, so list
-                    // elements produced by `return [x, y]` get tag 0 (int).
-                    // Here at the call site, T is concrete — retag the
-                    // returned list so printing dispatches correctly.
                     if (r.type == VType::List && r.elemType != VType::Unknown)
                         line("call $vayu_list_retag(l " + t + ", l " +
                             std::to_string(tagOf(r.elemType)) + ")");
@@ -4156,6 +4137,8 @@ namespace vayu {
                                     vi.elemType = v.elemType;
                                     vi.elemClsName = v.elemCls;
                                     vi.valType = v.valType;
+                                    vi.tupleElemTypes = v.tupleElemTypes;
+                                    vi.tupleElemClsNames = v.tupleElemClsNames;
                                     varInfo_[slotName] = vi;
                                     return;
                                 }
@@ -4244,6 +4227,8 @@ namespace vayu {
                     vi.elemType = v.elemType;
                     vi.elemClsName = v.elemCls;
                     vi.valType = v.valType;
+                    vi.tupleElemTypes = v.tupleElemTypes;
+                    vi.tupleElemClsNames = v.tupleElemClsNames;
                     varInfo_[slotName] = vi;
                     return;
                 }
@@ -4277,6 +4262,8 @@ namespace vayu {
                         vi.elemType = v.elemType; vi.elemClsName = v.elemCls;
                         vi.valType = v.valType;
                     }
+                    vi.tupleElemTypes = v.tupleElemTypes;
+                    vi.tupleElemClsNames = v.tupleElemClsNames;
                     varInfo_[slotName] = vi;
                     return;
                 }
@@ -4452,8 +4439,6 @@ namespace vayu {
                 emitForList(n);
             }
 
-            // Phase 11.1k4 fix: use try_next so we never call next() a final
-            // time on an already-exhausted generator.
             void emitForGenerator(const ForStmt* n, const CallExpr* /*call*/) {
                 Val genVal = emitExpr(n->iterable.get());
                 std::string genSlot = "%__for_gen_" + std::to_string(nextLabel_++);
@@ -4836,11 +4821,6 @@ namespace vayu {
                         vi.elemClsName = tmp.elemCls;
                         vi.valType = tmp.valType;
 
-                        // Phase 11.2c fix: a param annotated with a type
-                        // parameter (`T` or `T: Constraint`) is erased at
-                        // runtime but must be treated as an object here.
-                        // If constrained, use the constraint class so field
-                        // lookups resolve.
                         if (vi.type == VType::Unknown &&
                             p.type->kind == ExprKind::NameRef) {
                             const std::string& annName =
@@ -5146,7 +5126,7 @@ typedef struct {
     int64_t len;
     int64_t cap;
     int64_t* items;
-    int8_t*  tags;   /* per-element kind: 0=int 1=bool 2=str 3=list 4=map */
+    int8_t*  tags;   /* per-element kind: 0=int 1=bool 2=str 3=list 4=map 5=tuple 6=set */
 } VayuList;
 typedef struct { VayuStr* key; int64_t value; uint8_t used; } VayuMapEntry;
 typedef struct { int64_t len; int64_t cap; VayuMapEntry* entries; } VayuMap;
@@ -5951,6 +5931,14 @@ int64_t vayu_tuple_count(VayuTuple* t, int64_t v, int64_t tag) {
     return c;
 }
 
+int64_t vayu_tuple_index(VayuTuple* t, int64_t v, int64_t tag) {
+    for (int64_t i = 0; i < t->len; ++i)
+        if (vayu_list_val_eq(t->items[i], t->tags[i], v, (int8_t)tag)) return i;
+    vayu_raise_str(vayu_mkstr_c("ValueError"),
+                   vayu_mkstr_c("tuple.index(): value not in tuple"));
+    return -1;
+}
+
 VayuTuple* vayu_tuple_from_str(VayuStr* s) {
     VayuList* r = vayu_list_new();
     for (int64_t i = 0; i < s->len; ++i)
@@ -6008,6 +5996,28 @@ void vayu_set_remove(VayuSet* s, int64_t v, int64_t tag) {
     }
 }
 void vayu_set_clear(VayuSet* s) { s->len = 0; }
+VayuSet* vayu_set_union(VayuSet* a, VayuSet* b) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < a->len; ++i)
+        vayu_list_push_tagged(r, a->items[i], a->tags[i]);
+    for (int64_t i = 0; i < b->len; ++i)
+        vayu_set_push_tagged(r, b->items[i], b->tags[i]);
+    return r;
+}
+VayuSet* vayu_set_intersection(VayuSet* a, VayuSet* b) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < a->len; ++i)
+        if (vayu_set_has(b, a->items[i], a->tags[i]))
+            vayu_list_push_tagged(r, a->items[i], a->tags[i]);
+    return r;
+}
+VayuSet* vayu_set_difference(VayuSet* a, VayuSet* b) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < a->len; ++i)
+        if (!vayu_set_has(b, a->items[i], a->tags[i]))
+            vayu_list_push_tagged(r, a->items[i], a->tags[i]);
+    return r;
+}
 int64_t vayu_set_len(VayuSet* s) { return s->len; }
 VayuSet* vayu_set_copy(VayuSet* s) {
     VayuList* r = vayu_list_new();
@@ -6243,7 +6253,7 @@ void vayu_print_list_noln(VayuList* l) {
     putchar('[');
     for (int64_t i = 0; i < l->len; ++i) {
         if (i) printf(", ");
-                int8_t t = l->tags[i];
+        int8_t t = l->tags[i];
         if (t == 1) {
             printf("%s", l->items[i] ? "true" : "false");
         } else if (t == 2) {
@@ -8195,8 +8205,6 @@ int64_t vayu_gen_done(VayuGen* g) {
     return r;
 }
 
-/* try_next: returns 1 and writes *out if the generator yielded,
-   0 if it's exhausted.  Real errors still raise on the caller thread. */
 int64_t vayu_gen_try_next(VayuGen* g, int64_t* out) {
     VG_LOCK(g);
     if (g->state == 3) {
