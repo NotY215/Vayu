@@ -40,6 +40,8 @@ namespace vayu {
         case OpCode::INDEX_GET: return "INDEX_GET";
         case OpCode::INDEX_SET: return "INDEX_SET";
         case OpCode::MAP_NEW:   return "MAP_NEW";
+        case OpCode::TUPLE_NEW: return "TUPLE_NEW";
+        case OpCode::SET_NEW:   return "SET_NEW";
         case OpCode::IN:        return "IN";
         case OpCode::NEW_INSTANCE: return "NEW_INSTANCE";
         case OpCode::ATTR_GET:     return "ATTR_GET";

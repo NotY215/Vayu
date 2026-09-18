@@ -1244,24 +1244,36 @@ namespace vayu {
         return node;
     }
 
-    ExprPtr Parser::parseMapLit() {
+    ExprPtr Parser::parseBraceLit() {
         Token open = advance();
-        auto node = std::make_unique<MapLitExpr>(open.location);
-        if (!check(TokenType::RBrace)) {
-            ExprPtr k = parseExpression();
-            expect(TokenType::Colon, "':' between key and value");
+        if (check(TokenType::RBrace)) {
+            advance();
+            return std::make_unique<MapLitExpr>(open.location);
+        }
+        ExprPtr first = parseExpression();
+        if (check(TokenType::Colon)) {
+            advance();
+            auto m = std::make_unique<MapLitExpr>(open.location);
             ExprPtr v = parseExpression();
-            node->entries.push_back({ std::move(k), std::move(v) });
+            m->entries.push_back({ std::move(first), std::move(v) });
             while (match(TokenType::Comma)) {
                 if (check(TokenType::RBrace)) break;
-                k = parseExpression();
+                ExprPtr k2 = parseExpression();
                 expect(TokenType::Colon, "':' between key and value");
-                v = parseExpression();
-                node->entries.push_back({ std::move(k), std::move(v) });
+                ExprPtr v2 = parseExpression();
+                m->entries.push_back({ std::move(k2), std::move(v2) });
             }
+            expect(TokenType::RBrace, "'}' to close map literal");
+            return m;
         }
-        expect(TokenType::RBrace, "'}' to close map literal");
-        return node;
+        auto s = std::make_unique<SetLitExpr>(open.location);
+        s->elements.push_back(std::move(first));
+        while (match(TokenType::Comma)) {
+            if (check(TokenType::RBrace)) break;
+            s->elements.push_back(parseExpression());
+        }
+        expect(TokenType::RBrace, "'}' to close set literal");
+        return s;
     }
 
     ExprPtr Parser::parsePrimary() {
@@ -1314,24 +1326,27 @@ namespace vayu {
         }
         case TokenType::LParen: {
             Token open = advance();
+            if (check(TokenType::RParen)) {
+                advance();
+                return std::make_unique<TupleLitExpr>(open.location);
+            }
             ExprPtr first = parseExpression();
             if (check(TokenType::Comma)) {
-                // Tuple literal — desugared to a list literal.
-                auto lst = std::make_unique<ListLitExpr>(open.location);
-                lst->elements.push_back(std::move(first));
+                auto tup = std::make_unique<TupleLitExpr>(open.location);
+                tup->elements.push_back(std::move(first));
                 while (match(TokenType::Comma)) {
                     if (check(TokenType::RParen)) break;
-                    lst->elements.push_back(parseExpression());
+                    tup->elements.push_back(parseExpression());
                 }
                 expect(TokenType::RParen, "')' to close tuple literal");
-                return lst;
+                return tup;
             }
             expect(TokenType::RParen, "')' to close group");
             return std::make_unique<GroupingExpr>(std::move(first),
                 open.location);
         }
         case TokenType::LBracket: return parseListLit();
-        case TokenType::LBrace:   return parseMapLit();
+        case TokenType::LBrace:   return parseBraceLit();
         default:
             throw ParseError(std::string("expected expression, found '") +
                 t.lexeme + "'", t.location);

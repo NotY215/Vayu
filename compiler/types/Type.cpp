@@ -45,6 +45,22 @@ namespace vayu {
             s += ">";
             return s;
         }
+        case TypeKind::Tuple: {
+            std::string s = "(";
+            for (size_t i = 0; i < params.size(); ++i) {
+                if (i) s += ", ";
+                s += params[i]->toString();
+            }
+            if (params.size() == 1) s += ",";
+            s += ")";
+            return s;
+        }
+        case TypeKind::Set: {
+            std::string s = "set<";
+            s += params.empty() ? "?" : params[0]->toString();
+            s += ">";
+            return s;
+        }
         case TypeKind::List: {
             std::string s = "list<";
             if (!params.empty()) s += params[0]->toString();
@@ -83,7 +99,8 @@ namespace vayu {
             return name == other->name;
         if (kind == TypeKind::List || kind == TypeKind::Map ||
             kind == TypeKind::Unique || kind == TypeKind::Shared ||
-            kind == TypeKind::Weak) {
+            kind == TypeKind::Weak || kind == TypeKind::Tuple ||
+            kind == TypeKind::Set) {
             if (params.size() != other->params.size()) return false;
             for (size_t i = 0; i < params.size(); ++i)
                 if (!params[i]->equals(other->params[i])) return false;
@@ -146,6 +163,16 @@ namespace vayu {
         }
         TypePtr Weak(TypePtr elem) {
             auto t = std::make_shared<Type>(TypeKind::Weak);
+            t->params.push_back(std::move(elem));
+            return t;
+        }
+        TypePtr Tuple(std::vector<TypePtr> elems) {
+            auto t = std::make_shared<Type>(TypeKind::Tuple);
+            t->params = std::move(elems);
+            return t;
+        }
+        TypePtr Set(TypePtr elem) {
+            auto t = std::make_shared<Type>(TypeKind::Set);
             t->params.push_back(std::move(elem));
             return t;
         }
@@ -220,7 +247,18 @@ namespace vayu {
             to->kind == TypeKind::Unique || to->kind == TypeKind::Shared ||
             to->kind == TypeKind::Weak)
             return false;
-
+        if (to->kind == TypeKind::Tuple && from->kind == TypeKind::Tuple) {
+            if (to->params.size() != from->params.size()) return false;
+            for (size_t i = 0; i < to->params.size(); ++i)
+                if (!isAssignable(to->params[i], from->params[i])) return false;
+            return true;
+        }
+        if (to->kind == TypeKind::Set && from->kind == TypeKind::Set) {
+            TypePtr a = to->params.empty() ? Types::Any() : to->params[0];
+            TypePtr b = from->params.empty() ? Types::Any() : from->params[0];
+            if (a->kind == TypeKind::Any || b->kind == TypeKind::Any) return true;
+            return a->equals(b);
+        }
         // Collections.
         if (to->kind == TypeKind::List && from->kind == TypeKind::List) {
             TypePtr a = to->params.empty() ? Types::Any() : to->params[0];

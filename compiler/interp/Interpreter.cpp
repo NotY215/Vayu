@@ -45,6 +45,25 @@ namespace vayu {
             if (a.isNone() && b.isNone())   return true;
             if (a.isList() && b.isList())   return a.asList() == b.asList();
             if (a.isMap() && b.isMap())    return a.asMap() == b.asMap();
+            if (a.isTuple() && b.isTuple()) {
+                const auto& x = a.asTuple()->items;
+                const auto& y = b.asTuple()->items;
+                if (x.size() != y.size()) return false;
+                for (size_t i = 0; i < x.size(); ++i)
+                    if (!valueEquals(x[i], y[i])) return false;
+                return true;
+            }
+            if (a.isSet() && b.isSet()) {
+                const auto& x = a.asSet()->items;
+                const auto& y = b.asSet()->items;
+                if (x.size() != y.size()) return false;
+                for (auto& xv : x) {
+                    bool found = false;
+                    for (auto& yv : y) if (valueEquals(xv, yv)) { found = true; break; }
+                    if (!found) return false;
+                }
+                return true;
+            }
             if (a.isInstance() && b.isInstance()) return a.asInstance() == b.asInstance();
             return false;
         }
@@ -154,6 +173,20 @@ namespace vayu {
             c->kind = Callable::Kind::MapMethod;
             c->name = name;
             c->boundMap = base.asMap();
+            return Value(c);
+        }
+        if (base.isTuple()) {
+            auto c = std::make_shared<Callable>();
+            c->kind = Callable::Kind::TupleMethod;
+            c->name = name;
+            c->boundTuple = base.asTuple();
+            return Value(c);
+        }
+        if (base.isSet()) {
+            auto c = std::make_shared<Callable>();
+            c->kind = Callable::Kind::SetMethod;
+            c->name = name;
+            c->boundSet = base.asSet();
             return Value(c);
         }
         if (!base.isInstance())
@@ -793,6 +826,8 @@ namespace vayu {
                 tgt.asMap()->entries[idx.asString()] = std::move(v);
                 return;
             }
+            if (tgt.isTuple())
+                throw RuntimeError("tuples are immutable", ix->loc);
             if (tgt.isString())
                 throw RuntimeError("strings are immutable", ix->loc);
             throw RuntimeError("cannot index-assign to value of type " + tgt.typeName(), ix->loc);
@@ -848,6 +883,22 @@ namespace vayu {
                     break;
                 }
                 bindVar(v);
+                if (!runBody()) break;
+            }
+            return;
+        }
+        if (iterable.isTuple()) {
+            const auto& items = iterable.asTuple()->items;
+            for (size_t i = 0; i < items.size(); ++i) {
+                bindVar(items[i]);
+                if (!runBody()) break;
+            }
+            return;
+        }
+        if (iterable.isSet()) {
+            const auto& items = iterable.asSet()->items;
+            for (size_t i = 0; i < items.size(); ++i) {
+                bindVar(items[i]);
                 if (!runBody()) break;
             }
             return;
@@ -909,6 +960,25 @@ namespace vayu {
         case ExprKind::ListLit:return evalListLit(static_cast<const ListLitExpr*>(e));
         case ExprKind::MapLit: return evalMapLit(static_cast<const MapLitExpr*>(e));
 
+        case ExprKind::TupleLit: {
+            auto* n = static_cast<const TupleLitExpr*>(e);
+            auto tup = std::make_shared<TupleValue>();
+            tup->items.reserve(n->elements.size());
+            for (auto& el : n->elements) tup->items.push_back(eval(el.get()));
+            return Value(tup);
+        }
+        case ExprKind::SetLit: {
+            auto* n = static_cast<const SetLitExpr*>(e);
+            auto s = std::make_shared<SetValue>();
+            for (auto& el : n->elements) {
+                Value v = eval(el.get());
+                bool found = false;
+                for (auto& u : s->items) if (valueEquals(u, v)) { found = true; break; }
+                if (!found) s->items.push_back(std::move(v));
+            }
+            return Value(s);
+        }
+
         case ExprKind::Lambda: {
             auto* n = static_cast<const LambdaExpr*>(e);
             auto fn = std::make_shared<Callable>();
@@ -952,6 +1022,16 @@ namespace vayu {
             if (i < 0 || i >= (long long)lst->items.size())
                 throw RuntimeError("list index out of range", ix->loc);
             return lst->items[(size_t)i];
+        }
+        if (tgt.isTuple()) {
+            if (!idx.isInt())
+                throw RuntimeError("tuple index must be int, got " + idx.typeName(), ix->loc);
+            const auto& items = tgt.asTuple()->items;
+            long long i = idx.asInt();
+            if (i < 0) i += (long long)items.size();
+            if (i < 0 || i >= (long long)items.size())
+                throw RuntimeError("tuple index out of range", ix->loc);
+            return items[(size_t)i];
         }
         if (tgt.isMap()) {
             if (!idx.isString())
@@ -1018,6 +1098,18 @@ namespace vayu {
         if (base.isMap()) {
             auto c = std::make_shared<Callable>();
             c->kind = Callable::Kind::MapMethod; c->name = a->name; c->boundMap = base.asMap();
+            return Value(c);
+        }
+        if (base.isTuple()) {
+            auto c = std::make_shared<Callable>();
+            c->kind = Callable::Kind::TupleMethod; c->name = a->name;
+            c->boundTuple = base.asTuple();
+            return Value(c);
+        }
+        if (base.isSet()) {
+            auto c = std::make_shared<Callable>();
+            c->kind = Callable::Kind::SetMethod; c->name = a->name;
+            c->boundSet = base.asSet();
             return Value(c);
         }
         if (!base.isInstance())
@@ -1186,13 +1278,23 @@ namespace vayu {
                     if (valueEquals(l, v)) return Value(true);
                 return Value(false);
             }
+            if (r.isSet()) {
+                for (auto& v : r.asSet()->items)
+                    if (valueEquals(l, v)) return Value(true);
+                return Value(false);
+            }
+            if (r.isTuple()) {
+                for (auto& v : r.asTuple()->items)
+                    if (valueEquals(l, v)) return Value(true);
+                return Value(false);
+            }
             if (r.isMap()) {
                 if (!l.isString()) return Value(false);
                 return Value(r.asMap()->entries.count(l.asString()) > 0);
             }
             if (r.isString() && l.isString())
                 return Value(r.asString().find(l.asString()) != std::string::npos);
-            throw RuntimeError("'in' requires a list, map, or str on the right", b->loc);
+            throw RuntimeError("'in' requires a container on the right", b->loc);
         }
 
         Value l = eval(b->lhs.get());
@@ -1359,6 +1461,8 @@ namespace vayu {
         }
         case Callable::Kind::SuperMethod:
             throw RuntimeError("cannot call super() directly", loc);
+        case Callable::Kind::TupleMethod: return callTupleMethod(fn, args, loc);
+        case Callable::Kind::SetMethod:   return callSetMethod(fn, args, loc);
         case Callable::Kind::ListMethod:   return callListMethod(fn, args, loc);
         case Callable::Kind::MapMethod:    return callMapMethod(fn, args, loc);
         case Callable::Kind::StringMethod: return callStringMethod(fn, args, loc);
@@ -1641,7 +1745,108 @@ namespace vayu {
         }
         bool isWS(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; }
     } // namespace
+    Value Interpreter::callTupleMethod(const std::shared_ptr<Callable>& fn,
+        const std::vector<Value>& args,
+        SourceLocation loc) {
+        auto tup = fn->boundTuple;
+        const std::string& m = fn->name;
+        if (m == "count") {
+            if (args.size() != 1)
+                throw RuntimeError("count(v) takes 1 argument", loc);
+            long long c = 0;
+            for (auto& v : tup->items) if (valueEquals(v, args[0])) ++c;
+            return Value(c);
+        }
+        if (m == "index") {
+            if (args.size() != 1)
+                throw RuntimeError("index(v) takes 1 argument", loc);
+            for (size_t i = 0; i < tup->items.size(); ++i)
+                if (valueEquals(tup->items[i], args[0]))
+                    return Value((long long)i);
+            throw RuntimeError("index(): value not in tuple", loc);
+        }
+        throw RuntimeError("tuple has no method '" + m + "'", loc);
+    }
 
+    Value Interpreter::callSetMethod(const std::shared_ptr<Callable>& fn,
+        const std::vector<Value>& args,
+        SourceLocation loc) {
+        auto s = fn->boundSet;
+        const std::string& m = fn->name;
+        if (m == "add") {
+            if (args.size() != 1)
+                throw RuntimeError("add(v) takes 1 argument", loc);
+            for (auto& u : s->items) if (valueEquals(u, args[0])) return Value();
+            s->items.push_back(args[0]);
+            return Value();
+        }
+        if (m == "remove") {
+            if (args.size() != 1)
+                throw RuntimeError("remove(v) takes 1 argument", loc);
+            for (size_t i = 0; i < s->items.size(); ++i)
+                if (valueEquals(s->items[i], args[0])) {
+                    s->items.erase(s->items.begin() + i); return Value();
+                }
+            throw RuntimeError("remove(): value not in set", loc);
+        }
+        if (m == "discard") {
+            if (args.size() != 1)
+                throw RuntimeError("discard(v) takes 1 argument", loc);
+            for (size_t i = 0; i < s->items.size(); ++i)
+                if (valueEquals(s->items[i], args[0])) {
+                    s->items.erase(s->items.begin() + i); return Value();
+                }
+            return Value();
+        }
+        if (m == "contains") {
+            if (args.size() != 1)
+                throw RuntimeError("contains(v) takes 1 argument", loc);
+            for (auto& u : s->items) if (valueEquals(u, args[0])) return Value(true);
+            return Value(false);
+        }
+        if (m == "clear") {
+            if (!args.empty())
+                throw RuntimeError("clear() takes no arguments", loc);
+            s->items.clear(); return Value();
+        }
+        if (m == "copy") {
+            if (!args.empty())
+                throw RuntimeError("copy() takes no arguments", loc);
+            auto out = std::make_shared<SetValue>();
+            out->items = s->items;
+            return Value(out);
+        }
+        if (m == "union" || m == "intersection" || m == "difference") {
+            if (args.size() != 1 || !args[0].isSet())
+                throw RuntimeError(m + "(other) takes one set argument", loc);
+            auto other = args[0].asSet();
+            auto out = std::make_shared<SetValue>();
+            if (m == "union") {
+                out->items = s->items;
+                for (auto& v : other->items) {
+                    bool found = false;
+                    for (auto& u : out->items) if (valueEquals(u, v)) { found = true; break; }
+                    if (!found) out->items.push_back(v);
+                }
+            }
+            else if (m == "intersection") {
+                for (auto& v : s->items) {
+                    for (auto& u : other->items)
+                        if (valueEquals(v, u)) { out->items.push_back(v); break; }
+                }
+            }
+            else {
+                for (auto& v : s->items) {
+                    bool found = false;
+                    for (auto& u : other->items)
+                        if (valueEquals(v, u)) { found = true; break; }
+                    if (!found) out->items.push_back(v);
+                }
+            }
+            return Value(out);
+        }
+        throw RuntimeError("set has no method '" + m + "'", loc);
+    }
     Value Interpreter::callStringMethod(const std::shared_ptr<Callable>& fn,
         const std::vector<Value>& args,
         SourceLocation loc) {
@@ -2041,6 +2246,8 @@ namespace vayu {
             if (a[0].isString()) return Value((long long)a[0].asString().size());
             if (a[0].isList())   return Value((long long)a[0].asList()->items.size());
             if (a[0].isMap())    return Value((long long)a[0].asMap()->entries.size());
+            if (a[0].isTuple()) return Value((long long)a[0].asTuple()->items.size());
+            if (a[0].isSet())   return Value((long long)a[0].asSet()->items.size());
             throw std::runtime_error("len(): unsupported type " + a[0].typeName());
         }
         Value bi_abs(const std::vector<Value>& a) {
@@ -2736,6 +2943,46 @@ namespace vayu {
     } // namespace
 
     namespace {
+        // ---- Phase 14.0 / 14.1: tuple() and set() builtins ----
+        Value bi_tuple(const std::vector<Value>& a) {
+            if (a.size() != 1)
+                throw std::runtime_error("tuple() takes 1 argument");
+            auto t = std::make_shared<TupleValue>();
+            const Value& v = a[0];
+            if (v.isTuple()) return v;
+            if (v.isList()) {
+                t->items = v.asList()->items;
+                return Value(t);
+            }
+            if (v.isSet()) {
+                t->items = v.asSet()->items;
+                return Value(t);
+            }
+            if (v.isString()) {
+                for (char c : v.asString())
+                    t->items.push_back(Value(std::string(1, c)));
+                return Value(t);
+            }
+            throw std::runtime_error("tuple(): cannot convert " + v.typeName());
+        }
+        Value bi_set(const std::vector<Value>& a) {
+            if (a.size() != 1)
+                throw std::runtime_error("set() takes 1 argument");
+            auto s = std::make_shared<SetValue>();
+            const Value& v = a[0];
+            if (v.isSet()) return v;
+            auto addUnique = [&](const Value& x) {
+                for (auto& u : s->items) if (valueEquals(u, x)) return;
+                s->items.push_back(x);
+                };
+            if (v.isList()) { for (auto& x : v.asList()->items) addUnique(x); return Value(s); }
+            if (v.isTuple()) { for (auto& x : v.asTuple()->items)  addUnique(x); return Value(s); }
+            if (v.isString()) {
+                for (char c : v.asString()) addUnique(Value(std::string(1, c)));
+                return Value(s);
+            }
+            throw std::runtime_error("set(): cannot convert " + v.typeName());
+        }
         Value bi_next(const std::vector<Value>& a) {
             if (a.size() != 1 || !a[0].isGenerator())
                 throw std::runtime_error("next() takes a generator argument");
@@ -2750,6 +2997,8 @@ namespace vayu {
             c->kind = Callable::Kind::Native; c->name = name; c->nativeFn = fn;
             globals_->define(name, Value(c));
             };
+        add("tuple", bi_tuple);
+        add("set", bi_set);
         add("print", bi_print);
         add("str", bi_str);
         add("bool", bi_bool);

@@ -17,6 +17,8 @@ namespace vayu {
         case OpCode::DEFINE:
         case OpCode::LIST_NEW:
         case OpCode::MAP_NEW:
+        case OpCode::TUPLE_NEW:
+        case OpCode::SET_NEW:
         case OpCode::MAKE_FN:
         case OpCode::MAKE_GENERATOR:
         case OpCode::ATTR_GET:

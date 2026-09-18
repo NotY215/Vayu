@@ -790,6 +790,24 @@ namespace vayu {
             chunk_->emit((uint8_t)(cnt & 0xFF), line);
             return;
         }
+        case ExprKind::TupleLit: {
+            auto* n = static_cast<const TupleLitExpr*>(e);
+            for (auto& el : n->elements) compileExpr(el.get());
+            chunk_->emitOp(OpCode::TUPLE_NEW, line);
+            int cnt = (int)n->elements.size();
+            chunk_->emit((uint8_t)((cnt >> 8) & 0xFF), line);
+            chunk_->emit((uint8_t)(cnt & 0xFF), line);
+            return;
+        }
+        case ExprKind::SetLit: {
+            auto* n = static_cast<const SetLitExpr*>(e);
+            for (auto& el : n->elements) compileExpr(el.get());
+            chunk_->emitOp(OpCode::SET_NEW, line);
+            int cnt = (int)n->elements.size();
+            chunk_->emit((uint8_t)((cnt >> 8) & 0xFF), line);
+            chunk_->emit((uint8_t)(cnt & 0xFF), line);
+            return;
+        }
 
         case ExprKind::Lambda:
             compileLambda(static_cast<const LambdaExpr*>(e));

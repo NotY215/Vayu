@@ -159,6 +159,24 @@ namespace vayu {
             prExpr(n->body.get(), childPrefix(prefix, isLast), true);
             break;
         }
+        case ExprKind::TupleLit: {
+            auto* n = static_cast<const TupleLitExpr*>(e);
+            putLabel(prefix, isLast, "TupleLit[" +
+                std::to_string(n->elements.size()) + "]");
+            std::string cp = childPrefix(prefix, isLast);
+            for (size_t i = 0; i < n->elements.size(); ++i)
+                prExpr(n->elements[i].get(), cp, i + 1 == n->elements.size());
+            break;
+        }
+        case ExprKind::SetLit: {
+            auto* n = static_cast<const SetLitExpr*>(e);
+            putLabel(prefix, isLast, "SetLit{" +
+                std::to_string(n->elements.size()) + "}");
+            std::string cp = childPrefix(prefix, isLast);
+            for (size_t i = 0; i < n->elements.size(); ++i)
+                prExpr(n->elements[i].get(), cp, i + 1 == n->elements.size());
+            break;
+        }
         case ExprKind::GenericType: {
             auto* n = static_cast<const GenericTypeExpr*>(e);
             std::string s = "GenericType(" + n->name + "<";

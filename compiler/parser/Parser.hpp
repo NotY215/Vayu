@@ -70,7 +70,7 @@ namespace vayu {
         ExprPtr  parsePostfix();
         ExprPtr  parsePrimary();
         ExprPtr  parseListLit();
-        ExprPtr  parseMapLit();
+        ExprPtr  parseBraceLit();
         CallArg  parseCallArg();
         ExprPtr  parseTypeExpr();
     };

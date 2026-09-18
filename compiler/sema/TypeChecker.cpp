@@ -111,6 +111,8 @@ namespace vayu {
         B("gcd", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("lcm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("clamp", Types::Function({ A, A, A }, A));
+        B("tuple", Types::Function({ Types::Any() }, Types::Any()));
+        B("set", Types::Function({ Types::Any() }, Types::Any()));
         B("comb", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("perm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("isqrt", Types::Function({ Types::Int() }, Types::Int()));
@@ -580,7 +582,29 @@ namespace vayu {
                 return Types::Function({}, Types::List(V));
             error(loc, "map has no method '" + name + "'");
         }
+        if (target->kind == TypeKind::Tuple) {
+            TypePtr E = Types::Any();
+            if (name == "count")
+                return Types::Function({ E }, Types::Int());
+            if (name == "index")
+                return Types::Function({ E }, Types::Int());
+            error(loc, "tuple has no method '" + name + "'");
+        }
 
+        if (target->kind == TypeKind::Set) {
+            TypePtr E = target->params.empty() ? Types::Any() : target->params[0];
+            if (name == "add")      return Types::Function({ E }, Types::None());
+            if (name == "remove")   return Types::Function({ E }, Types::None());
+            if (name == "discard")  return Types::Function({ E }, Types::None());
+            if (name == "contains") return Types::Function({ E }, Types::Bool());
+            if (name == "clear")    return Types::Function({}, Types::None());
+            if (name == "copy")     return Types::Function({}, target);
+            if (name == "union" ||
+                name == "intersection" ||
+                name == "difference")
+                return Types::Function({ target }, target);
+            error(loc, "set has no method '" + name + "'");
+        }
         return nullptr;
     }
 
@@ -857,6 +881,12 @@ namespace vayu {
             else if (it->kind == TypeKind::Str) {
                 elem = Types::Str();
             }
+            else if (it->kind == TypeKind::Tuple) {
+                elem = Types::Any();
+            }
+            else if (it->kind == TypeKind::Set) {
+                elem = it->params.empty() ? Types::Any() : it->params[0];
+            }
             else if (it->kind == TypeKind::Any || it->kind == TypeKind::Error) {
                 elem = it;
             }
@@ -1070,6 +1100,22 @@ namespace vayu {
             }
             return Types::Map(Types::Str(), valType);
         }
+        case ExprKind::TupleLit: {
+            auto* n = static_cast<const TupleLitExpr*>(e);
+            std::vector<TypePtr> elems;
+            for (auto& el : n->elements) elems.push_back(checkExpr(el.get()));
+            return Types::Tuple(std::move(elems));
+        }
+        case ExprKind::SetLit: {
+            auto* n = static_cast<const SetLitExpr*>(e);
+            if (n->elements.empty()) return Types::Set(Types::Any());
+            TypePtr elem = checkExpr(n->elements[0].get());
+            for (size_t i = 1; i < n->elements.size(); ++i) {
+                TypePtr t = checkExpr(n->elements[i].get());
+                elem = commonElementType(elem, t, n->elements[i]->loc);
+            }
+            return Types::Set(elem);
+        }
 
         case ExprKind::Lambda: {
             auto* n = static_cast<const LambdaExpr*>(e);
@@ -1124,10 +1170,20 @@ namespace vayu {
                             " is in " + rt->toString());
                     return Types::Bool();
                 }
+                if (rt->kind == TypeKind::Set) {
+                    if (lt->kind != TypeKind::Any && rt->params.size() > 0 &&
+                        !isAssignable(rt->params[0], lt))
+                        error(n->loc, "cannot check if " + lt->toString() +
+                            " is in " + rt->toString());
+                    return Types::Bool();
+                }
+                if (rt->kind == TypeKind::Tuple)
+                    return Types::Bool();
                 if (rt->kind == TypeKind::Str && lt->kind == TypeKind::Str)
                     return Types::Bool();
                 if (rt->kind == TypeKind::Any) return Types::Bool();
-                error(n->loc, "'in' requires a list, map, or str on the right");
+                error(n->loc,
+                    "'in' requires a list, map, set, tuple, or str on the right");
             }
 
             if (lt->kind == TypeKind::Any || rt->kind == TypeKind::Any) {
@@ -1249,6 +1305,11 @@ namespace vayu {
                         idx->toString());
                 return Types::Str();
             }
+            if (tgt->kind == TypeKind::Tuple) {
+                if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
+                    error(n->loc, "tuple index must be int, got " + idx->toString());
+                return Types::Any();
+            }
             error(n->loc, "cannot index value of type " + tgt->toString());
         }
 
@@ -1313,7 +1374,8 @@ namespace vayu {
             }
 
             if (t->kind == TypeKind::List || t->kind == TypeKind::Map ||
-                t->kind == TypeKind::Str) {
+                t->kind == TypeKind::Str ||
+                t->kind == TypeKind::Tuple || t->kind == TypeKind::Set) {
                 TypePtr m = lookupCollectionMethod(t, n->name, n->loc);
                 if (m) return m;
             }
@@ -1478,6 +1540,13 @@ namespace vayu {
                         attr->name == "zfill")) {
                     for (auto& a : n->args)
                         checkExpr(a.value.get());
+                    return callee->returnType ? callee->returnType
+                        : Types::None();
+                }
+                if (!fromBuiltinModule && (attr->name == "union" ||
+                    attr->name == "intersection" ||
+                    attr->name == "difference")) {
+                    for (auto& a : n->args) checkExpr(a.value.get());
                     return callee->returnType ? callee->returnType
                         : Types::None();
                 }

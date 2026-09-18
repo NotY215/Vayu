@@ -4,10 +4,6 @@
 
 namespace vayu {
 
-    // ===========================================================================
-    // Lifecycle
-    // ===========================================================================
-
     void Value::destroy() noexcept {
         if (static_cast<uint8_t>(tag_) < static_cast<uint8_t>(Tag::Str)) return;
         switch (tag_) {
@@ -19,6 +15,8 @@ namespace vayu {
         case Tag::Map:       u_.map.~shared_ptr();        break;
         case Tag::Module:    u_.module.~shared_ptr();     break;
         case Tag::Generator: u_.generator.~shared_ptr();  break;
+        case Tag::Tuple:     u_.tuple.~shared_ptr();      break;
+        case Tag::Set:       u_.set.~shared_ptr();        break;
         default: break;
         }
     }
@@ -38,6 +36,8 @@ namespace vayu {
         case Tag::Map:       new (&u_.map) MapPtr(other.u_.map);             break;
         case Tag::Module:    new (&u_.module) ModulePtr(other.u_.module);    break;
         case Tag::Generator: new (&u_.generator) GeneratorPtr(other.u_.generator); break;
+        case Tag::Tuple:     new (&u_.tuple) TuplePtr(other.u_.tuple);       break;
+        case Tag::Set:       new (&u_.set) SetPtr(other.u_.set);             break;
         }
     }
 
@@ -56,6 +56,8 @@ namespace vayu {
         case Tag::Map:       new (&u_.map) MapPtr(std::move(other.u_.map));              break;
         case Tag::Module:    new (&u_.module) ModulePtr(std::move(other.u_.module));     break;
         case Tag::Generator: new (&u_.generator) GeneratorPtr(std::move(other.u_.generator)); break;
+        case Tag::Tuple:     new (&u_.tuple) TuplePtr(std::move(other.u_.tuple));        break;
+        case Tag::Set:       new (&u_.set) SetPtr(std::move(other.u_.set));              break;
         }
     }
 
@@ -74,6 +76,8 @@ namespace vayu {
     Value::Value(MapPtr m)       noexcept : tag_(Tag::Map) { new (&u_.map)       MapPtr(std::move(m)); }
     Value::Value(ModulePtr m)    noexcept : tag_(Tag::Module) { new (&u_.module)    ModulePtr(std::move(m)); }
     Value::Value(GeneratorPtr g) noexcept : tag_(Tag::Generator) { new (&u_.generator) GeneratorPtr(std::move(g)); }
+    Value::Value(TuplePtr t)     noexcept : tag_(Tag::Tuple) { new (&u_.tuple)     TuplePtr(std::move(t)); }
+    Value::Value(SetPtr s)       noexcept : tag_(Tag::Set) { new (&u_.set)       SetPtr(std::move(s)); }
 
     Value::Value(const Value& other) { copyFrom(other); }
     Value::Value(Value&& other) noexcept { moveFrom(std::move(other)); }
@@ -87,10 +91,6 @@ namespace vayu {
         if (this != &other) { destroy(); moveFrom(std::move(other)); }
         return *this;
     }
-
-    // ===========================================================================
-    // Conversions
-    // ===========================================================================
 
     static std::string formatDouble(double d) {
         if (std::isnan(d)) return "nan";
@@ -110,57 +110,77 @@ namespace vayu {
         case Tag::Str:   return !u_.s.empty();
         case Tag::List:  return !u_.list->items.empty();
         case Tag::Map:   return !u_.map->entries.empty();
+        case Tag::Tuple: return !u_.tuple->items.empty();
+        case Tag::Set:   return !u_.set->items.empty();
         default:         return true;
         }
     }
 
-    std::string Value::toString() const {
-        switch (tag_) {
-        case Tag::None:      return "None";
-        case Tag::Bool:      return u_.b ? "true" : "false";
-        case Tag::Int:       return std::to_string(u_.i);
-        case Tag::Float:     return formatDouble(u_.f);
-        case Tag::Str:       return u_.s;
-        case Tag::Callable:  return "<function " + u_.callable->name + ">";
-        case Tag::Class:     return "<class " + u_.cls->name + ">";
-        case Tag::Module:    return "<module " + u_.module->name + ">";
-        case Tag::Generator: return "<generator>";
+    static void emitInner(std::string& out, const Value& v, bool inContainer);
 
-        case Tag::List: {
-            std::string out = "[";
-            const auto& items = u_.list->items;
+    std::string Value::toString() const {
+        std::string out;
+        emitInner(out, *this, false);
+        return out;
+    }
+
+    static void emitInner(std::string& out, const Value& v, bool /*inContainer*/) {
+        switch (v.isNone() ? 100 :
+            v.isBool() ? 101 :
+            v.isInt() ? 102 :
+            v.isFloat() ? 103 :
+            v.isString() ? 104 :
+            v.isCallable() ? 105 :
+            v.isClass() ? 106 :
+            v.isModule() ? 107 :
+            v.isGenerator() ? 108 :
+            v.isList() ? 109 :
+            v.isMap() ? 110 :
+            v.isInstance() ? 111 :
+            v.isTuple() ? 112 :
+            v.isSet() ? 113 : -1) {
+        case 100: out += "None"; return;
+        case 101: out += v.asBool() ? "true" : "false"; return;
+        case 102: out += std::to_string(v.asInt()); return;
+        case 103: out += formatDouble(v.asFloat()); return;
+        case 104: out += v.asString(); return;
+        case 105: out += "<function " + v.asCallable()->name + ">"; return;
+        case 106: out += "<class " + v.asClass()->name + ">"; return;
+        case 107: out += "<module " + v.asModule()->name + ">"; return;
+        case 108: out += "<generator>"; return;
+        case 109: {
+            out += "[";
+            const auto& items = v.asList()->items;
             for (size_t i = 0; i < items.size(); ++i) {
                 if (i) out += ", ";
                 if (items[i].isString()) out += "\"" + items[i].asString() + "\"";
-                else                     out += items[i].toString();
+                else { std::string s; emitInner(s, items[i], true); out += s; }
             }
-            out += "]";
-            return out;
+            out += "]"; return;
         }
-        case Tag::Map: {
-            std::string out = "{";
+        case 110: {
+            out += "{";
             bool first = true;
-            for (auto& [k, v] : u_.map->entries) {
+            for (auto& [k, vv] : v.asMap()->entries) {
                 if (!first) out += ", ";
                 first = false;
                 out += "\"" + k + "\": ";
-                if (v.isString()) out += "\"" + v.asString() + "\"";
-                else              out += v.toString();
+                if (vv.isString()) out += "\"" + vv.asString() + "\"";
+                else { std::string s; emitInner(s, vv, true); out += s; }
             }
-            out += "}";
-            return out;
+            out += "}"; return;
         }
-        case Tag::Instance: {
-            auto s = u_.inst;
-            std::string out = s->cls ? s->cls->name : "?";
+        case 111: {
+            auto s = v.asInstance();
+            out += s->cls ? s->cls->name : "?";
             out += "(";
             bool first = true;
-            auto emit = [&](const std::string& fn, const Value& v) {
+            auto emit = [&](const std::string& fn, const Value& vv) {
                 if (!first) out += ", ";
                 first = false;
                 out += fn + "=";
-                if (v.isString()) out += "\"" + v.asString() + "\"";
-                else              out += v.toString();
+                if (vv.isString()) out += "\"" + vv.asString() + "\"";
+                else { std::string ss; emitInner(ss, vv, true); out += ss; }
                 };
             if (s->cls) {
                 for (const auto& fn : s->cls->fieldOrder) {
@@ -168,19 +188,40 @@ namespace vayu {
                     if (it != s->fields.end()) emit(fn, it->second);
                 }
             }
-            for (auto& [fn, v] : s->fields) {
+            for (auto& [fn, vv] : s->fields) {
                 if (s->cls) {
                     bool declared = false;
                     for (auto& d : s->cls->fieldOrder) if (d == fn) { declared = true; break; }
                     if (declared) continue;
                 }
-                emit(fn, v);
+                emit(fn, vv);
             }
-            out += ")";
-            return out;
+            out += ")"; return;
         }
+        case 112: {
+            const auto& items = v.asTuple()->items;
+            out += "(";
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (i) out += ", ";
+                if (items[i].isString()) out += "\"" + items[i].asString() + "\"";
+                else { std::string s; emitInner(s, items[i], true); out += s; }
+            }
+            if (items.size() == 1) out += ",";
+            out += ")"; return;
         }
-        return "<unknown>";
+        case 113: {
+            const auto& items = v.asSet()->items;
+            if (items.empty()) { out += "set()"; return; }
+            out += "{";
+            for (size_t i = 0; i < items.size(); ++i) {
+                if (i) out += ", ";
+                if (items[i].isString()) out += "\"" + items[i].asString() + "\"";
+                else { std::string s; emitInner(s, items[i], true); out += s; }
+            }
+            out += "}"; return;
+        }
+        default: out += "<unknown>"; return;
+        }
     }
 
     std::string Value::typeName() const {
@@ -197,11 +238,12 @@ namespace vayu {
         case Tag::Map:       return "map";
         case Tag::Module:    return "module";
         case Tag::Generator: return "generator";
+        case Tag::Tuple:     return "tuple";
+        case Tag::Set:       return "set";
         }
         return "?";
     }
 
-    // Defined out-of-line so GeneratorValue is complete.
     GeneratorValue::~GeneratorValue() {
         {
             std::lock_guard<std::mutex> lk(mtx);

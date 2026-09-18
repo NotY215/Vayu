@@ -19,18 +19,19 @@ namespace vayu {
         ListLit, MapLit,
         Lambda,
         GenericType,
+        // Phase 14.0 / 14.1
+        TupleLit,
+        SetLit,
     };
 
     enum class BinOp {
         Add, Sub, Mul, Div, FloorDiv, Mod, Pow,
         Eq, NotEq, Lt, Gt, LtEq, GtEq,
         And, Or, In, Is,
-        // Phase 11.1i
         BAnd, BOr, BXor, Shl, Shr,
     };
     enum class UnOp {
         Neg, Pos, Not,
-        // Phase 11.1i
         BNot,
     };
 
@@ -131,6 +132,18 @@ namespace vayu {
         explicit MapLitExpr(SourceLocation l) : Expr(ExprKind::MapLit, l) {}
     };
 
+    // Phase 14.0: real tuple literal.
+    struct TupleLitExpr : Expr {
+        std::vector<ExprPtr> elements;
+        explicit TupleLitExpr(SourceLocation l) : Expr(ExprKind::TupleLit, l) {}
+    };
+
+    // Phase 14.1: real set literal.
+    struct SetLitExpr : Expr {
+        std::vector<ExprPtr> elements;
+        explicit SetLitExpr(SourceLocation l) : Expr(ExprKind::SetLit, l) {}
+    };
+
     struct LambdaExpr : Expr {
         std::vector<std::string> params;
         ExprPtr                  body;
@@ -210,14 +223,12 @@ namespace vayu {
 
     struct DefStmt : Stmt {
         std::string               name;
-        std::vector<std::string>  typeParams;            // Phase 11.2
-        std::vector<std::string>  typeParamConstraints;  // Phase 11.2c (parallel)
+        std::vector<std::string>  typeParams;
+        std::vector<std::string>  typeParamConstraints;
         std::vector<Param>        params;
         ExprPtr                   returnType;
         Block                     body;
-        // Phase 11.1j
         Visibility                vis = Visibility::Public;
-        // Phase 11.1k
         bool                      isGenerator = false;
         DefStmt(std::string n, std::vector<Param> p, ExprPtr rt, Block b, SourceLocation l)
             : Stmt(StmtKind::Def, l),
@@ -237,7 +248,6 @@ namespace vayu {
         std::string name;
         ExprPtr type;
         SourceLocation loc;
-        // Phase 11.1j
         Visibility vis = Visibility::Public;
     };
 
@@ -259,8 +269,8 @@ namespace vayu {
 
     struct ClassStmt : Stmt {
         std::string                           name;
-        std::vector<std::string>              typeParams;           // Phase 11.2b
-        std::vector<std::string>              typeParamConstraints; // Phase 11.2c
+        std::vector<std::string>              typeParams;
+        std::vector<std::string>              typeParamConstraints;
         std::string                           parentName;
         std::vector<FieldDef>                 fields;
         std::vector<StaticFieldDef>           staticFields;
@@ -326,9 +336,8 @@ namespace vayu {
     struct BreakStmt : Stmt { BreakStmt(SourceLocation l) : Stmt(StmtKind::Break, l) {} };
     struct ContinueStmt : Stmt { ContinueStmt(SourceLocation l) : Stmt(StmtKind::Continue, l) {} };
 
-    // Phase 11.1k1: `yield expr` / `yield`
     struct YieldStmt : Stmt {
-        ExprPtr value;   // may be null
+        ExprPtr value;
         YieldStmt(ExprPtr v, SourceLocation l)
             : Stmt(StmtKind::Yield, l), value(std::move(v)) {
         }

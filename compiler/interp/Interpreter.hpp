@@ -104,6 +104,10 @@ namespace vayu {
             const std::vector<Value>& args, SourceLocation loc);
         Value callMapMethod(const std::shared_ptr<Callable>& fn,
             const std::vector<Value>& args, SourceLocation loc);
+        Value callTupleMethod(const std::shared_ptr<Callable>& fn,
+            const std::vector<Value>& args, SourceLocation loc);
+        Value callSetMethod(const std::shared_ptr<Callable>& fn,
+            const std::vector<Value>& args, SourceLocation loc);
         Value callStringMethod(const std::shared_ptr<Callable>& fn,
             const std::vector<Value>& args, SourceLocation loc);
 

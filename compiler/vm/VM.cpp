@@ -259,6 +259,20 @@ namespace vayu {
                         stack_.emplace_back(0LL);
                         break;
                     }
+                    if (v.isTuple()) {
+                        auto lst = std::make_shared<ListValue>();
+                        lst->items = v.asTuple()->items;
+                        stack_.emplace_back(std::move(lst));
+                        stack_.emplace_back(0LL);
+                        break;
+                    }
+                    if (v.isSet()) {
+                        auto lst = std::make_shared<ListValue>();
+                        lst->items = v.asSet()->items;
+                        stack_.emplace_back(std::move(lst));
+                        stack_.emplace_back(0LL);
+                        break;
+                    }
                     runtimeError("cannot iterate over " + v.typeName());
                 }
                 case OpCode::ITER_NEXT: {
@@ -305,6 +319,34 @@ namespace vayu {
                         stack_.pop_back();
                     }
                     stack_.emplace_back(std::move(lst));
+                    break;
+                }
+                case OpCode::TUPLE_NEW: {
+                    int count = (int(code[ip]) << 8) | int(code[ip + 1]); ip += 2;
+                    auto tup = std::make_shared<TupleValue>();
+                    tup->items.resize((size_t)count);
+                    for (int i = count - 1; i >= 0; --i) {
+                        tup->items[(size_t)i] = std::move(stack_.back());
+                        stack_.pop_back();
+                    }
+                    stack_.emplace_back(std::move(tup));
+                    break;
+                }
+                case OpCode::SET_NEW: {
+                    int count = (int(code[ip]) << 8) | int(code[ip + 1]); ip += 2;
+                    auto s = std::make_shared<SetValue>();
+                    std::vector<Value> tmp((size_t)count);
+                    for (int i = count - 1; i >= 0; --i) {
+                        tmp[(size_t)i] = std::move(stack_.back());
+                        stack_.pop_back();
+                    }
+                    for (auto& v : tmp) {
+                        bool found = false;
+                        for (auto& u : s->items)
+                            if (valueEqualsVM(u, v)) { found = true; break; }
+                        if (!found) s->items.push_back(std::move(v));
+                    }
+                    stack_.emplace_back(std::move(s));
                     break;
                 }
 
@@ -480,6 +522,17 @@ namespace vayu {
                         stack_.emplace_back(std::string(1, s[(size_t)i]));
                         break;
                     }
+                    if (tgt.isTuple()) {
+                        if (!idx.isInt())
+                            runtimeError("tuple index must be int, got " + idx.typeName());
+                        const auto& items = tgt.asTuple()->items;
+                        long long i = idx.asInt();
+                        if (i < 0) i += (long long)items.size();
+                        if (i < 0 || i >= (long long)items.size())
+                            runtimeError("tuple index out of range");
+                        stack_.push_back(items[(size_t)i]);
+                        break;
+                    }
                     runtimeError("cannot index value of type " + tgt.typeName());
                 }
                 case OpCode::INDEX_SET: {
@@ -532,6 +585,20 @@ namespace vayu {
                         stack_.emplace_back(found);
                         break;
                     }
+                    if (r.isSet()) {
+                        bool found = false;
+                        for (auto& v : r.asSet()->items)
+                            if (valueEqualsVM(l, v)) { found = true; break; }
+                        stack_.emplace_back(found);
+                        break;
+                    }
+                    if (r.isTuple()) {
+                        bool found = false;
+                        for (auto& v : r.asTuple()->items)
+                            if (valueEqualsVM(l, v)) { found = true; break; }
+                        stack_.emplace_back(found);
+                        break;
+                    }
                     if (r.isMap()) {
                         if (!l.isString()) { stack_.emplace_back(false); break; }
                         stack_.emplace_back(r.asMap()->entries.count(l.asString()) > 0);
@@ -541,7 +608,7 @@ namespace vayu {
                         stack_.emplace_back(r.asString().find(l.asString()) != std::string::npos);
                         break;
                     }
-                    runtimeError("'in' requires a list, map, or str on the right");
+                    runtimeError("'in' requires a container on the right");
                 }
 
                                // ---------- Exceptions ----------
@@ -890,6 +957,25 @@ namespace vayu {
         if (a.isInstance() && b.isInstance()) return a.asInstance() == b.asInstance();
         if (a.isList() && b.isList()) return a.asList() == b.asList();
         if (a.isMap() && b.isMap())  return a.asMap() == b.asMap();
+        if (a.isTuple() && b.isTuple()) {
+            const auto& x = a.asTuple()->items;
+            const auto& y = b.asTuple()->items;
+            if (x.size() != y.size()) return false;
+            for (size_t i = 0; i < x.size(); ++i)
+                if (!valueEqualsVM(x[i], y[i])) return false;
+            return true;
+        }
+        if (a.isSet() && b.isSet()) {
+            const auto& x = a.asSet()->items;
+            const auto& y = b.asSet()->items;
+            if (x.size() != y.size()) return false;
+            for (auto& xv : x) {
+                bool found = false;
+                for (auto& yv : y) if (valueEqualsVM(xv, yv)) { found = true; break; }
+                if (!found) return false;
+            }
+            return true;
+        }
         return false;
     }
 

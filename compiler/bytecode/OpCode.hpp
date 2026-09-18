@@ -52,6 +52,9 @@ namespace vayu {
         INDEX_GET,          // [target, index] -> value
         INDEX_SET,          // [target, index, value] -> ()
         MAP_NEW,            // <count:u16>   pop count*2 elems -> map
+        // ---- Phase 14.0 / 14.1 ----
+        TUPLE_NEW,          // <count:u16>    pop count elems -> tuple
+        SET_NEW,            // <count:u16>    pop count elems -> set (dedup'd)
         IN,                 // [lhs, rhs] -> bool
         // ---- Exceptions ----
         TRY_BEGIN,          // <offset:i16>   push handler

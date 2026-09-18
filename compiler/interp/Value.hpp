@@ -24,13 +24,10 @@ namespace vayu {
     struct StructInstance;
     struct Callable;
     struct GeneratorValue;
-    // Thrown inside a generator worker thread when the owner cancelled it
-    // (its last shared_ptr died mid-suspension).
+    struct TupleValue;
+    struct SetValue;
     struct GeneratorCancelled {};
 
-    // ===========================================================================
-    // Value — hand-rolled tagged union.
-    // ===========================================================================
     class Value {
     public:
         using FnPtr = std::shared_ptr<Callable>;
@@ -40,12 +37,15 @@ namespace vayu {
         using MapPtr = std::shared_ptr<MapValue>;
         using ModulePtr = std::shared_ptr<ModuleValue>;
         using GeneratorPtr = std::shared_ptr<GeneratorValue>;
+        using TuplePtr = std::shared_ptr<TupleValue>;
+        using SetPtr = std::shared_ptr<SetValue>;
 
     private:
         enum class Tag : uint8_t {
             None, Bool, Int, Float,
             Str, Callable, Instance, Class,
-            List, Map, Module, Generator
+            List, Map, Module, Generator,
+            Tuple, Set,
         };
 
         union U {
@@ -60,6 +60,8 @@ namespace vayu {
             MapPtr      map;
             ModulePtr   module;
             GeneratorPtr generator;
+            TuplePtr    tuple;
+            SetPtr      set;
 
             U() noexcept : i(0) {}
             ~U() {}
@@ -88,6 +90,8 @@ namespace vayu {
         Value(MapPtr m)       noexcept;
         Value(ModulePtr m)    noexcept;
         Value(GeneratorPtr g) noexcept;
+        Value(TuplePtr t)     noexcept;
+        Value(SetPtr s)       noexcept;
 
         Value(const Value& other);
         Value(Value&& other) noexcept;
@@ -108,6 +112,8 @@ namespace vayu {
         bool isMap()       const noexcept { return tag_ == Tag::Map; }
         bool isModule()    const noexcept { return tag_ == Tag::Module; }
         bool isGenerator() const noexcept { return tag_ == Tag::Generator; }
+        bool isTuple()     const noexcept { return tag_ == Tag::Tuple; }
+        bool isSet()       const noexcept { return tag_ == Tag::Set; }
 
         bool               asBool()    const { return u_.b; }
         long long          asInt()     const { return u_.i; }
@@ -120,6 +126,8 @@ namespace vayu {
         MapPtr       asMap()       const { return u_.map; }
         ModulePtr    asModule()    const { return u_.module; }
         GeneratorPtr asGenerator() const { return u_.generator; }
+        TuplePtr     asTuple()     const { return u_.tuple; }
+        SetPtr       asSet()       const { return u_.set; }
 
         double asDouble() const noexcept {
             return tag_ == Tag::Int ? (double)u_.i : u_.f;
@@ -156,8 +164,17 @@ namespace vayu {
         std::string                            name;
         std::vector<std::string>               fieldOrder;
         std::shared_ptr<ClassObject>           parent;
-        // Phase 11.1c
         std::unordered_map<std::string, Value> staticFields;
+    };
+
+    // Phase 14.0: immutable, fixed-length, tagged.
+    struct TupleValue {
+        std::vector<Value> items;
+    };
+
+    // Phase 14.1: order-preserving, dedup-on-insert.
+    struct SetValue {
+        std::vector<Value> items;
     };
 
     // ===========================================================================
@@ -178,39 +195,38 @@ namespace vayu {
             StringMethod,
             Lambda,
             VMFunction,
+            TupleMethod,
+            SetMethod,
         } kind = Kind::Native;
 
         std::string name;
 
         NativeFnPtr nativeFn = nullptr;
 
-        // User / BoundMethod / SuperMethod / Lambda
         const DefStmt* decl = nullptr;
         std::shared_ptr<Environment> closure;
         std::shared_ptr<ClassObject> definingClass;
         const LambdaExpr* lambdaExpr = nullptr;
 
-        // VMFunction
         std::shared_ptr<Chunk>       chunk;
         std::vector<std::string>     vmParams;
         bool                         isGenerator = false;
 
-        // ClassCtor
         std::shared_ptr<ClassObject> classObj;
 
-        // BoundMethod / SuperMethod
         std::shared_ptr<StructInstance> boundSelf;
         std::shared_ptr<Callable>       methodFn;
         std::shared_ptr<ClassObject>    superParent;
 
-        // ListMethod / MapMethod / StringMethod
         std::shared_ptr<ListValue> boundList;
         std::shared_ptr<MapValue>  boundMap;
         std::string                boundStr;
+        std::shared_ptr<TupleValue> boundTuple;
+        std::shared_ptr<SetValue>   boundSet;
     };
 
     // ===========================================================================
-    // Phase 11.1k1: Generator (thread-backed coroutine)
+    // Generator
     // ===========================================================================
 
     enum class GenState { Fresh, Running, Suspended, Done };
@@ -225,9 +241,6 @@ namespace vayu {
         Value                   yielded;
         std::exception_ptr      pendingError;
 
-        // Phase 11.1k1 fix: the worker and owner share the Interpreter's
-        // env_/generatorContext_ fields.  At every suspend point the worker
-        // stashes the owner's state here and restores its own on resume.
         std::shared_ptr<Environment>    ownerEnv;
         std::shared_ptr<GeneratorValue> ownerGen;
 

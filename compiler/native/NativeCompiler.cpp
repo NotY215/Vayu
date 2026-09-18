@@ -42,7 +42,10 @@ namespace vayu {
 
     namespace {
 
-        enum class VType { Int, Bool, Str, List, Map, Obj, Exc, Void, Unknown };
+        enum class VType {
+            Int, Bool, Str, List, Map, Obj, Exc, Void, Unknown,
+            Tuple, Set
+        };
 
         struct VarInfo {
             VType       type = VType::Unknown;
@@ -752,12 +755,14 @@ namespace vayu {
 
             static int tagOf(VType t) {
                 switch (t) {
-                case VType::Int:  return 0;
-                case VType::Bool: return 1;
-                case VType::Str:  return 2;
-                case VType::List: return 3;
-                case VType::Map:  return 4;
-                default:          return 0;
+                case VType::Int:   return 0;
+                case VType::Bool:  return 1;
+                case VType::Str:   return 2;
+                case VType::List:  return 3;
+                case VType::Map:   return 4;
+                case VType::Tuple: return 5;
+                case VType::Set:   return 6;
+                default:           return 0;
                 }
             }
 
@@ -1468,7 +1473,17 @@ namespace vayu {
                         line(t + " =l call " + fn + "(l " + a.ssa + ", l " + b.ssa + ")");
                         r.ssa = t; r.type = VType::Bool; return r;
                     }
-
+                    bool tupleCmp =
+                        (n->op == BinOp::Eq || n->op == BinOp::NotEq) &&
+                        (a.type == VType::Tuple || b.type == VType::Tuple);
+                    if (tupleCmp) {
+                        const char* fn = (n->op == BinOp::Eq)
+                            ? "$vayu_tuple_eq" : "$vayu_tuple_ne";
+                        std::string t = newTemp();
+                        line(t + " =l call " + std::string(fn) + "(l " +
+                            a.ssa + ", l " + b.ssa + ")");
+                        r.ssa = t; r.type = VType::Bool; return r;
+                    }
                     switch (n->op) {
                     case BinOp::Add: {
                         std::string t = newTemp();
@@ -1581,6 +1596,24 @@ namespace vayu {
                                 ", l " + a.ssa + ")");
                             r.ssa = t; r.type = VType::Bool; return r;
                         }
+                        if (b.type == VType::Set) {
+                            std::string t = newTemp();
+                            line(t + " =l call $vayu_set_has(l " + b.ssa +
+                                ", l " + a.ssa + ", l " +
+                                std::to_string(tagOf(a.type)) + ")");
+                            r.ssa = t; r.type = VType::Bool; return r;
+                        }
+                        if (b.type == VType::Tuple) {
+                            std::string cnt = newTemp();
+                            line(cnt + " =l call $vayu_tuple_count(l " + b.ssa +
+                                ", l " + a.ssa + ", l " +
+                                std::to_string(tagOf(a.type)) + ")");
+                            std::string w = newTemp();
+                            line(w + " =w cnel " + cnt + ", 0");
+                            std::string ext = newTemp();
+                            line(ext + " =l extsw " + w);
+                            r.ssa = ext; r.type = VType::Bool; return r;
+                        }
                         throw std::runtime_error("native: 'in' unsupported on these types");
                     }
                     case BinOp::Is:
@@ -1622,6 +1655,13 @@ namespace vayu {
                         line(t + " =l call $vayu_str_char_at(l " + tgt.ssa +
                             ", l " + idx.ssa + ")");
                         r.ssa = t; r.type = VType::Str;
+                        return r;
+                    }
+                    if (tgt.type == VType::Tuple) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_get(l " + tgt.ssa +
+                            ", l " + idx.ssa + ")");
+                        r.ssa = t; r.type = VType::Int;
                         return r;
                     }
                     throw std::runtime_error("native: index on unsupported type");
@@ -1803,7 +1843,30 @@ namespace vayu {
                     r.ssa = m; r.type = VType::Map; r.valType = valT;
                     return r;
                 }
-
+                case ExprKind::TupleLit: {
+                    auto* n = static_cast<const TupleLitExpr*>(e);
+                    std::string tup = newTemp();
+                    line(tup + " =l call $vayu_tuple_new()");
+                    for (auto& el : n->elements) {
+                        Val v = emitExpr(el.get());
+                        line("call $vayu_tuple_push_tagged(l " + tup + ", l " +
+                            v.ssa + ", l " + std::to_string(tagOf(v.type)) + ")");
+                    }
+                    r.ssa = tup; r.type = VType::Tuple;
+                    return r;
+                }
+                case ExprKind::SetLit: {
+                    auto* n = static_cast<const SetLitExpr*>(e);
+                    std::string set = newTemp();
+                    line(set + " =l call $vayu_set_new()");
+                    for (auto& el : n->elements) {
+                        Val v = emitExpr(el.get());
+                        line("call $vayu_set_push_tagged(l " + set + ", l " +
+                            v.ssa + ", l " + std::to_string(tagOf(v.type)) + ")");
+                    }
+                    r.ssa = set; r.type = VType::Set;
+                    return r;
+                }
                 case ExprKind::FloatLit:
                     throw std::runtime_error("native: floats not yet supported");
                 case ExprKind::CharLit:
@@ -2391,6 +2454,35 @@ namespace vayu {
                     line(t + " =l call $vayu_factorial(l " + v.ssa + ")");
                     r.ssa = t; r.type = VType::Int; return true;
                 }
+                if (name == "tuple") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: tuple() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type == VType::Tuple) { r = v; return true; }
+                    if (v.type == VType::List) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_from_list(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::Tuple; return true;
+                    }
+                    if (v.type == VType::Str) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_from_str(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::Tuple; return true;
+                    }
+                    throw std::runtime_error("native: tuple() unsupported arg");
+                }
+                if (name == "set") {
+                    if (n->args.size() != 1)
+                        throw std::runtime_error("native: set() takes 1 argument");
+                    Val v = emitExpr(n->args[0].value.get());
+                    if (v.type == VType::Set) { r = v; return true; }
+                    if (v.type == VType::List) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_from_list(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::Set; return true;
+                    }
+                    throw std::runtime_error("native: set() unsupported arg");
+                }
                 return false;
             }
 
@@ -2774,6 +2866,92 @@ namespace vayu {
                         line(t + " =l call " + std::string(fn) + "(l " +
                             recv.ssa + ")");
                         r.ssa = t; r.type = VType::Bool; return true;
+                    }
+                }
+                if (recv.type == VType::Tuple) {
+                    if (recvName == "count") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_count(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Int; return true;
+                    }
+                }
+                if (recv.type == VType::Set) {
+                    if (recvName == "add") {
+                        Val v = argV(0);
+                        line("call $vayu_set_push_tagged(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "contains") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_has(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Bool; return true;
+                    }
+                    if (recvName == "remove" || recvName == "discard") {
+                        Val v = argV(0);
+                        line("call $vayu_set_remove(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "clear") {
+                        line("call $vayu_set_clear(l " + recv.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "copy") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_copy(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Set; return true;
+                    }
+                }
+                if (recv.type == VType::Set) {
+                    if (recvName == "add") {
+                        Val v = argV(0);
+                        line("call $vayu_set_push_tagged(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "contains") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_has(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Bool; return true;
+                    }
+                    if (recvName == "remove" || recvName == "discard") {
+                        Val v = argV(0);
+                        line("call $vayu_set_remove(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "clear") {
+                        line("call $vayu_set_clear(l " + recv.ssa + ")");
+                        r.ssa = "0"; r.type = VType::Void; return true;
+                    }
+                    if (recvName == "copy") {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_set_copy(l " + recv.ssa + ")");
+                        r.ssa = t; r.type = VType::Set; return true;
+                    }
+                }
+                if (recv.type == VType::Tuple) {
+                    if (recvName == "count") {
+                        Val v = argV(0);
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_tuple_count(l " + recv.ssa +
+                            ", l " + v.ssa + ", l " +
+                            std::to_string(tagOf(v.type)) + ")");
+                        r.ssa = t; r.type = VType::Int; return true;
                     }
                 }
                 return false;
@@ -3592,6 +3770,12 @@ namespace vayu {
                             line("call $vayu_print_map_noln(l " + v.ssa + ", l " +
                                 std::to_string(kindOf(v.valType)) + ")");
                             break;
+                        case VType::Tuple:
+                            line("call $vayu_print_tuple_noln(l " + v.ssa + ")");
+                            break;
+                        case VType::Set:
+                            line("call $vayu_print_set_noln(l " + v.ssa + ")");
+                            break;
                         default:
                             line("call $vayu_print_int_noln(l " + v.ssa + ")");
                             break;
@@ -3608,6 +3792,8 @@ namespace vayu {
                     case VType::Str:  kind = 0; break;
                     case VType::List: kind = 1; break;
                     case VType::Map:  kind = 2; break;
+                    case VType::Tuple: kind = 3; break;
+                    case VType::Set:   kind = 4; break;
                     default: throw std::runtime_error(
                         "native: len() of unsupported type");
                     }
@@ -4379,9 +4565,11 @@ namespace vayu {
                     iter.valType = VType::Unknown;
                 }
 
-                if (iter.type != VType::List)
+                if (iter.type != VType::List &&
+                    iter.type != VType::Tuple &&
+                    iter.type != VType::Set)
                     throw std::runtime_error(
-                        "native: `for` requires range(...), a list, or a map");
+                        "native: `for` requires range(...), list, tuple, set, or map");
 
                 std::string savedSlot; bool hadSaved = false;
                 {
@@ -5739,6 +5927,101 @@ VayuList* vayu_list_copy(VayuList* l) {
     return r;
 }
 
+/* ---- Phase 14.0: tuples (VayuList with tag 5) ---- */
+typedef VayuList VayuTuple;
+
+VayuTuple* vayu_tuple_new(void) { return vayu_list_new(); }
+void vayu_tuple_push_tagged(VayuTuple* t, int64_t v, int64_t tag) {
+    vayu_list_push_tagged(t, v, tag);
+}
+int64_t vayu_tuple_get(VayuTuple* t, int64_t i) {
+    return vayu_list_get(t, i);
+}
+int64_t vayu_tuple_len(VayuTuple* t) { return t->len; }
+VayuTuple* vayu_tuple_from_list(VayuList* l) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < l->len; ++i)
+        vayu_list_push_tagged(r, l->items[i], l->tags[i]);
+    return r;
+}
+int64_t vayu_tuple_count(VayuTuple* t, int64_t v, int64_t tag) {
+    int64_t c = 0;
+    for (int64_t i = 0; i < t->len; ++i)
+        if (vayu_list_val_eq(t->items[i], t->tags[i], v, (int8_t)tag)) ++c;
+    return c;
+}
+
+VayuTuple* vayu_tuple_from_str(VayuStr* s) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < s->len; ++i)
+        vayu_list_push_tagged(r, (int64_t)vayu_mkstr(s->data + i, 1), 2);
+    return r;
+}
+
+static int64_t vayu_list_struct_eq(VayuList* a, VayuList* b) {
+    if (a->len != b->len) return 0;
+    for (int64_t i = 0; i < a->len; ++i) {
+        int8_t ta = a->tags[i], tb = b->tags[i];
+        if (ta != tb) return 0;
+        if (ta == 2) {
+            if (!vayu_str_eq((VayuStr*)a->items[i], (VayuStr*)b->items[i]))
+                return 0;
+        } else if (ta == 3 || ta == 5 || ta == 6) {
+            if (!vayu_list_struct_eq((VayuList*)a->items[i],
+                                     (VayuList*)b->items[i])) return 0;
+        } else {
+            if (a->items[i] != b->items[i]) return 0;
+        }
+    }
+    return 1;
+}
+int64_t vayu_tuple_eq(VayuTuple* a, VayuTuple* b) {
+    return vayu_list_struct_eq(a, b);
+}
+int64_t vayu_tuple_ne(VayuTuple* a, VayuTuple* b) {
+    return !vayu_list_struct_eq(a, b);
+}
+/* ---- Phase 14.1: sets (VayuList with tag 6, dedup on push) ---- */
+typedef VayuList VayuSet;
+
+VayuSet* vayu_set_new(void) { return vayu_list_new(); }
+void vayu_set_push_tagged(VayuSet* s, int64_t v, int64_t tag) {
+    for (int64_t i = 0; i < s->len; ++i)
+        if (vayu_list_val_eq(s->items[i], s->tags[i], v, (int8_t)tag)) return;
+    vayu_list_push_tagged(s, v, tag);
+}
+int64_t vayu_set_has(VayuSet* s, int64_t v, int64_t tag) {
+    for (int64_t i = 0; i < s->len; ++i)
+        if (vayu_list_val_eq(s->items[i], s->tags[i], v, (int8_t)tag)) return 1;
+    return 0;
+}
+void vayu_set_remove(VayuSet* s, int64_t v, int64_t tag) {
+    for (int64_t i = 0; i < s->len; ++i) {
+        if (vayu_list_val_eq(s->items[i], s->tags[i], v, (int8_t)tag)) {
+            memmove(s->items + i, s->items + i + 1,
+                    sizeof(int64_t) * (size_t)(s->len - i - 1));
+            memmove(s->tags + i, s->tags + i + 1,
+                    (size_t)(s->len - i - 1));
+            s->len--;
+            return;
+        }
+    }
+}
+void vayu_set_clear(VayuSet* s) { s->len = 0; }
+int64_t vayu_set_len(VayuSet* s) { return s->len; }
+VayuSet* vayu_set_copy(VayuSet* s) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < s->len; ++i)
+        vayu_list_push_tagged(r, s->items[i], s->tags[i]);
+    return r;
+}
+VayuSet* vayu_set_from_list(VayuList* l) {
+    VayuList* r = vayu_list_new();
+    for (int64_t i = 0; i < l->len; ++i)
+        vayu_set_push_tagged(r, l->items[i], l->tags[i]);
+    return r;
+}
+
 int64_t vayu_list_first(VayuList* l) {
     if (l->len == 0) {
         vayu_raise_str(vayu_mkstr_c("IndexError"),
@@ -5939,6 +6222,8 @@ int64_t vayu_len(int64_t v, int64_t kind) {
         case 0: return vayu_str_len((VayuStr*)v);
         case 1: return vayu_list_len((VayuList*)v);
         case 2: return vayu_map_len((VayuMap*)v);
+        case 3: return vayu_tuple_len((VayuTuple*)v);
+        case 4: return vayu_set_len((VayuSet*)v);
     }
     return 0;
 }
@@ -5951,12 +6236,14 @@ void vayu_print_value(int64_t v, int64_t kind) {
 }
 void vayu_print_list_noln(VayuList* l);
 void vayu_print_map_noln(VayuMap* m, int64_t vk);
+void vayu_print_tuple_noln(VayuList* t);
+void vayu_print_set_noln(VayuList* s);
 
 void vayu_print_list_noln(VayuList* l) {
     putchar('[');
     for (int64_t i = 0; i < l->len; ++i) {
         if (i) printf(", ");
-        int8_t t = l->tags[i];
+                int8_t t = l->tags[i];
         if (t == 1) {
             printf("%s", l->items[i] ? "true" : "false");
         } else if (t == 2) {
@@ -5968,12 +6255,69 @@ void vayu_print_list_noln(VayuList* l) {
             vayu_print_list_noln((VayuList*)l->items[i]);
         } else if (t == 4) {
             vayu_print_map_noln((VayuMap*)l->items[i], 0);
+        } else if (t == 5) {
+            vayu_print_tuple_noln((VayuTuple*)l->items[i]);
+        } else if (t == 6) {
+            vayu_print_set_noln((VayuSet*)l->items[i]);
         } else {
             printf("%lld", (long long)l->items[i]);
         }
     }
     putchar(']');
 }
+void vayu_print_tuple_noln(VayuTuple* t) {
+    putchar('(');
+    for (int64_t i = 0; i < t->len; ++i) {
+        if (i) printf(", ");
+        int8_t tag = t->tags[i];
+        if (tag == 1) {
+            printf("%s", t->items[i] ? "true" : "false");
+        } else if (tag == 2) {
+            VayuStr* s = (VayuStr*)t->items[i];
+            putchar('"');
+            fwrite(s->data, 1, (size_t)s->len, stdout);
+            putchar('"');
+        } else if (tag == 3) {
+            vayu_print_list_noln((VayuList*)t->items[i]);
+        } else if (tag == 4) {
+            vayu_print_map_noln((VayuMap*)t->items[i], 0);
+        } else if (tag == 5) {
+            vayu_print_tuple_noln((VayuTuple*)t->items[i]);
+        } else if (tag == 6) {
+            vayu_print_set_noln((VayuSet*)t->items[i]);
+        } else {
+            printf("%lld", (long long)t->items[i]);
+        }
+    }
+    if (t->len == 1) putchar(',');
+    putchar(')');
+}
+void vayu_print_tuple(VayuTuple* t) { vayu_print_tuple_noln(t); putchar('\n'); }
+
+void vayu_print_set_noln(VayuSet* s) {
+    if (s->len == 0) { printf("set()"); return; }
+    putchar('{');
+    for (int64_t i = 0; i < s->len; ++i) {
+        if (i) printf(", ");
+        int8_t tag = s->tags[i];
+        if (tag == 1) {
+            printf("%s", s->items[i] ? "true" : "false");
+        } else if (tag == 2) {
+            VayuStr* str = (VayuStr*)s->items[i];
+            putchar('"');
+            fwrite(str->data, 1, (size_t)str->len, stdout);
+            putchar('"');
+        } else if (tag == 5) {
+            vayu_print_tuple_noln((VayuTuple*)s->items[i]);
+        } else if (tag == 6) {
+            vayu_print_set_noln((VayuSet*)s->items[i]);
+        } else {
+            printf("%lld", (long long)s->items[i]);
+        }
+    }
+    putchar('}');
+}
+void vayu_print_set(VayuSet* s) { vayu_print_set_noln(s); putchar('\n'); }
 void vayu_print_list(VayuList* l, int64_t ek) {
     (void)ek;
     vayu_print_list_noln(l); putchar('\n');

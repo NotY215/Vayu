@@ -20,6 +20,8 @@ namespace vayu {
         Unique,   // Phase 12.0 — unique<T>
         Shared,   // Phase 12.1 — shared<T>, copyable
         Weak,     // Phase 12.1 — weak<T>, must .upgrade()
+        Tuple,    // Phase 14.0
+        Set,      // Phase 14.1
     };
 
     class Type;
@@ -71,6 +73,8 @@ namespace vayu {
         TypePtr Unique(TypePtr elem);
         TypePtr Shared(TypePtr elem);
         TypePtr Weak(TypePtr elem);
+        TypePtr Tuple(std::vector<TypePtr> elems);
+        TypePtr Set(TypePtr elem);
     }
 
     bool    isAssignable(const TypePtr& to, const TypePtr& from);
