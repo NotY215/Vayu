@@ -1,0 +1,33 @@
+class Counter:
+    value: int
+    def __init__(self, v: int) -> None:
+        self.value = v
+    def bump(self) -> int:
+        self.value = self.value + 1
+        return self.value
+
+def use_shared(c: shared<Counter>) -> int:
+    return c.bump()
+
+def main() -> None:
+    a: shared<Counter> = Counter(10)
+
+    # shared copies are fine — no move.
+    b: shared<Counter> = a
+    print(a.value)
+    print(b.value)
+
+    # bump through b, observe via a.
+    b.bump()
+    print(a.value)
+
+    # pass to a function
+    print(use_shared(a))
+    print(use_shared(b))
+
+    # weak<T> upgrade
+    w: weak<Counter> = a
+    up: shared<Counter> = w.upgrade()
+    print(up.value)
+
+main()
