@@ -27,24 +27,6 @@ namespace vayu {
             auto pos = name.find('#');
             return pos == std::string::npos ? name : name.substr(0, pos);
         }
-        case TypeKind::Unique: {
-            std::string s = "unique<";
-            s += params.empty() ? "?" : params[0]->toString();
-            s += ">";
-            return s;
-        }
-        case TypeKind::Shared: {
-            std::string s = "shared<";
-            s += params.empty() ? "?" : params[0]->toString();
-            s += ">";
-            return s;
-        }
-        case TypeKind::Weak: {
-            std::string s = "weak<";
-            s += params.empty() ? "?" : params[0]->toString();
-            s += ">";
-            return s;
-        }
         case TypeKind::List: {
             std::string s = "list<";
             if (!params.empty()) s += params[0]->toString();
@@ -81,9 +63,7 @@ namespace vayu {
             return name == other->name;
         if (kind == TypeKind::Named || kind == TypeKind::Struct)
             return name == other->name;
-        if (kind == TypeKind::List || kind == TypeKind::Map ||
-            kind == TypeKind::Unique || kind == TypeKind::Shared ||
-            kind == TypeKind::Weak) {
+        if (kind == TypeKind::List || kind == TypeKind::Map) {
             if (params.size() != other->params.size()) return false;
             for (size_t i = 0; i < params.size(); ++i)
                 if (!params[i]->equals(other->params[i])) return false;
@@ -134,21 +114,6 @@ namespace vayu {
             t->params.push_back(std::move(value));
             return t;
         }
-        TypePtr Unique(TypePtr elem) {
-            auto t = std::make_shared<Type>(TypeKind::Unique);
-            t->params.push_back(std::move(elem));
-            return t;
-        }
-        TypePtr Shared(TypePtr elem) {
-            auto t = std::make_shared<Type>(TypeKind::Shared);
-            t->params.push_back(std::move(elem));
-            return t;
-        }
-        TypePtr Weak(TypePtr elem) {
-            auto t = std::make_shared<Type>(TypeKind::Weak);
-            t->params.push_back(std::move(elem));
-            return t;
-        }
     } // namespace Types
 
     bool isAssignable(const TypePtr& to, const TypePtr& from) {
@@ -157,26 +122,6 @@ namespace vayu {
         if (to->kind == TypeKind::Error || from->kind == TypeKind::Error) return true;
         if (to->kind == TypeKind::Unknown || from->kind == TypeKind::Unknown) return true;
         if (to->kind == TypeKind::Float && from->kind == TypeKind::Int) return true;
-        // Phase 12.0: unique<T> semantics.
-        if (to->kind == TypeKind::Unique && from->kind == TypeKind::Unique) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        // Phase 12.1: shared<T> / weak<T> semantics.
-        if (to->kind == TypeKind::Shared && from->kind == TypeKind::Shared) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        if (to->kind == TypeKind::Weak && from->kind == TypeKind::Weak) {
-            if (to->params.empty() || from->params.empty()) return true;
-            return to->params[0]->equals(from->params[0]);
-        }
-        // weak<T> -> shared<T>: only via .upgrade().  shared<T> -> weak<T>:
-        // only via explicit conversion.  None are implicit.
-        if (to->kind == TypeKind::Unique || from->kind == TypeKind::Unique ||
-            to->kind == TypeKind::Shared || from->kind == TypeKind::Shared ||
-            to->kind == TypeKind::Weak || from->kind == TypeKind::Weak)
-            return false;
 
         // Phase 11.2: a bare type parameter is only assignable from itself.
         if (to->kind == TypeKind::TypeParam)

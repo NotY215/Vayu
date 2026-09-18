@@ -17,9 +17,6 @@ namespace vayu {
         Map,
         Named,
         TypeParam,
-        Unique,   // Phase 12.0 — unique<T>
-        Shared,   // Phase 12.1 — shared<T>, copyable
-        Weak,     // Phase 12.1 — weak<T>, must .upgrade()
     };
 
     class Type;
@@ -68,9 +65,6 @@ namespace vayu {
         TypePtr Struct(std::string name, std::vector<StructFieldInfo> fields);
         TypePtr List(TypePtr elem);
         TypePtr Map(TypePtr key, TypePtr value);
-        TypePtr Unique(TypePtr elem);
-        TypePtr Shared(TypePtr elem);
-        TypePtr Weak(TypePtr elem);
     }
 
     bool    isAssignable(const TypePtr& to, const TypePtr& from);

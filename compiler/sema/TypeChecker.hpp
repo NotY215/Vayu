@@ -29,9 +29,6 @@ namespace vayu {
         std::unordered_map<std::string, TypePtr> builtins_;
 
         std::unordered_set<std::string>          consts_;
-        // Phase 12.0: names that have been moved-from in the current scope.
-        // Reset per scope push/pop.
-        std::vector<std::unordered_set<std::string>> moved_;
 
         std::unordered_map<std::string,
             std::unordered_map<std::string, long long>> enums_;

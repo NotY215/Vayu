@@ -1116,13 +1116,6 @@ namespace vayu {
                     if (c->callee->kind == ExprKind::NameRef) {
                         const auto* nm = static_cast<const NameRefExpr*>(
                             c->callee.get());
-                        // Phase 11.2c fix: direct class-ctor call yields Obj
-                        // with the class name, so we can drill into it later.
-                        if (classes_.count(nm->name)) {
-                            r.type = VType::Obj;
-                            r.cls = nm->name;
-                            return r;
-                        }
                         auto fit = topFnDecls_.find(nm->name);
                         if (fit != topFnDecls_.end() && fit->second->returnType) {
                             bindTypeParamsFromCall(fit->second, c, r);
@@ -1138,97 +1131,59 @@ namespace vayu {
                 return r;
             }
 
-            // Phase 11.2c: bind a generic function's type params from the
-            // actual argument types, then apply the resulting substitution
-            // to the return type.  Handles the case where an argument is a
-            // direct constructor call to a generic class, so `T` can flow
-            // through a class field like `Box<T>.value`.
+            // Phase 11.2 fix: walk a generic function's parameter annotations
+            // against the actual argument types of `call`, recording each
+            // type-param name -> concrete VType, then apply the resulting
+            // substitution to the return type.
             void bindTypeParamsFromCall(const DefStmt* def,
                 const CallExpr* call,
                 Val& r) {
                 if (!def) return;
                 if (def->typeParams.empty()) {
-                    if (def->returnType)
-                        inferFromAnnotation(def->returnType.get(), r);
+                    if (def->returnType) inferFromAnnotation(def->returnType.get(), r);
                     return;
                 }
                 std::unordered_map<std::string, Val> subst;
 
-                auto isTypeParam = [&](const std::string& name) -> bool {
-                    for (auto& tp : def->typeParams) if (tp == name) return true;
-                    return false;
-                    };
-                auto bindParam = [&](const std::string& name,
-                    const Val& val) {
-                        if (val.type == VType::Unknown) return;
-                        if (subst.find(name) != subst.end()) return;
-                        subst[name] = val;
-                    };
-
                 auto unify = [&](auto&& self, const Expr* ann,
-                    const Val& actual,
-                    const Expr* actualExpr) -> void {
+                    const Val& actual) -> void {
                         if (!ann) return;
                         if (ann->kind == ExprKind::NameRef) {
                             const std::string& n =
                                 static_cast<const NameRefExpr*>(ann)->name;
-                            if (isTypeParam(n)) { bindParam(n, actual); return; }
-                            const ClassInfo* ci = findClass(n);
-                            if (!ci || !ci->decl ||
-                                ci->decl->typeParams.empty()) return;
-                            if (!actualExpr || actualExpr->kind != ExprKind::Call)
-                                return;
-                            auto* cc = static_cast<const CallExpr*>(actualExpr);
-                            if (cc->callee->kind != ExprKind::NameRef) return;
-                            if (static_cast<const NameRefExpr*>(
-                                cc->callee.get())->name != n) return;
-                            for (size_t fi = 0;
-                                fi < ci->decl->fields.size() &&
-                                fi < cc->args.size(); ++fi) {
-                                const Expr* fieldAnn =
-                                    ci->decl->fields[fi].type.get();
-                                if (!fieldAnn ||
-                                    fieldAnn->kind != ExprKind::NameRef) continue;
-                                const std::string& fname =
-                                    static_cast<const NameRefExpr*>(fieldAnn)->name;
-                                bool isClassTP = false;
-                                for (auto& ctp : ci->decl->typeParams)
-                                    if (ctp == fname) { isClassTP = true; break; }
-                                if (!isClassTP) continue;
-                                Val argVal = inferExprType(
-                                    cc->args[fi].value.get());
-                                if (isTypeParam(fname)) bindParam(fname, argVal);
+                            for (auto& tp : def->typeParams) {
+                                if (tp == n) {
+                                    if (actual.type != VType::Unknown &&
+                                        subst.find(n) == subst.end())
+                                        subst[n] = actual;
+                                    return;
+                                }
                             }
                             return;
                         }
                         if (ann->kind == ExprKind::GenericType) {
-                            const auto* g =
-                                static_cast<const GenericTypeExpr*>(ann);
+                            const auto* g = static_cast<const GenericTypeExpr*>(ann);
                             if (g->name == "list" && !g->typeArgs.empty()) {
                                 Val inner;
                                 inner.type = actual.elemType;
                                 inner.cls = actual.elemCls;
-                                self(self, g->typeArgs[0].get(), inner, nullptr);
+                                self(self, g->typeArgs[0].get(), inner);
                             }
                             else if (g->name == "map" && g->typeArgs.size() >= 2) {
-                                Val kk; kk.type = actual.elemType;
-                                kk.cls = actual.elemCls;
+                                Val kk; kk.type = actual.elemType; kk.cls = actual.elemCls;
                                 Val vv; vv.type = actual.valType;
-                                self(self, g->typeArgs[0].get(), kk, nullptr);
-                                self(self, g->typeArgs[1].get(), vv, nullptr);
+                                self(self, g->typeArgs[0].get(), kk);
+                                self(self, g->typeArgs[1].get(), vv);
                             }
                         }
                     };
 
-                for (size_t i = 0;
-                    i < call->args.size() && i < def->params.size(); ++i) {
+                for (size_t i = 0; i < call->args.size() && i < def->params.size(); ++i) {
                     Val a = inferExprType(call->args[i].value.get());
-                    unify(unify, def->params[i].type.get(), a,
-                        call->args[i].value.get());
+                    unify(unify, def->params[i].type.get(), a);
                 }
 
-                applySubst(def->returnType.get(), subst, r,
-                    def->typeParams);
+                applySubst(def->returnType.get(), subst, r, def->typeParams);
             }
 
             void applySubst(const Expr* ann,
