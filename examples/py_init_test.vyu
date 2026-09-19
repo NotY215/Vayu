@@ -1,0 +1,7 @@
+import py
+
+print(py.init())
+print(py.version())
+py.run("print('hello from CPython')")
+py.run("x = 6 * 7")
+py.run("print(x)")

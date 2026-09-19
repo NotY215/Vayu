@@ -110,6 +110,9 @@ namespace vayu {
         B("tuple", Types::Function({ A }, A));
         B("set", Types::Function({ A }, A));
 
+        B("malloc", Types::Function({ Types::Int() }, Types::Ptr(Types::Int())));
+        B("free", Types::Function({ Types::Ptr(Types::Int()) }, Types::None()));
+
         B("math", Types::Any());
 
         B("read_file", Types::Function({ Types::Str() }, Types::Str()));
@@ -136,6 +139,7 @@ namespace vayu {
         B("crypto", Types::Any());
         B("random", Types::Any());
         B("os", Types::Any());
+        B("py", Types::Any());
     }
 
     void TypeChecker::installBuiltinExceptions() {

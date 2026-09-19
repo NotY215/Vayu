@@ -68,6 +68,17 @@ namespace vayu {
         }
     } // namespace
 
+    // Phase 16.0: forward declarations for the `py` stub builtins.  The
+    // real definitions live in a later anonymous namespace (next to
+    // bi_malloc / bi_free); anonymous namespaces in the same TU are
+    // merged, so a forward decl here is enough.
+    namespace {
+        Value pyStubInit(const std::vector<Value>&);
+        Value pyStubVersion(const std::vector<Value>&);
+        Value pyStubRun(const std::vector<Value>&);
+        Value pyStubExec(const std::vector<Value>&);
+    }
+
     std::string staticGlobalName(const std::string& cls, const std::string& m) {
         return "__static_" + cls + "__" + m;
     }
@@ -736,12 +747,39 @@ namespace vayu {
     }
 
     void Interpreter::execImport(const ImportStmt* n) {
+        // Phase 16.0: `py` is a stub module on tree/VM.
+        if (n->moduleName == "py") {
+            auto mod = std::make_shared<ModuleValue>();
+            mod->name = "py";
+
+            auto mk = [](const char* nm, NativeFnPtr fn) -> Value {
+                auto c = std::make_shared<Callable>();
+                c->kind = Callable::Kind::Native;
+                c->name = nm;
+                c->nativeFn = fn;
+                return Value(c);
+                };
+            mod->members["init"] = mk("init", pyStubInit);
+            mod->members["version"] = mk("version", pyStubVersion);
+            mod->members["run"] = mk("run", pyStubRun);
+            mod->members["exec"] = mk("exec", pyStubExec);
+
+            const std::string& bind =
+                n->alias.empty() ? n->moduleName : n->alias;
+            env_->define(bind, Value(mod));
+            return;
+        }
         Value mod = loadModule(n->moduleName, n->loc);
         const std::string& bind = n->alias.empty() ? n->moduleName : n->alias;
-        env_->define(bind, mod);
+        env_->define(bind, Value(mod));
     }
 
     void Interpreter::execFromImport(const FromImportStmt* n) {
+        // Phase 16.0: from py import ... is not supported on tree/VM.
+        if (n->moduleName == "py") {
+            throw RuntimeError(
+                "from py import ... requires the native backend", n->loc);
+        }
         Value mod = loadModule(n->moduleName, n->loc);
         if (!mod.isModule())
             throw RuntimeError("'" + n->moduleName + "' is not a module", n->loc);
@@ -3251,6 +3289,47 @@ namespace vayu {
     } // namespace
 
     namespace {
+        // Phase 15.6: malloc/free built-ins.
+        // malloc(n) allocates a heap-style block of n bytes and returns a
+        // reference to a backing list of n/8 cells.  free(p) is a no-op
+        // here — the shared_ptr reclaims the block when the last ref dies.
+        Value bi_malloc(const std::vector<Value>& a) {
+            if (a.size() != 1 || !a[0].isInt())
+                throw std::runtime_error("malloc(n) takes one int argument");
+            long long bytes = a[0].asInt();
+            if (bytes < 0) bytes = 0;
+            long long cells = (bytes + 7) / 8;
+            if (cells < 1) cells = 1;
+            auto lst = std::make_shared<ListValue>();
+            lst->items.resize((size_t)cells);
+            auto ref = std::make_shared<Reference>();
+            ref->backing = lst;
+            ref->offset = 0;
+            ref->accessor = [lst]() -> Value& { return lst->items[0]; };
+            return Value(ref);
+        }
+        Value bi_free(const std::vector<Value>& a) {
+            if (a.size() != 1)
+                throw std::runtime_error("free(p) takes one argument");
+            return Value();
+        }
+        // Phase 16.0: py.* stubs for tree/VM.
+        Value pyStubInit(const std::vector<Value>&) {
+            throw std::runtime_error(
+                "py.init() requires the native backend");
+        }
+        Value pyStubVersion(const std::vector<Value>&) {
+            throw std::runtime_error(
+                "py.version() requires the native backend");
+        }
+        Value pyStubRun(const std::vector<Value>&) {
+            throw std::runtime_error(
+                "py.run() requires the native backend");
+        }
+        Value pyStubExec(const std::vector<Value>&) {
+            throw std::runtime_error(
+                "py.exec() requires the native backend");
+        }
         Value bi_next(const std::vector<Value>& a) {
             if (a.size() != 1 || !a[0].isGenerator())
                 throw std::runtime_error("next() takes a generator argument");
@@ -3318,6 +3397,8 @@ namespace vayu {
         add("setattr", bi_setattr);
         add("delattr", bi_delattr);
         add("next", bi_next);
+        add("malloc", bi_malloc);
+        add("free", bi_free);
     }
 
     void Interpreter::installMathModule() {

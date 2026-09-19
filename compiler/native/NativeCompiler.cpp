@@ -319,7 +319,7 @@ namespace vayu {
                             n->moduleName != "json" && n->moduleName != "regex" &&
                             n->moduleName != "thread" && n->moduleName != "net" &&
                             n->moduleName != "crypto" && n->moduleName != "random" &&
-                            n->moduleName != "os" && !modules_.count(n->moduleName))
+                            n->moduleName != "os" && n->moduleName != "py" && !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
                     else if (s->kind == StmtKind::FromImport) {
@@ -3934,6 +3934,41 @@ namespace vayu {
                         if (tn0->name == "crypto")return emitCryptoCall(n, attr);
                         if (tn0->name == "random")return emitRandomCall(n, attr);
                         if (tn0->name == "os")    return emitOsCall(n, attr);
+                        if (tn0->name == "py") {
+                            // Phase 16.0: intercept py.method(...)
+                            const std::string& m = attr->name;
+                            if (m == "init") {
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_init()");
+                                r.ssa = t; r.type = VType::Bool;
+                                return r;
+                            }
+                            if (m == "version") {
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_version()");
+                                r.ssa = t; r.type = VType::Str;
+                                return r;
+                            }
+                            if (m == "run" || m == "exec") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py." + m +
+                                        "() takes one str argument");
+                                Val s = emitExpr(n->args[0].value.get());
+                                if (s.type != VType::Str)
+                                    throw std::runtime_error(
+                                        "native: py." + m +
+                                        "() argument must be str");
+                                std::string c = newTemp();
+                                line(c + " =l call $vayu_str_cstr(l " +
+                                    s.ssa + ")");
+                                line("call $vayu_py_run(l " + c + ")");
+                                r.ssa = "0"; r.type = VType::Void;
+                                return r;
+                            }
+                            throw std::runtime_error(
+                                "native: py has no method '" + m + "'");
+                        }
                     }
 
                     Val recv = emitExpr(attr->target.get());
@@ -4126,6 +4161,28 @@ namespace vayu {
                         }
                     }
                     r.ssa = t; r.type = rType; r.cls = rCls;
+                    return r;
+                }
+
+                // Phase 15.6: malloc / free fallback when no extern decl.
+                if ((name == "malloc" || name == "free") &&
+                    !externDecls_.count(name)) {
+                    std::vector<std::string> args;
+                    for (auto& a : n->args) {
+                        if (!a.name.empty())
+                            throw std::runtime_error(
+                                "native: kwargs not supported");
+                        args.push_back(emitExpr(a.value.get()).ssa);
+                    }
+                    std::string argsStr;
+                    for (size_t i = 0; i < args.size(); ++i) {
+                        if (i) argsStr += ", ";
+                        argsStr += "l " + args[i];
+                    }
+                    std::string t = newTemp();
+                    line(t + " =l call $" + name + "(" + argsStr + ")");
+                    r.ssa = t;
+                    r.type = (name == "malloc") ? VType::Ptr : VType::Void;
                     return r;
                 }
 
@@ -5615,6 +5672,104 @@ VayuStr* vayu_cstr_to_str(const char* p) {
     if (!p) return vayu_mkstr("", 0);
     return vayu_mkstr_c(p);
 }
+
+/* ---- Phase 16.0: CPython dynamic-loading shim ---- */
+#ifdef _WIN32
+#  define VAYU_PY_DLL_T HMODULE
+#  define VAYU_PY_OPEN(n)  LoadLibraryA(n)
+#  define VAYU_PY_SYM(h,n) GetProcAddress(h,n)
+static VAYU_PY_DLL_T g_py_dll = NULL;
+#else
+#  include <dlfcn.h>
+#  define VAYU_PY_DLL_T void*
+#  define VAYU_PY_OPEN(n)  dlopen(n, RTLD_LAZY | RTLD_GLOBAL)
+#  define VAYU_PY_SYM(h,n) dlsym(h,n)
+static VAYU_PY_DLL_T g_py_dll = NULL;
+#endif
+
+typedef int      (*vayu_py_init_t)(int);
+typedef int      (*vayu_py_final_t)(void);
+typedef int      (*vayu_py_isinit_t)(void);
+typedef const char* (*vayu_py_ver_t)(void);
+typedef int      (*vayu_py_runstr_t)(const char*);
+typedef void     (*vayu_py_errprint_t)(void);
+
+static vayu_py_init_t     p_Py_InitializeEx    = NULL;
+static vayu_py_final_t    p_Py_FinalizeEx      = NULL;
+static vayu_py_isinit_t   p_Py_IsInitialized   = NULL;
+static vayu_py_ver_t      p_Py_GetVersion      = NULL;
+static vayu_py_runstr_t   p_PyRun_SimpleString = NULL;
+static vayu_py_errprint_t p_PyErr_Print        = NULL;
+static int g_py_inited = 0;
+
+static int vayu_py_load_dll(void) {
+    if (g_py_dll) return 1;
+#ifdef _WIN32
+    const char* candidates[] = {
+        getenv("VAYU_PYTHON_DLL"),
+        "python3.dll",
+        "python313.dll", "python312.dll", "python311.dll",
+        "python310.dll", "python39.dll", "python38.dll",
+        NULL
+    };
+#else
+    const char* candidates[] = {
+        getenv("VAYU_PYTHON_SO"),
+        "libpython3.so",
+        "libpython3.13.so", "libpython3.12.so", "libpython3.11.so",
+        "libpython3.10.so", "libpython3.9.so",
+        NULL
+    };
+#endif
+    for (int i = 0; candidates[i]; ++i) {
+        VAYU_PY_DLL_T h = VAYU_PY_OPEN(candidates[i]);
+        if (h) { g_py_dll = h; break; }
+    }
+    if (!g_py_dll) return 0;
+
+    p_Py_InitializeEx    = (vayu_py_init_t)   VAYU_PY_SYM(g_py_dll, "Py_InitializeEx");
+    p_Py_FinalizeEx      = (vayu_py_final_t)  VAYU_PY_SYM(g_py_dll, "Py_FinalizeEx");
+    p_Py_IsInitialized   = (vayu_py_isinit_t) VAYU_PY_SYM(g_py_dll, "Py_IsInitialized");
+    p_Py_GetVersion      = (vayu_py_ver_t)    VAYU_PY_SYM(g_py_dll, "Py_GetVersion");
+    p_PyRun_SimpleString = (vayu_py_runstr_t) VAYU_PY_SYM(g_py_dll, "PyRun_SimpleString");
+    p_PyErr_Print        = (vayu_py_errprint_t)VAYU_PY_SYM(g_py_dll, "PyErr_Print");
+
+    if (!p_Py_InitializeEx || !p_Py_GetVersion || !p_PyRun_SimpleString) {
+        g_py_dll = NULL;
+        return 0;
+    }
+    return 1;
+}
+
+int64_t vayu_py_init(void) {
+    if (g_py_inited) return 1;
+    if (!vayu_py_load_dll()) return 0;
+    p_Py_InitializeEx(0);       /* 0 = skip default signal handlers */
+    g_py_inited = 1;
+    return 1;
+}
+
+VayuStr* vayu_py_version(void) {
+    if (!vayu_py_init()) {
+        return vayu_mkstr_c("(no python runtime found)");
+    }
+    const char* v = p_Py_GetVersion();
+    if (!v) return vayu_mkstr_c("(unknown)");
+    /* Trim trailing newline if any. */
+    const char* nl = strchr(v, '\n');
+    if (nl) return vayu_mkstr(v, (int64_t)(nl - v));
+    return vayu_mkstr_c(v);
+}
+
+void vayu_py_run(const char* src) {
+    if (!vayu_py_init()) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    int rc = p_PyRun_SimpleString(src);
+    if (rc != 0 && p_PyErr_Print) p_PyErr_Print();
+}
+
 /* ---- Phase 15.2d: compound lvalue addresses ---- */
 int64_t* vayu_list_slot(VayuList* l, int64_t i) {
     if (i < 0) i += l->len;
