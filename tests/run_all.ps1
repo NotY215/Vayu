@@ -47,6 +47,7 @@ $skip = @(
     "ffi_callback_test.vyu",   # native-only; same reason
     "ffi_test.vyu",
     "ffi_struct_test.vyu",
+    "ffi_wrap_test.vyu",
     "math_test.vyu"            # tree/VM only; native backend has no float type yet
 )
 

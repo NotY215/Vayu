@@ -1,0 +1,16 @@
+class Wrapper:
+    v: int
+    def __init__(self, x: int) -> None:
+        self.v = x
+
+extern "C":
+    def vayu_ffi_wrap_double(w: Wrapper) -> Wrapper
+    def vayu_ffi_wrap_sum(a: Wrapper, b: Wrapper) -> int
+
+w = Wrapper(21)
+d = vayu_ffi_wrap_double(w)
+print(d.v)
+
+a = Wrapper(10)
+b = Wrapper(32)
+print(vayu_ffi_wrap_sum(a, b))

@@ -427,11 +427,6 @@ namespace vayu {
                 return Types::Map(resolveTypeExpr(g->typeArgs[0].get()),
                     resolveTypeExpr(g->typeArgs[1].get()));
             }
-            if (g->name == "ptr" || g->name == "ref") {
-                if (g->typeArgs.size() != 1)
-                    error(e->loc, g->name + "<> takes exactly one type argument");
-                return resolveTypeExpr(g->typeArgs[0].get());
-            }
             if (g->name == "ptr") {
                 if (g->typeArgs.size() != 1)
                     error(e->loc, "ptr<> takes exactly one type argument");

@@ -1455,11 +1455,14 @@ namespace vayu {
 
                 case ExprKind::Unary: {
                     auto* n = static_cast<const UnaryExpr*>(e);
-                    Val v = emitExpr(n->operand.get());
+
+                    // Phase 15.4: &fn / &var / &arr[i] / &obj.f must run
+                    // BEFORE we evaluate the operand as a value, because a
+                    // bare function name is not a runtime variable.
                     if (n->op == UnOp::AddrOf) {
                         const Expr* op = n->operand.get();
 
-                        // Phase 15.4: &topLevelFn → function pointer.
+                        // &topLevelFn → function pointer.
                         if (op->kind == ExprKind::NameRef) {
                             const auto* nm =
                                 static_cast<const NameRefExpr*>(op);
@@ -1565,18 +1568,45 @@ namespace vayu {
                         }
 
                         // Fallback: heap cell.
+                        Val v = emitExpr(op);
                         std::string cell = newTemp();
                         line(cell + " =l call $vayu_alloc(l 8)");
                         line("storel " + v.ssa + ", " + cell);
                         r.ssa = cell; r.type = VType::Ptr;
                         return r;
                     }
+
                     if (n->op == UnOp::Deref) {
+                        Val v = emitExpr(n->operand.get());
                         std::string t = newTemp();
                         line(t + " =l loadl " + v.ssa);
                         r.ssa = t; r.type = VType::Int;
                         return r;
                     }
+
+                    Val v = emitExpr(n->operand.get());
+                    switch (n->op) {
+                    case UnOp::Pos: return v;
+                    case UnOp::Neg: {
+                        std::string t = newTemp();
+                        line(t + " =l sub 0, " + v.ssa);
+                        r.ssa = t; r.type = VType::Int; return r;
+                    }
+                    case UnOp::Not: {
+                        std::string c = newTemp();
+                        line(c + " =w ceql " + v.ssa + ", 0");
+                        std::string ext = newTemp();
+                        line(ext + " =l extsw " + c);
+                        r.ssa = ext; r.type = VType::Bool; return r;
+                    }
+                    case UnOp::BNot: {
+                        std::string t = newTemp();
+                        line(t + " =l xor " + v.ssa + ", -1");
+                        r.ssa = t; r.type = VType::Int; return r;
+                    }
+                    default: break;
+                    }
+                    return v;
                 }
 
                 case ExprKind::Binary: {
@@ -4002,19 +4032,43 @@ namespace vayu {
                             std::to_string(ed->params.size()) +
                             " argument(s), got " +
                             std::to_string(n->args.size()));
+
                     std::vector<std::string> args;
                     for (size_t i = 0; i < n->args.size(); ++i) {
                         Val a = emitExpr(n->args[i].value.get());
                         std::string argSsa = a.ssa;
                         const Expr* pType = ed->params[i].type.get();
+
+                        // str → char*
                         bool wantStr = (pType &&
                             pType->kind == ExprKind::NameRef &&
                             static_cast<const NameRefExpr*>(pType)->name == "str");
                         if (wantStr && a.type == VType::Str) {
                             std::string t = newTemp();
-                            line(t + " =l call $vayu_str_cstr(l " + a.ssa + ")");
+                            line(t + " =l call $vayu_str_cstr(l " +
+                                a.ssa + ")");
                             argSsa = t;
                         }
+
+                        // Phase 15.5: class-typed parameter.
+                        // ≤ 8 bytes → unwrap the single field and pass by
+                        // value.  Larger → pass the pointer as-is.
+                        if (pType && pType->kind == ExprKind::NameRef) {
+                            const std::string& pn =
+                                static_cast<const NameRefExpr*>(pType)->name;
+                            const ClassInfo* ci = findClass(pn);
+                            if (ci && !ci->fields.empty() &&
+                                ci->totalSize <= 8) {
+                                int off = ci->fieldOffsets.at(ci->fields[0]);
+                                std::string addr = newTemp();
+                                line(addr + " =l add " + a.ssa + ", " +
+                                    std::to_string(off));
+                                std::string field = newTemp();
+                                line(field + " =l loadl " + addr);
+                                argSsa = field;
+                            }
+                        }
+
                         args.push_back(argSsa);
                     }
                     std::string argsStr;
@@ -4025,11 +4079,10 @@ namespace vayu {
                     std::string t = newTemp();
                     line(t + " =l call $" + ed->name + "(" + argsStr + ")");
 
-                    // Return type — default int if unknown; class returns
-                    // become `Obj` with the class name attached.
-                    // Return type — default int if unknown.
+                    // ---- return type ----
                     VType rType = VType::Int;
                     std::string rCls;
+
                     if (ed->returnType) {
                         if (ed->returnType->kind == ExprKind::GenericType) {
                             auto* g = static_cast<const GenericTypeExpr*>(
@@ -4049,6 +4102,24 @@ namespace vayu {
                                 rType = VType::Str;
                             }
                             else if (classes_.count(rn)) {
+                                const ClassInfo* ci = findClass(rn);
+                                if (ci && !ci->fields.empty() &&
+                                    ci->totalSize <= 8) {
+                                    // By-value small struct return:
+                                    // wrap the single i64 into a heap cell
+                                    // shaped like the Vayu class.
+                                    std::string cell = newTemp();
+                                    line(cell + " =l call $vayu_alloc(l " +
+                                        std::to_string(ci->totalSize) + ")");
+                                    int off = ci->fieldOffsets.at(
+                                        ci->fields[0]);
+                                    std::string addr = newTemp();
+                                    line(addr + " =l add " + cell + ", " +
+                                        std::to_string(off));
+                                    line("storel " + t + ", " + addr);
+                                    t = cell;
+                                }
+                                // else: the C side returned a pointer.
                                 rType = VType::Obj;
                                 rCls = rn;
                             }
@@ -5571,6 +5642,20 @@ int64_t vayu_test_apply(int64_t (*f)(int64_t), int64_t x) {
     if (!f) return 0;
     return f(x);
 }
+
+/* ---- Phase 15.5: FFI by-value single-field structs ---- */
+typedef struct { int64_t v; } VayuWrap8;
+
+VayuWrap8 vayu_ffi_wrap_double(VayuWrap8 w) {
+    VayuWrap8 r;
+    r.v = w.v * 2;
+    return r;
+}
+
+int64_t vayu_ffi_wrap_sum(VayuWrap8 a, VayuWrap8 b) {
+    return a.v + b.v;
+}
+
 /* ---- Phase 15.2b / 15.3: FFI test helpers ---- */
 int64_t vayu_ffi_deref(int64_t p) { return *(int64_t*)p; }
 void vayu_ffi_store(int64_t p, int64_t v) { *(int64_t*)p = v; }

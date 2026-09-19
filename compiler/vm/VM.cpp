@@ -661,6 +661,18 @@ namespace vayu {
                 case OpCode::INDEX_GET: {
                     Value idx = std::move(stack_.back()); stack_.pop_back();
                     Value tgt = std::move(stack_.back()); stack_.pop_back();
+                    if (tgt.isRef()) {
+                        auto ref = tgt.asRef();
+                        if (!ref->backing)
+                            runtimeError("cannot index a non-arithmetic reference");
+                        if (!idx.isInt())
+                            runtimeError("pointer index must be int, got " + idx.typeName());
+                        long long i = ref->offset + idx.asInt();
+                        if (i < 0 || i >= (long long)ref->backing->items.size())
+                            runtimeError("pointer index out of range");
+                        stack_.push_back(ref->backing->items[(size_t)i]);
+                        break;
+                    }
                     if (tgt.isList()) {
                         if (!idx.isInt())
                             runtimeError("list index must be int, got " + idx.typeName());
@@ -710,6 +722,18 @@ namespace vayu {
                     Value v = std::move(stack_.back()); stack_.pop_back();
                     Value idx = std::move(stack_.back()); stack_.pop_back();
                     Value tgt = std::move(stack_.back()); stack_.pop_back();
+                    if (tgt.isRef()) {
+                        auto ref = tgt.asRef();
+                        if (!ref->backing)
+                            runtimeError("cannot index a non-arithmetic reference");
+                        if (!idx.isInt())
+                            runtimeError("pointer index must be int, got " + idx.typeName());
+                        long long i = ref->offset + idx.asInt();
+                        if (i < 0 || i >= (long long)ref->backing->items.size())
+                            runtimeError("pointer index out of range");
+                        ref->backing->items[(size_t)i] = std::move(v);
+                        break;
+                    }
                     if (tgt.isList()) {
                         if (!idx.isInt())
                             runtimeError("list index must be int, got " + idx.typeName());
@@ -725,18 +749,6 @@ namespace vayu {
                         if (!idx.isString())
                             runtimeError("map key must be str, got " + idx.typeName());
                         tgt.asMap()->entries[idx.asString()] = std::move(v);
-                        break;
-                    }
-                    if (tgt.isRef()) {
-                        auto ref = tgt.asRef();
-                        if (!ref->backing)
-                            runtimeError("cannot index a non-arithmetic reference");
-                        if (!idx.isInt())
-                            runtimeError("pointer index must be int, got " + idx.typeName());
-                        long long i = ref->offset + idx.asInt();
-                        if (i < 0 || i >= (long long)ref->backing->items.size())
-                            runtimeError("pointer index out of range");
-                        ref->backing->items[(size_t)i] = std::move(v);
                         break;
                     }
                     if (tgt.isString())
