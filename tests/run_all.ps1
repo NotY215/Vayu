@@ -46,6 +46,8 @@ $skip = @(
     "ptr_arith_test.vyu",      # native-only; same reason
     "ffi_callback_test.vyu",   # native-only; same reason
     "py_init_test.vyu",        # native-only; same reason
+    "py_bridge_test.vyu",      # native-only; same reason
+    "py_call_test.vyu",        # native-only; same reason
     "ffi_test.vyu",
     "ffi_struct_test.vyu",
     "ffi_wrap_test.vyu",

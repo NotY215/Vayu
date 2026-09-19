@@ -1,0 +1,15 @@
+import py
+
+py.init()
+
+builtins_mod = py.import("builtins")
+abs_fn = py.getattr(builtins_mod, "abs")
+len_fn = py.getattr(builtins_mod, "len")
+
+print(py.from_int(py.call(abs_fn, [-42])))
+print(py.from_int(py.call(abs_fn, [7])))
+print(py.from_int(py.call(abs_fn, [0])))
+
+print(py.from_int(py.call(len_fn, ["hello"])))
+print(py.from_int(py.call(len_fn, [""])))
+print(py.from_int(py.call(len_fn, ["wide"])))

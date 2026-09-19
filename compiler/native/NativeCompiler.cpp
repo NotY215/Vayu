@@ -3966,6 +3966,144 @@ namespace vayu {
                                 r.ssa = "0"; r.type = VType::Void;
                                 return r;
                             }
+                            // ---- Phase 16.1: value bridging ----
+                            if (m == "int") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.int() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                if (v.type != VType::Int &&
+                                    v.type != VType::Bool)
+                                    throw std::runtime_error(
+                                        "native: py.int() argument must be "
+                                        "int or bool");
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_int(l " +
+                                    v.ssa + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "str") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.str() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                if (v.type != VType::Str)
+                                    throw std::runtime_error(
+                                        "native: py.str() argument must be str");
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_str(l " +
+                                    v.ssa + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "bool") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.bool() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                std::string w = newTemp();
+                                line(w + " =w cnel " + v.ssa + ", 0");
+                                std::string ext = newTemp();
+                                line(ext + " =l extsw " + w);
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_bool(l " +
+                                    ext + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "from_int") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.from_int() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_from_int(l " +
+                                    v.ssa + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "from_str") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.from_str() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_from_str(l " +
+                                    v.ssa + ")");
+                                r.ssa = t; r.type = VType::Str;
+                                return r;
+                            }
+                            if (m == "from_bool") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.from_bool() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_from_bool(l " +
+                                    v.ssa + ")");
+                                r.ssa = t; r.type = VType::Bool;
+                                return r;
+                            }
+                            // ---- Phase 16.2: calling Python ----
+                            if (m == "import") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.import() takes one str argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                if (v.type != VType::Str)
+                                    throw std::runtime_error(
+                                        "native: py.import() argument must be str");
+                                std::string c = newTemp();
+                                line(c + " =l call $vayu_str_cstr(l " +
+                                    v.ssa + ")");
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_import(l " + c + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "getattr") {
+                                if (n->args.size() != 2)
+                                    throw std::runtime_error(
+                                        "native: py.getattr(obj, name) takes two arguments");
+                                Val o = emitExpr(n->args[0].value.get());
+                                Val v = emitExpr(n->args[1].value.get());
+                                if (v.type != VType::Str)
+                                    throw std::runtime_error(
+                                        "native: py.getattr() name must be str");
+                                std::string c = newTemp();
+                                line(c + " =l call $vayu_str_cstr(l " +
+                                    v.ssa + ")");
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_getattr(l " +
+                                    o.ssa + ", l " + c + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "call") {
+                                if (n->args.size() != 2)
+                                    throw std::runtime_error(
+                                        "native: py.call(fn, args) takes two arguments");
+                                Val f = emitExpr(n->args[0].value.get());
+                                Val a = emitExpr(n->args[1].value.get());
+                                if (a.type != VType::List)
+                                    throw std::runtime_error(
+                                        "native: py.call() second arg must be a list");
+                                std::string t = newTemp();
+                                line(t + " =l call $vayu_py_call(l " +
+                                    f.ssa + ", l " + a.ssa + ")");
+                                r.ssa = t; r.type = VType::Int;
+                                return r;
+                            }
+                            if (m == "decref") {
+                                if (n->args.size() != 1)
+                                    throw std::runtime_error(
+                                        "native: py.decref() takes one argument");
+                                Val v = emitExpr(n->args[0].value.get());
+                                line("call $vayu_py_decref(l " + v.ssa + ")");
+                                r.ssa = "0"; r.type = VType::Void;
+                                return r;
+                            }
                             throw std::runtime_error(
                                 "native: py has no method '" + m + "'");
                         }
@@ -5673,59 +5811,266 @@ VayuStr* vayu_cstr_to_str(const char* p) {
     return vayu_mkstr_c(p);
 }
 
-/* ---- Phase 16.0: CPython dynamic-loading shim ---- */
+/* ===========================================================================
+ * Phase 16.0–16.2: CPython dynamic-loading shim.
+ *
+ *  16.0  dynamic discovery + py.init / py.version / py.run
+ *  16.1  value bridging: py.int / py.str / py.bool + py.from_*
+ *  16.2  calling:        py.import / py.getattr / py.call / py.decref
+ *
+ * Loads python3.dll (or libpython3.so) at first use via:
+ *   1) VAYU_PYTHON_DLL / VAYU_PYTHON_SO env override
+ *   2) auto-discovery by shelling out to `where python`
+ *   3) bare-name candidates on PATH
+ * ========================================================================= */
 #ifdef _WIN32
 #  define VAYU_PY_DLL_T HMODULE
 #  define VAYU_PY_OPEN(n)  LoadLibraryA(n)
 #  define VAYU_PY_SYM(h,n) GetProcAddress(h,n)
-static VAYU_PY_DLL_T g_py_dll = NULL;
 #else
 #  include <dlfcn.h>
 #  define VAYU_PY_DLL_T void*
 #  define VAYU_PY_OPEN(n)  dlopen(n, RTLD_LAZY | RTLD_GLOBAL)
 #  define VAYU_PY_SYM(h,n) dlsym(h,n)
-static VAYU_PY_DLL_T g_py_dll = NULL;
 #endif
 
-typedef int      (*vayu_py_init_t)(int);
-typedef int      (*vayu_py_final_t)(void);
-typedef int      (*vayu_py_isinit_t)(void);
-typedef const char* (*vayu_py_ver_t)(void);
-typedef int      (*vayu_py_runstr_t)(const char*);
-typedef void     (*vayu_py_errprint_t)(void);
+static VAYU_PY_DLL_T g_py_dll = NULL;
+static int           g_py_inited = 0;
 
-static vayu_py_init_t     p_Py_InitializeEx    = NULL;
-static vayu_py_final_t    p_Py_FinalizeEx      = NULL;
-static vayu_py_isinit_t   p_Py_IsInitialized   = NULL;
-static vayu_py_ver_t      p_Py_GetVersion      = NULL;
-static vayu_py_runstr_t   p_PyRun_SimpleString = NULL;
-static vayu_py_errprint_t p_PyErr_Print        = NULL;
-static int g_py_inited = 0;
+typedef int         (*vayu_py_init_t)(int);
+typedef int         (*vayu_py_final_t)(void);
+typedef int         (*vayu_py_isinit_t)(void);
+typedef const char* (*vayu_py_ver_t)(void);
+typedef int         (*vayu_py_runstr_t)(const char*);
+typedef void        (*vayu_py_errprint_t)(void);
+
+typedef int64_t     (*vayu_py_long_from_t)(int64_t);
+typedef int64_t     (*vayu_py_long_as_t)(int64_t);
+typedef int64_t     (*vayu_py_unicode_from_t)(const char*, int64_t);
+typedef const char* (*vayu_py_unicode_as_t)(int64_t);
+typedef int64_t     (*vayu_py_bool_from_t)(int64_t);
+typedef int         (*vayu_py_is_true_t)(int64_t);
+
+typedef int64_t     (*vayu_py_import_t)(const char*);
+typedef int64_t     (*vayu_py_getattr_t)(int64_t, const char*);
+typedef int64_t     (*vayu_py_call_t)(int64_t, int64_t, int64_t);
+typedef int64_t     (*vayu_py_tuple_new_t)(int64_t);
+typedef int         (*vayu_py_tuple_set_t)(int64_t, int64_t, int64_t);
+typedef void        (*vayu_py_decref_t)(int64_t);
+typedef void        (*vayu_py_incref_t)(int64_t);
+
+static vayu_py_init_t      p_Py_InitializeEx           = NULL;
+static vayu_py_final_t     p_Py_FinalizeEx             = NULL;
+static vayu_py_isinit_t    p_Py_IsInitialized          = NULL;
+static vayu_py_ver_t       p_Py_GetVersion             = NULL;
+static vayu_py_runstr_t    p_PyRun_SimpleString        = NULL;
+static vayu_py_errprint_t  p_PyErr_Print               = NULL;
+
+static vayu_py_long_from_t    p_PyLong_FromLongLong         = NULL;
+static vayu_py_long_as_t      p_PyLong_AsLongLong           = NULL;
+static vayu_py_unicode_from_t p_PyUnicode_FromStringAndSize = NULL;
+static vayu_py_unicode_as_t   p_PyUnicode_AsUTF8            = NULL;
+static vayu_py_bool_from_t    p_PyBool_FromLong             = NULL;
+static vayu_py_is_true_t      p_PyObject_IsTrue             = NULL;
+
+static vayu_py_import_t     p_PyImport_ImportModule    = NULL;
+static vayu_py_getattr_t    p_PyObject_GetAttrString   = NULL;
+static vayu_py_call_t       p_PyObject_Call            = NULL;
+static vayu_py_tuple_new_t  p_PyTuple_New              = NULL;
+static vayu_py_tuple_set_t  p_PyTuple_SetItem          = NULL;
+static vayu_py_decref_t     p_Py_DecRef                = NULL;
+static vayu_py_incref_t     p_Py_IncRef                = NULL;
+
+/* ---- DLL discovery ---- */
+
+/* Upgrade the loader: use LOAD_WITH_ALTERED_SEARCH_PATH so that when we
+   load tools\python313.dll, its vcruntime*.dll and DLLs\*.pyd siblings
+   are resolved from tools\ first (not from the exe's directory). */
+#ifdef _WIN32
+#  undef VAYU_PY_OPEN
+static VAYU_PY_DLL_T vayu_py_open_ex(const char* n) {
+    if (strchr(n, '\\') || strchr(n, '/'))
+        return LoadLibraryExA(n, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    return LoadLibraryA(n);
+}
+#  define VAYU_PY_OPEN(n)  vayu_py_open_ex(n)
+#endif
+
+/* Versioned runtime DLLs only.  We deliberately exclude the stable-ABI
+   forwarder `python3.dll` — on this system it does not export
+   PyRun_SimpleString, and using it silently loses py.run(). */
+#ifdef _WIN32
+static const char* const vayu_py_dll_names[] = {
+    "python313.dll", "python312.dll", "python311.dll",
+    "python310.dll", "python39.dll",  "python38.dll",
+    "python37.dll",  "python36.dll",
+    NULL
+};
+#else
+static const char* const vayu_py_dll_names[] = {
+    "libpython3.13.so", "libpython3.12.so", "libpython3.11.so",
+    "libpython3.10.so", "libpython3.9.so",  "libpython3.8.so",
+    "libpython3.so",
+    NULL
+};
+#endif
+
+static int vayu_py_try_dir(const char* dir, char* out, size_t outsz) {
+    if (!dir || !*dir) return 0;
+    for (int i = 0; vayu_py_dll_names[i]; ++i) {
+        int n = snprintf(out, outsz,
+#ifdef _WIN32
+                         "%s\\%s",
+#else
+                         "%s/%s",
+#endif
+                         dir, vayu_py_dll_names[i]);
+        if (n <= 0 || (size_t)n >= outsz) continue;
+        FILE* g = fopen(out, "rb");
+        if (!g) continue;
+        fclose(g);
+        return 1;
+    }
+    return 0;
+}
+
+/* Search <cwd>\tools\python3XX.dll and walk up a few levels, so an exe
+   run from build\x64-debug\bin still finds the DLLs the user dropped in
+   E:\Vayu\tools\. */
+static int vayu_py_search_upward(char* out, size_t outsz, int maxUp) {
+    char buf[2048];
+#ifdef _WIN32
+    if (_getcwd(buf, sizeof(buf)) == NULL) return 0;
+#else
+    if (getcwd(buf, sizeof(buf)) == NULL) return 0;
+#endif
+    for (int i = 0; i <= maxUp; ++i) {
+        char cand[2048];
+#ifdef _WIN32
+        snprintf(cand, sizeof(cand), "%s\\tools", buf);
+#else
+        snprintf(cand, sizeof(cand), "%s/tools", buf);
+#endif
+        if (vayu_py_try_dir(cand, out, outsz)) return 1;
+        if (vayu_py_try_dir(buf, out, outsz)) return 1;
+
+        size_t blen = strlen(buf);
+        while (blen > 0 && (buf[blen-1] == '\\' || buf[blen-1] == '/'))
+            buf[--blen] = 0;
+#ifdef _WIN32
+        char* slash = strrchr(buf, '\\');
+#else
+        char* slash = strrchr(buf, '/');
+#endif
+        if (!slash) break;
+        if (slash == buf) { buf[1] = 0; }
+        else { *slash = 0; }
+    }
+    return 0;
+}
+
+static int vayu_py_discover(char* out, size_t outsz) {
+#ifdef _WIN32
+    FILE* f = _popen("where python 2>nul", "r");
+#else
+    FILE* f = popen("which python3 2>/dev/null", "r");
+#endif
+    if (!f) return 0;
+    char line[2048];
+    int found = 0;
+    while (fgets(line, sizeof(line), f)) {
+        size_t n = strlen(line);
+        while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r'))
+            line[--n] = 0;
+        size_t start = 0;
+        while (start < n && (line[start] == ' ' || line[start] == '\t')) ++start;
+        if (start > 0) { memmove(line, line + start, n - start + 1); n -= start; }
+        if (n < 2) continue;
+#ifdef _WIN32
+        char* slash = strrchr(line, '\\');
+#else
+        char* slash = strrchr(line, '/');
+#endif
+        if (!slash) continue;
+        *slash = 0;
+        if (vayu_py_try_dir(line, out, outsz)) { found = 1; break; }
+    }
+#ifdef _WIN32
+    _pclose(f);
+#else
+    pclose(f);
+#endif
+    return found;
+}
 
 static int vayu_py_load_dll(void) {
     if (g_py_dll) return 1;
+    const int dbg = (getenv("VAYU_PY_DEBUG") != NULL);
+
+    /* 1) Env override. */
+    const char* envp =
 #ifdef _WIN32
-    const char* candidates[] = {
-        getenv("VAYU_PYTHON_DLL"),
-        "python3.dll",
-        "python313.dll", "python312.dll", "python311.dll",
-        "python310.dll", "python39.dll", "python38.dll",
-        NULL
-    };
+        getenv("VAYU_PYTHON_DLL");
 #else
-    const char* candidates[] = {
-        getenv("VAYU_PYTHON_SO"),
-        "libpython3.so",
-        "libpython3.13.so", "libpython3.12.so", "libpython3.11.so",
-        "libpython3.10.so", "libpython3.9.so",
-        NULL
-    };
+        getenv("VAYU_PYTHON_SO");
 #endif
-    for (int i = 0; candidates[i]; ++i) {
-        VAYU_PY_DLL_T h = VAYU_PY_OPEN(candidates[i]);
-        if (h) { g_py_dll = h; break; }
+    if (envp && *envp) {
+        if (dbg) fprintf(stderr, "[py] env override: %s\n", envp);
+        g_py_dll = VAYU_PY_OPEN(envp);
+        if (dbg && !g_py_dll)
+            fprintf(stderr, "[py] env override load failed\n");
     }
-    if (!g_py_dll) return 0;
+
+    /* 2) tools\python3XX.dll next to or above the cwd. */
+    if (!g_py_dll) {
+        char local[2048];
+        if (vayu_py_search_upward(local, sizeof(local), 6)) {
+            if (dbg) fprintf(stderr, "[py] upward search: %s\n", local);
+            g_py_dll = VAYU_PY_OPEN(local);
+            if (dbg && !g_py_dll)
+                fprintf(stderr, "[py] LoadLibrary failed on %s\n", local);
+        } else if (dbg) {
+            fprintf(stderr, "[py] upward search found nothing "
+                            "(looked for tools\\python3XX.dll)\n");
+        }
+    }
+
+    /* 3) `where python` discovery — parent dir of python.exe. */
+    if (!g_py_dll) {
+        char discovered[2048];
+        if (vayu_py_discover(discovered, sizeof(discovered))) {
+            if (dbg) fprintf(stderr, "[py] where python: %s\n", discovered);
+            g_py_dll = VAYU_PY_OPEN(discovered);
+            if (dbg && !g_py_dll)
+                fprintf(stderr, "[py] LoadLibrary failed on %s\n", discovered);
+        } else if (dbg) {
+            fprintf(stderr, "[py] `where python` discovery failed\n");
+        }
+    }
+
+    /* 4) Bare-name candidates — let the OS search PATH. */
+    if (!g_py_dll) {
+        for (int i = 0; vayu_py_dll_names[i]; ++i) {
+            g_py_dll = VAYU_PY_OPEN(vayu_py_dll_names[i]);
+            if (g_py_dll) {
+                if (dbg) fprintf(stderr, "[py] bare-name load: %s\n",
+                                 vayu_py_dll_names[i]);
+                break;
+            }
+        }
+    }
+    if (!g_py_dll) {
+        if (dbg) fprintf(stderr, "[py] all load paths failed\n");
+        return 0;
+    }
+
+    if (dbg) {
+        char modpath[2048];
+        DWORD got = GetModuleFileNameA(g_py_dll, modpath, sizeof(modpath));
+        if (got > 0) modpath[got] = 0;
+        else         modpath[0] = 0;
+        fprintf(stderr, "[py] loaded: %s\n", modpath);
+    }
 
     p_Py_InitializeEx    = (vayu_py_init_t)   VAYU_PY_SYM(g_py_dll, "Py_InitializeEx");
     p_Py_FinalizeEx      = (vayu_py_final_t)  VAYU_PY_SYM(g_py_dll, "Py_FinalizeEx");
@@ -5734,28 +6079,59 @@ static int vayu_py_load_dll(void) {
     p_PyRun_SimpleString = (vayu_py_runstr_t) VAYU_PY_SYM(g_py_dll, "PyRun_SimpleString");
     p_PyErr_Print        = (vayu_py_errprint_t)VAYU_PY_SYM(g_py_dll, "PyErr_Print");
 
+    p_PyLong_FromLongLong         = (vayu_py_long_from_t)
+        VAYU_PY_SYM(g_py_dll, "PyLong_FromLongLong");
+    p_PyLong_AsLongLong           = (vayu_py_long_as_t)
+        VAYU_PY_SYM(g_py_dll, "PyLong_AsLongLong");
+    p_PyUnicode_FromStringAndSize = (vayu_py_unicode_from_t)
+        VAYU_PY_SYM(g_py_dll, "PyUnicode_FromStringAndSize");
+    p_PyUnicode_AsUTF8            = (vayu_py_unicode_as_t)
+        VAYU_PY_SYM(g_py_dll, "PyUnicode_AsUTF8");
+    p_PyBool_FromLong             = (vayu_py_bool_from_t)
+        VAYU_PY_SYM(g_py_dll, "PyBool_FromLong");
+    p_PyObject_IsTrue             = (vayu_py_is_true_t)
+        VAYU_PY_SYM(g_py_dll, "PyObject_IsTrue");
+
+    p_PyImport_ImportModule  = (vayu_py_import_t)
+        VAYU_PY_SYM(g_py_dll, "PyImport_ImportModule");
+    p_PyObject_GetAttrString = (vayu_py_getattr_t)
+        VAYU_PY_SYM(g_py_dll, "PyObject_GetAttrString");
+    p_PyObject_Call          = (vayu_py_call_t)
+        VAYU_PY_SYM(g_py_dll, "PyObject_Call");
+    p_PyTuple_New            = (vayu_py_tuple_new_t)
+        VAYU_PY_SYM(g_py_dll, "PyTuple_New");
+    p_PyTuple_SetItem        = (vayu_py_tuple_set_t)
+        VAYU_PY_SYM(g_py_dll, "PyTuple_SetItem");
+    p_Py_DecRef              = (vayu_py_decref_t)
+        VAYU_PY_SYM(g_py_dll, "Py_DecRef");
+    p_Py_IncRef              = (vayu_py_incref_t)
+        VAYU_PY_SYM(g_py_dll, "Py_IncRef");
+
     if (!p_Py_InitializeEx || !p_Py_GetVersion || !p_PyRun_SimpleString) {
+        if (dbg) fprintf(stderr,
+            "[py] required symbols missing after load: "
+            "InitializeEx=%p GetVersion=%p Run_SimpleString=%p\n",
+            (void*)p_Py_InitializeEx, (void*)p_Py_GetVersion,
+            (void*)p_PyRun_SimpleString);
         g_py_dll = NULL;
         return 0;
     }
     return 1;
 }
 
+/* ---- 16.0: init / version / run ---- */
 int64_t vayu_py_init(void) {
     if (g_py_inited) return 1;
     if (!vayu_py_load_dll()) return 0;
-    p_Py_InitializeEx(0);       /* 0 = skip default signal handlers */
+    p_Py_InitializeEx(0);
     g_py_inited = 1;
     return 1;
 }
 
 VayuStr* vayu_py_version(void) {
-    if (!vayu_py_init()) {
-        return vayu_mkstr_c("(no python runtime found)");
-    }
+    if (!vayu_py_init()) return vayu_mkstr_c("(no python runtime found)");
     const char* v = p_Py_GetVersion();
     if (!v) return vayu_mkstr_c("(unknown)");
-    /* Trim trailing newline if any. */
     const char* nl = strchr(v, '\n');
     if (nl) return vayu_mkstr(v, (int64_t)(nl - v));
     return vayu_mkstr_c(v);
@@ -5768,6 +6144,127 @@ void vayu_py_run(const char* src) {
     }
     int rc = p_PyRun_SimpleString(src);
     if (rc != 0 && p_PyErr_Print) p_PyErr_Print();
+}
+
+/* ---- 16.1: value bridging ---- */
+int64_t vayu_py_int(int64_t v) {
+    if (!vayu_py_init() || !p_PyLong_FromLongLong) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    return p_PyLong_FromLongLong(v);
+}
+
+int64_t vayu_py_bool(int64_t v) {
+    if (!vayu_py_init() || !p_PyBool_FromLong) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    return p_PyBool_FromLong(v ? 1 : 0);
+}
+
+int64_t vayu_py_str(int64_t sp) {
+    if (!vayu_py_init() || !p_PyUnicode_FromStringAndSize) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    VayuStr* s = (VayuStr*)sp;
+    return p_PyUnicode_FromStringAndSize(s->data, s->len);
+}
+
+int64_t vayu_py_from_int(int64_t p) {
+    if (!vayu_py_init() || !p_PyLong_AsLongLong) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    return p_PyLong_AsLongLong(p);
+}
+
+int64_t vayu_py_from_str(int64_t p) {
+    if (!vayu_py_init() || !p_PyUnicode_AsUTF8) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    const char* s = p_PyUnicode_AsUTF8(p);
+    if (!s) return (int64_t)vayu_mkstr("", 0);
+    return (int64_t)vayu_mkstr_c(s);
+}
+
+int64_t vayu_py_from_bool(int64_t p) {
+    if (!vayu_py_init() || !p_PyObject_IsTrue) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    return (int64_t)(p_PyObject_IsTrue(p) ? 1 : 0);
+}
+
+/* ---- 16.2: calling Python ---- */
+int64_t vayu_py_import(const char* name) {
+    if (!vayu_py_init() || !p_PyImport_ImportModule) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    return p_PyImport_ImportModule(name);
+}
+
+int64_t vayu_py_getattr(int64_t obj, const char* name) {
+    if (!vayu_py_init() || !p_PyObject_GetAttrString) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    if (!obj) return 0;
+    return p_PyObject_GetAttrString(obj, name);
+}
+
+void vayu_py_decref(int64_t obj) {
+    if (!vayu_py_init()) return;
+    if (obj && p_Py_DecRef) p_Py_DecRef(obj);
+}
+
+void vayu_py_incref(int64_t obj) {
+    if (!vayu_py_init()) return;
+    if (obj && p_Py_IncRef) p_Py_IncRef(obj);
+}
+
+static int64_t vayu_py_arg_to_obj(int64_t v, int8_t tag) {
+    if (tag == 0 || tag == 1) {
+        return p_PyLong_FromLongLong(v);
+    }
+    if (tag == 2) {
+        VayuStr* s = (VayuStr*)v;
+        return p_PyUnicode_FromStringAndSize(s->data, s->len);
+    }
+    return 0;
+}
+
+int64_t vayu_py_call(int64_t fn, int64_t args_list) {
+    if (!vayu_py_init() || !p_PyObject_Call || !p_PyTuple_New) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("Python runtime not available"));
+    }
+    if (!fn) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("py.call: null function handle"));
+    }
+    VayuList* lst = (VayuList*)args_list;
+    int64_t n = lst->len;
+    int64_t tup = p_PyTuple_New(n);
+    if (!tup) {
+        vayu_raise_str(vayu_mkstr_c("RuntimeError"),
+                       vayu_mkstr_c("py.call: PyTuple_New failed"));
+    }
+    for (int64_t i = 0; i < n; ++i) {
+        int64_t arg = vayu_py_arg_to_obj(lst->items[i], lst->tags[i]);
+        if (!arg) {
+            if (p_Py_DecRef) p_Py_DecRef(tup);
+            vayu_raise_str(vayu_mkstr_c("TypeError"),
+                           vayu_mkstr_c("py.call: unsupported argument type"));
+        }
+        p_PyTuple_SetItem(tup, i, arg);
+    }
+    int64_t result = p_PyObject_Call(fn, tup, 0);
+    if (p_Py_DecRef) p_Py_DecRef(tup);
+    return result;
 }
 
 /* ---- Phase 15.2d: compound lvalue addresses ---- */

@@ -1,0 +1,38 @@
+import py
+
+py.init()
+
+# ---- int round-trip ----
+p1 = py.int(42)
+print(py.from_int(p1))
+
+p2 = py.int(0)
+print(py.from_int(p2))
+
+p3 = py.int(-7)
+print(py.from_int(p3))
+
+# ---- str round-trip ----
+s1 = py.str("hello")
+print(py.from_str(s1))
+
+s2 = py.str("")
+print(py.from_str(s2))
+
+s3 = py.str("with spaces and !@#")
+print(py.from_str(s3))
+
+# ---- bool round-trip ----
+b1 = py.bool(true)
+print(py.from_bool(b1))
+
+b2 = py.bool(false)
+print(py.from_bool(b2))
+
+# ---- composition with existing builtins ----
+x = 100
+p = py.int(x)
+print(py.from_int(p) + 1)
+
+b = py.bool(x)
+print(py.from_bool(b))
