@@ -33,6 +33,9 @@ namespace vayu {
     enum class UnOp {
         Neg, Pos, Not,
         BNot,
+        // Phase 15.2b — raw pointers
+        AddrOf,
+        Deref,
     };
 
     struct Expr {

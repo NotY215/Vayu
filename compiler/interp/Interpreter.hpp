@@ -129,6 +129,7 @@ namespace vayu {
 
         void installBuiltins();
         void installMathModule();
+        void  installExternStubs(const Block& program);
         void installExceptionClasses();
     };
 

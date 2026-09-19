@@ -40,9 +40,6 @@ namespace vayu {
         case OpCode::INDEX_GET: return "INDEX_GET";
         case OpCode::INDEX_SET: return "INDEX_SET";
         case OpCode::MAP_NEW:   return "MAP_NEW";
-        case OpCode::TUPLE_NEW: return "TUPLE_NEW";
-        case OpCode::SET_NEW:   return "SET_NEW";
-        case OpCode::SLICE:     return "SLICE";
         case OpCode::IN:        return "IN";
         case OpCode::NEW_INSTANCE: return "NEW_INSTANCE";
         case OpCode::ATTR_GET:     return "ATTR_GET";
@@ -66,6 +63,14 @@ namespace vayu {
         case OpCode::EXCEPT_PUSH:  return "EXCEPT_PUSH";
         case OpCode::EXCEPT_POP:   return "EXCEPT_POP";
         case OpCode::EXCEPT_MATCH: return "EXCEPT_MATCH";
+        case OpCode::TUPLE_NEW: return "TUPLE_NEW";
+        case OpCode::SET_NEW:   return "SET_NEW";
+        case OpCode::SLICE:     return "SLICE";
+        case OpCode::ADDR_OF:       return "ADDR_OF";
+        case OpCode::DEREF:         return "DEREF";
+        case OpCode::DEREF_SET:     return "DEREF_SET";
+        case OpCode::ADDR_OF_INDEX: return "ADDR_OF_INDEX";
+        case OpCode::ADDR_OF_ATTR:  return "ADDR_OF_ATTR";
         }
         return "?";
     }

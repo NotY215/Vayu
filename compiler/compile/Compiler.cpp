@@ -52,7 +52,6 @@ namespace vayu {
             }
             classInfo_[d->name] = std::move(info);
 
-            // Phase 11.1c: register static member names.
             std::unordered_map<std::string, bool> sm;
             for (auto& sf : d->staticFields) sm[sf.name] = true;
             statics_[d->name] = std::move(sm);
@@ -74,7 +73,7 @@ namespace vayu {
             if (!changed) break;
         }
 
-        // ---- Phase 11.1d: enums ----
+        // ---- enums ----
         for (auto& s : program.stmts) {
             if (s->kind != StmtKind::Enum) continue;
             auto* d = static_cast<const EnumStmt*>(s.get());
@@ -186,15 +185,29 @@ namespace vayu {
         case StmtKind::Assign: {
             auto* n = static_cast<const AssignStmt*>(s);
 
+            // Phase 15.2c: `*p = v`
+            if (n->target->kind == ExprKind::Unary) {
+                auto* u = static_cast<const UnaryExpr*>(n->target.get());
+                if (u->op == UnOp::Deref) {
+                    compileExpr(u->operand.get());
+                    compileExpr(n->value.get());
+                    chunk_->emitOp(OpCode::DEREF_SET, line);
+                    return;
+                }
+                error(u->loc,
+                    "VM mode: unsupported unary assignment target");
+            }
+
             if (n->target->kind == ExprKind::NameRef) {
-                const auto* nm = static_cast<const NameRefExpr*>(n->target.get());
+                const auto* nm =
+                    static_cast<const NameRefExpr*>(n->target.get());
                 compileExpr(n->value.get());
                 emitNameU16(OpCode::DEFINE, nm->name, line);
                 return;
             }
+
             if (n->target->kind == ExprKind::Attr) {
                 auto* a = static_cast<const AttrExpr*>(n->target.get());
-                // Phase 11.1c: ClassName.staticName = value
                 if (a->target->kind == ExprKind::NameRef) {
                     const auto* tn =
                         static_cast<const NameRefExpr*>(a->target.get());
@@ -209,6 +222,7 @@ namespace vayu {
                 compileAssignAttr(a, n->value.get(), line);
                 return;
             }
+
             if (n->target->kind == ExprKind::Index) {
                 auto* ix = static_cast<const IndexExpr*>(n->target.get());
                 compileExpr(ix->target.get());
@@ -217,6 +231,7 @@ namespace vayu {
                 chunk_->emitOp(OpCode::INDEX_SET, line);
                 return;
             }
+
             error(n->target->loc, "VM mode: unsupported assignment target");
         }
 
@@ -249,12 +264,21 @@ namespace vayu {
             return;
         }
 
-        case StmtKind::If:     compileIf(static_cast<const IfStmt*>(s));     return;
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            compileBlock(n->body);
+            return;
+        }
+
+        case StmtKind::Extern:
+            return;
+
+        case StmtKind::If:     compileIf(static_cast<const IfStmt*>(s));       return;
         case StmtKind::While:  compileWhile(static_cast<const WhileStmt*>(s));  return;
-        case StmtKind::For:    compileFor(static_cast<const ForStmt*>(s));    return;
-        case StmtKind::Def:    compileDef(static_cast<const DefStmt*>(s));    return;
+        case StmtKind::For:    compileFor(static_cast<const ForStmt*>(s));     return;
+        case StmtKind::Def:    compileDef(static_cast<const DefStmt*>(s));     return;
         case StmtKind::Return: compileReturn(static_cast<const ReturnStmt*>(s)); return;
-        case StmtKind::Try:    compileTry(static_cast<const TryStmt*>(s));    return;
+        case StmtKind::Try:    compileTry(static_cast<const TryStmt*>(s));     return;
         case StmtKind::Raise:  compileRaise(static_cast<const RaiseStmt*>(s));  return;
         case StmtKind::Yield: {
             auto* n = static_cast<const YieldStmt*>(s);
@@ -275,7 +299,8 @@ namespace vayu {
         case StmtKind::Break:
             if (loopStack_.empty())
                 error(s->loc, "'break' outside loop");
-            loopStack_.back().breakJumps.push_back(emitJump(OpCode::JUMP, line));
+            loopStack_.back().breakJumps.push_back(
+                emitJump(OpCode::JUMP, line));
             return;
 
         case StmtKind::Continue:
@@ -284,13 +309,6 @@ namespace vayu {
             emitJumpTo(loopStack_.back().continueTarget, line);
             return;
 
-        case StmtKind::Block: {
-            auto* n = static_cast<const BlockStmt*>(s);
-            compileBlock(n->body);
-            return;
-        }
-        case StmtKind::Extern:
-            return;
         case StmtKind::Pass: return;
 
         case StmtKind::Struct:
@@ -340,7 +358,8 @@ namespace vayu {
         chunk_ = saved;
 
         int fnIdx = chunk_->addFunction(fnChunk);
-        chunk_->emitOp(n->isGenerator ? OpCode::MAKE_GENERATOR : OpCode::MAKE_FN, line);
+        chunk_->emitOp(n->isGenerator ? OpCode::MAKE_GENERATOR : OpCode::MAKE_FN,
+            line);
         chunk_->emit((uint8_t)((fnIdx >> 8) & 0xFF), line);
         chunk_->emit((uint8_t)(fnIdx & 0xFF), line);
         emitNameU16(OpCode::DEFINE, n->name, line);
@@ -472,7 +491,8 @@ namespace vayu {
                     error(h.exceptionType->loc,
                         "try/except: exception type must be a class name");
                 const std::string& cn =
-                    static_cast<const NameRefExpr*>(h.exceptionType.get())->name;
+                    static_cast<const NameRefExpr*>(
+                        h.exceptionType.get())->name;
 
                 chunk_->emitOp(OpCode::EXCEPT_MATCH, line);
                 int ni = chunk_->addName(cn);
@@ -543,7 +563,8 @@ namespace vayu {
                             error(a.loc,
                                 "VM mode: keyword args for class with __init__ unsupported");
                     if (c->args.size() != info.initParams.size())
-                        error(c->loc, "class '" + nm->name + "' constructor expects " +
+                        error(c->loc, "class '" + nm->name +
+                            "' constructor expects " +
                             std::to_string(info.initParams.size()) +
                             " argument(s), got " +
                             std::to_string(c->args.size()));
@@ -567,7 +588,9 @@ namespace vayu {
                     else {
                         int fi = -1;
                         for (size_t j = 0; j < info.allFields.size(); ++j)
-                            if (info.allFields[j] == a.name) { fi = (int)j; break; }
+                            if (info.allFields[j] == a.name) {
+                                fi = (int)j; break;
+                            }
                         if (fi < 0)
                             error(a.loc, "'" + nm->name + "' has no field '" +
                                 a.name + "'");
@@ -595,7 +618,8 @@ namespace vayu {
             emitNameU16(OpCode::ATTR_GET, attr->name, line);
             for (auto& a : c->args) {
                 if (!a.name.empty())
-                    error(a.loc, "VM mode: keyword args for method calls unsupported");
+                    error(a.loc,
+                        "VM mode: keyword args for method calls unsupported");
                 compileExpr(a.value.get());
             }
             chunk_->emitOp(OpCode::CALL, line);
@@ -607,7 +631,8 @@ namespace vayu {
             compileExpr(c->callee.get());
             for (auto& a : c->args) {
                 if (!a.name.empty())
-                    error(a.loc, "VM mode: keyword arguments not yet supported");
+                    error(a.loc,
+                        "VM mode: keyword arguments not yet supported");
                 compileExpr(a.value.get());
             }
             chunk_->emitOp(OpCode::CALL, line);
@@ -668,12 +693,48 @@ namespace vayu {
 
         case ExprKind::Unary: {
             auto* n = static_cast<const UnaryExpr*>(e);
+
+            // Phase 15.2c
+            if (n->op == UnOp::AddrOf) {
+                const Expr* op = n->operand.get();
+                if (op->kind == ExprKind::NameRef) {
+                    const auto* nm = static_cast<const NameRefExpr*>(op);
+                    emitNameU16(OpCode::ADDR_OF, nm->name, line);
+                    return;
+                }
+                if (op->kind == ExprKind::Index) {
+                    auto* ix = static_cast<const IndexExpr*>(op);
+                    compileExpr(ix->target.get());
+                    compileExpr(ix->index.get());
+                    chunk_->emitOp(OpCode::ADDR_OF_INDEX, line);
+                    return;
+                }
+                if (op->kind == ExprKind::Attr) {
+                    auto* at = static_cast<const AttrExpr*>(op);
+                    compileExpr(at->target.get());
+                    emitNameU16(OpCode::ADDR_OF_ATTR, at->name, line);
+                    return;
+                }
+                // Fallback: container-of-one.
+                compileExpr(op);
+                chunk_->emitOp(OpCode::LIST_NEW, line);
+                chunk_->emit(0, line);
+                chunk_->emit(1, line);
+                return;
+            }
+            if (n->op == UnOp::Deref) {
+                compileExpr(n->operand.get());
+                chunk_->emitOp(OpCode::DEREF, line);
+                return;
+            }
+
             compileExpr(n->operand.get());
             switch (n->op) {
             case UnOp::Neg:  chunk_->emitOp(OpCode::NEG, line);  break;
             case UnOp::Pos:  break;
             case UnOp::Not:  chunk_->emitOp(OpCode::NOT, line);  break;
             case UnOp::BNot: chunk_->emitOp(OpCode::BNOT, line); break;
+            default: break;
             }
             return;
         }
@@ -739,15 +800,16 @@ namespace vayu {
             auto* a = static_cast<const AttrExpr*>(e);
 
             if (a->target->kind == ExprKind::NameRef) {
-                const auto* tn = static_cast<const NameRefExpr*>(a->target.get());
+                const auto* tn =
+                    static_cast<const NameRefExpr*>(a->target.get());
 
                 // Phase 11.1d: enum item access -> integer constant.
                 auto eit = enums_.find(tn->name);
                 if (eit != enums_.end()) {
                     auto iit = eit->second.find(a->name);
                     if (iit == eit->second.end())
-                        error(a->loc, "enum '" + tn->name + "' has no item '" +
-                            a->name + "'");
+                        error(a->loc, "enum '" + tn->name +
+                            "' has no item '" + a->name + "'");
                     int idx = chunk_->addConstant(Value(iit->second));
                     chunk_->emitOp(OpCode::CONST, line);
                     chunk_->emit((uint8_t)((idx >> 8) & 0xFF), line);
@@ -758,7 +820,8 @@ namespace vayu {
                 // Phase 11.1c: ClassName.staticName -> LOAD mangled global.
                 auto sit = statics_.find(tn->name);
                 if (sit != statics_.end() && sit->second.count(a->name)) {
-                    emitNameU16(OpCode::LOAD, staticName(tn->name, a->name), line);
+                    emitNameU16(OpCode::LOAD,
+                        staticName(tn->name, a->name), line);
                     return;
                 }
             }
@@ -797,6 +860,8 @@ namespace vayu {
             chunk_->emit((uint8_t)(cnt & 0xFF), line);
             return;
         }
+
+                             // Phase 14.0
         case ExprKind::TupleLit: {
             auto* n = static_cast<const TupleLitExpr*>(e);
             for (auto& el : n->elements) compileExpr(el.get());
@@ -806,6 +871,7 @@ namespace vayu {
             chunk_->emit((uint8_t)(cnt & 0xFF), line);
             return;
         }
+                               // Phase 14.1
         case ExprKind::SetLit: {
             auto* n = static_cast<const SetLitExpr*>(e);
             for (auto& el : n->elements) compileExpr(el.get());
@@ -816,6 +882,7 @@ namespace vayu {
             return;
         }
 
+                             // Phase 14.4 — slice
         case ExprKind::Slice: {
             auto* n = static_cast<const SliceExpr*>(e);
             compileExpr(n->target.get());

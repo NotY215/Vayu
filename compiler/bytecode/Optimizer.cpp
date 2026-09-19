@@ -17,8 +17,6 @@ namespace vayu {
         case OpCode::DEFINE:
         case OpCode::LIST_NEW:
         case OpCode::MAP_NEW:
-        case OpCode::TUPLE_NEW:
-        case OpCode::SET_NEW:
         case OpCode::MAKE_FN:
         case OpCode::MAKE_GENERATOR:
         case OpCode::ATTR_GET:
@@ -31,6 +29,8 @@ namespace vayu {
         case OpCode::JUMP_IF_TRUE:
         case OpCode::ITER_NEXT:
         case OpCode::TRY_BEGIN:
+        case OpCode::ADDR_OF:
+        case OpCode::ADDR_OF_ATTR:
             return 3;
 
         case OpCode::NEW_INSTANCE:

@@ -1,0 +1,18 @@
+extern "C":
+    def malloc(n: int) -> ptr<int>
+    def free(p: ptr<int>) -> None
+
+p = malloc(32)
+p[0] = 10
+p[1] = 20
+p[2] = 30
+print(p[0])
+print(p[1])
+print(p[2])
+
+q = p + 1
+print(*q)
+*q = 99
+print(p[1])
+
+free(p)

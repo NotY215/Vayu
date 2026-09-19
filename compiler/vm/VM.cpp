@@ -349,6 +349,104 @@ namespace vayu {
                     stack_.emplace_back(std::move(s));
                     break;
                 }
+                case OpCode::ADDR_OF: {
+                    int idx = (int(code[ip]) << 8) | int(code[ip + 1]); ip += 2;
+                    const std::string& name = chunk->names[idx];
+                    auto slot = frame->env->lookupShared(name);
+                    if (!slot)
+                        runtimeError("cannot take address of '" + name +
+                            "' (undefined)");
+                    auto ref = std::make_shared<Reference>();
+                    ref->accessor = [slot]() -> Value& { return *slot; };
+                    stack_.emplace_back(ref);
+                    break;
+                }
+                case OpCode::ADDR_OF_INDEX: {
+                    Value idx = std::move(stack_.back()); stack_.pop_back();
+                    Value tgt = std::move(stack_.back()); stack_.pop_back();
+                    if (tgt.isRef()) {
+                        auto ref = tgt.asRef();
+                        if (!ref->backing)
+                            runtimeError("cannot index a non-arithmetic reference");
+                        if (!idx.isInt())
+                            runtimeError("pointer index must be int, got " + idx.typeName());
+                        long long i = ref->offset + idx.asInt();
+                        if (i < 0 || i >= (long long)ref->backing->items.size())
+                            runtimeError("pointer index out of range");
+                        stack_.push_back(ref->backing->items[(size_t)i]);
+                        break;
+                    }
+                    if (tgt.isList()) {
+                        if (!idx.isInt())
+                            runtimeError("list index must be int, got " + idx.typeName());
+                        auto lst = tgt.asList();
+                        long long i = idx.asInt();
+                        if (i < 0) i += (long long)lst->items.size();
+                        if (i < 0 || i >= (long long)lst->items.size())
+                            runtimeError("list index out of range");
+                        auto ref = std::make_shared<Reference>();
+                        ref->backing = lst;
+                        ref->offset = i;
+                        ref->accessor = [lst, i]() -> Value& {
+                            return lst->items[(size_t)i];
+                            };
+                        stack_.emplace_back(ref);
+                        break;
+                    }
+                    if (tgt.isMap()) {
+                        if (!idx.isString())
+                            runtimeError("map key must be str, got " + idx.typeName());
+                        auto m = tgt.asMap();
+                        std::string k = idx.asString();
+                        auto ref = std::make_shared<Reference>();
+                        ref->accessor = [m, k]() -> Value& {
+                            return m->entries[k];
+                            };
+                        stack_.emplace_back(ref);
+                        break;
+                    }
+                    runtimeError("cannot take address of this index");
+                }
+                case OpCode::ADDR_OF_ATTR: {
+                    int idx = (int(code[ip]) << 8) | int(code[ip + 1]); ip += 2;
+                    const std::string& field = chunk->names[idx];
+                    Value base = std::move(stack_.back()); stack_.pop_back();
+                    if (!base.isInstance())
+                        runtimeError("cannot take address of field on non-object");
+                    auto inst = base.asInstance();
+                    std::string fn = field;
+                    auto ref = std::make_shared<Reference>();
+                    ref->accessor = [inst, fn]() -> Value& {
+                        return inst->fields[fn];
+                        };
+                    stack_.emplace_back(ref);
+                    break;
+                }
+                case OpCode::DEREF: {
+                    Value p = std::move(stack_.back()); stack_.pop_back();
+                    if (p.isRef()) {
+                        stack_.push_back(p.asRef()->accessor());
+                        break;
+                    }
+                    if (p.isList() && p.asList()->items.size() == 1) {
+                        stack_.push_back(p.asList()->items[0]);
+                        break;
+                    }
+                    runtimeError("'*' expects a reference");
+                }
+                case OpCode::DEREF_SET: {
+                    Value v = std::move(stack_.back()); stack_.pop_back();
+                    Value p = std::move(stack_.back()); stack_.pop_back();
+                    if (p.isRef()) {
+                        p.asRef()->accessor() = std::move(v);
+                        break;
+                    }
+                    if (p.isList() && p.asList()->items.size() == 1) {
+                        p.asList()->items[0] = std::move(v);
+                        break;
+                    }
+                    runtimeError("'*' expects a reference");
+                }
                 case OpCode::SLICE: {
                     Value endV = std::move(stack_.back()); stack_.pop_back();
                     Value startV = std::move(stack_.back()); stack_.pop_back();
@@ -627,6 +725,18 @@ namespace vayu {
                         if (!idx.isString())
                             runtimeError("map key must be str, got " + idx.typeName());
                         tgt.asMap()->entries[idx.asString()] = std::move(v);
+                        break;
+                    }
+                    if (tgt.isRef()) {
+                        auto ref = tgt.asRef();
+                        if (!ref->backing)
+                            runtimeError("cannot index a non-arithmetic reference");
+                        if (!idx.isInt())
+                            runtimeError("pointer index must be int, got " + idx.typeName());
+                        long long i = ref->offset + idx.asInt();
+                        if (i < 0 || i >= (long long)ref->backing->items.size())
+                            runtimeError("pointer index out of range");
+                        ref->backing->items[(size_t)i] = std::move(v);
                         break;
                     }
                     if (tgt.isString())
@@ -919,6 +1029,24 @@ namespace vayu {
                 out->items = l.asTuple()->items;
                 for (auto& v : r.asTuple()->items) out->items.push_back(v);
                 stack_.emplace_back(std::move(out));
+                return;
+            }
+            if (l.isRef() && r.isInt()) {
+                auto ref = l.asRef();
+                if (!ref->backing)
+                    runtimeError("cannot perform pointer arithmetic on this reference");
+                long long n = r.asInt();
+                auto out = std::make_shared<Reference>();
+                out->backing = ref->backing;
+                out->offset = ref->offset + n;
+                auto lst = ref->backing;
+                long long off = out->offset;
+                out->accessor = [lst, off]() -> Value& {
+                    if (off < 0 || off >= (long long)lst->items.size())
+                        throw std::runtime_error("pointer out of range");
+                    return lst->items[(size_t)off];
+                    };
+                stack_.emplace_back(out);
                 return;
             }
             runtimeError("cannot add " + l.typeName() + " and " + r.typeName());

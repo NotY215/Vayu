@@ -2,10 +2,6 @@
 
 namespace vayu {
 
-    // ===========================================================================
-    // Entry
-    // ===========================================================================
-
     void TypeChecker::check(const Block& program) {
         pushScope();
         installBuiltins();
@@ -14,10 +10,6 @@ namespace vayu {
         for (auto& s : program.stmts) checkStmt(s.get());
         popScope();
     }
-
-    // ===========================================================================
-    // Scopes
-    // ===========================================================================
 
     void TypeChecker::pushScope() {
         scopes_.emplace_back();
@@ -88,10 +80,8 @@ namespace vayu {
         B("sum", Types::Function({ listAny }, A));
 
         B("next", Types::Function({ A }, A));
-        // Phase 13.3 / 13.4
         B("setattr", Types::Function({ A, Types::Str(), A }, Types::None()));
         B("delattr", Types::Function({ A, Types::Str() }, Types::None()));
-        // Phase 13.0 — inspection & pure helpers.
         B("hash", Types::Function({ A }, Types::Int()));
         B("id", Types::Function({ A }, Types::Int()));
         B("callable", Types::Function({ A }, Types::Bool()));
@@ -111,12 +101,15 @@ namespace vayu {
         B("gcd", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("lcm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("clamp", Types::Function({ A, A, A }, A));
-        B("tuple", Types::Function({ Types::Any() }, Types::Any()));
-        B("set", Types::Function({ Types::Any() }, Types::Any()));
+
         B("comb", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("perm", Types::Function({ Types::Int(), Types::Int() }, Types::Int()));
         B("isqrt", Types::Function({ Types::Int() }, Types::Int()));
         B("factorial", Types::Function({ Types::Int() }, Types::Int()));
+
+        B("tuple", Types::Function({ A }, A));
+        B("set", Types::Function({ A }, A));
+
         B("math", Types::Any());
 
         B("read_file", Types::Function({ Types::Str() }, Types::Str()));
@@ -193,7 +186,7 @@ namespace vayu {
             st->fields = std::move(fields);
         }
 
-        // ---- classes (two passes for inheritance) ----
+        // ---- classes ----
         for (int pass = 0; pass < 2; ++pass) {
             for (auto& s : program.stmts) {
                 if (s->kind != StmtKind::Class) continue;
@@ -219,7 +212,6 @@ namespace vayu {
                     ct->parent = it->second;
                 }
 
-                // Phase 11.2b: register class type params (erased to Any).
                 typeParamScopes_.emplace_back();
                 for (auto& tp : d->typeParams) {
                     typeParamScopes_.back()[tp] = Types::Any();
@@ -243,7 +235,6 @@ namespace vayu {
                 }
                 ct->fields = std::move(fields);
 
-                // Phase 11.1c: register static members.
                 {
                     std::unordered_map<std::string, TypePtr> sm;
                     for (auto& sf : d->staticFields) {
@@ -295,6 +286,27 @@ namespace vayu {
             enums_[d->name] = std::move(items);
         }
 
+        // ---- Phase 15.0: extern "C" ----
+        for (auto& s : program.stmts) {
+            if (s->kind != StmtKind::Extern) continue;
+            auto* ex = static_cast<const ExternBlockStmt*>(s.get());
+            for (auto& fn : ex->funcs) {
+                std::vector<TypePtr> params;
+                for (auto& p : fn.params)
+                    params.push_back(p.type ? resolveTypeExpr(p.type.get())
+                        : Types::Any());
+                TypePtr ret = fn.returnType
+                    ? resolveTypeExpr(fn.returnType.get())
+                    : Types::None();
+                auto sig = Types::Function(std::move(params), ret);
+                if (functions_.count(fn.name))
+                    error(fn.loc, "extern function '" + fn.name +
+                        "' conflicts with an existing definition");
+                functions_[fn.name] = sig;
+                defineVar(fn.name, sig);
+            }
+        }
+
         // ---- functions ----
         collectDefs(program, /*isTopLevel=*/true);
     }
@@ -305,8 +317,6 @@ namespace vayu {
             case StmtKind::Def: {
                 auto* d = static_cast<const DefStmt*>(s.get());
 
-                // Phase 11.2 / 11.2c: type-param scope.  A constrained param
-                // resolves to its constraint struct so `x.name` typechecks.
                 typeParamScopes_.emplace_back();
                 for (size_t i = 0; i < d->typeParams.size(); ++i) {
                     std::string cstName;
@@ -387,27 +397,12 @@ namespace vayu {
                 for (auto& m : n->methods) collectDefs(m->body, false);
                 break;
             }
-            default: break;
+            case StmtKind::Block: {
+                auto* n = static_cast<const BlockStmt*>(s.get());
+                collectDefs(n->body, false);
+                break;
             }
-        }
-        // ---- Phase 15.0: extern "C" ----
-        for (auto& s : program.stmts) {
-            if (s->kind != StmtKind::Extern) continue;
-            auto* ex = static_cast<const ExternBlockStmt*>(s.get());
-            for (auto& fn : ex->funcs) {
-                std::vector<TypePtr> params;
-                for (auto& p : fn.params)
-                    params.push_back(p.type ? resolveTypeExpr(p.type.get())
-                        : Types::Any());
-                TypePtr ret = fn.returnType
-                    ? resolveTypeExpr(fn.returnType.get())
-                    : Types::None();
-                auto sig = Types::Function(std::move(params), ret);
-                if (functions_.count(fn.name))
-                    error(fn.loc, "extern function '" + fn.name +
-                        "' conflicts with an existing definition");
-                functions_[fn.name] = sig;
-                defineVar(fn.name, sig);
+            default: break;
             }
         }
     }
@@ -431,6 +426,21 @@ namespace vayu {
                     error(e->loc, "map<> takes exactly two type arguments");
                 return Types::Map(resolveTypeExpr(g->typeArgs[0].get()),
                     resolveTypeExpr(g->typeArgs[1].get()));
+            }
+            if (g->name == "ptr" || g->name == "ref") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, g->name + "<> takes exactly one type argument");
+                return resolveTypeExpr(g->typeArgs[0].get());
+            }
+            if (g->name == "ptr") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, "ptr<> takes exactly one type argument");
+                return Types::Ptr(resolveTypeExpr(g->typeArgs[0].get()));
+            }
+            if (g->name == "ref") {
+                if (g->typeArgs.size() != 1)
+                    error(e->loc, "ref<> takes exactly one type argument");
+                return resolveTypeExpr(g->typeArgs[0].get());
             }
             if (g->name == "unique") {
                 if (g->typeArgs.size() != 1)
@@ -526,8 +536,7 @@ namespace vayu {
                 return Types::Function({ Types::Int() }, Types::Str());
             if (name == "to_int")
                 return Types::Function({}, Types::Int());
-            if (name == "capitalize" || name == "title" ||
-                name == "swapcase")
+            if (name == "capitalize" || name == "title" || name == "swapcase")
                 return Types::Function({}, Types::Str());
             if (name == "center" || name == "ljust" || name == "rjust")
                 return Types::Function({ Types::Int(), Types::Str() },
@@ -598,10 +607,9 @@ namespace vayu {
                 return Types::Function({ K }, Types::Bool());
             if (name == "items")
                 return Types::Function({}, Types::List(Types::Any()));
-            if (name == "values")
-                return Types::Function({}, Types::List(V));
             error(loc, "map has no method '" + name + "'");
         }
+
         if (target->kind == TypeKind::Tuple) {
             TypePtr E = Types::Any();
             if (name == "count")
@@ -625,6 +633,7 @@ namespace vayu {
                 return Types::Function({ target }, target);
             error(loc, "set has no method '" + name + "'");
         }
+
         return nullptr;
     }
 
@@ -737,6 +746,20 @@ namespace vayu {
         case StmtKind::Assign: {
             auto* n = static_cast<const AssignStmt*>(s);
 
+            // Phase 15.2c: `*p = v` — deref-assign.  Permissive by design;
+            // the pointer type isn't tracked at the sema level, so we
+            // type-check the pointer expression and the value expression
+            // and accept the write.
+            if (n->target->kind == ExprKind::Unary) {
+                auto* u = static_cast<const UnaryExpr*>(n->target.get());
+                if (u->op == UnOp::Deref) {
+                    checkExpr(u->operand.get());
+                    checkExpr(n->value.get());
+                    return;
+                }
+                error(n->target->loc, "invalid assignment target");
+            }
+
             if (n->target->kind == ExprKind::NameRef) {
                 TypePtr v = checkExpr(n->value.get());
                 const auto* nm =
@@ -753,9 +776,6 @@ namespace vayu {
                 else {
                     defineVar(nm->name, v);
                 }
-                // Phase 12.0: if the RHS is a name bound to unique<T>, mark
-                // the source as moved — unless we're assigning back to the
-                // same name (a no-op move-to-self).
                 if (v->kind == TypeKind::Unique &&
                     n->value->kind == ExprKind::NameRef) {
                     const auto* src =
@@ -806,6 +826,16 @@ namespace vayu {
                 TypePtr idx = checkExpr(ix->index.get());
                 TypePtr val = checkExpr(n->value.get());
 
+                if (tgt->kind == TypeKind::Ptr) {
+                    if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
+                        error(ix->loc, "ptr index must be int, got " +
+                            idx->toString());
+                    if (!tgt->params.empty() &&
+                        !isAssignable(tgt->params[0], val))
+                        error(n->loc, "cannot assign " + val->toString() +
+                            " into " + tgt->toString());
+                    return;
+                }
                 if (tgt->kind == TypeKind::List) {
                     if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
                         error(ix->loc, "list index must be int, got " +
@@ -827,6 +857,8 @@ namespace vayu {
                 }
                 if (tgt->kind == TypeKind::Str)
                     error(n->loc, "strings are immutable");
+                if (tgt->kind == TypeKind::Tuple)
+                    error(n->loc, "tuples are immutable");
                 error(ix->loc, "cannot index-assign to value of type " +
                     tgt->toString());
             }
@@ -865,6 +897,15 @@ namespace vayu {
 
         case StmtKind::Enum:
             return;
+
+        case StmtKind::Extern:
+            return;
+
+        case StmtKind::Block: {
+            auto* n = static_cast<const BlockStmt*>(s);
+            for (auto& st : n->body.stmts) checkStmt(st.get());
+            return;
+        }
 
         case StmtKind::If: {
             auto* n = static_cast<const IfStmt*>(s);
@@ -959,10 +1000,6 @@ namespace vayu {
             TypePtr v = n->value ? checkExpr(n->value.get()) : Types::None();
 
             if (!isAssignable(currentReturnType_, v)) {
-                // Phase 12.1: `return u` inside a function declared to
-                // return `T` where `u: unique<T>` — a move-out.  The value
-                // is unwrapped, and the source name is marked moved so it
-                // can't be used again in this scope.
                 bool unwrapOK = false;
                 if (currentReturnType_ && v &&
                     v->kind == TypeKind::Unique && !v->params.empty() &&
@@ -1049,16 +1086,6 @@ namespace vayu {
             return;
         }
 
-        case StmtKind::Block: {
-            auto* n = static_cast<const BlockStmt*>(s);
-            for (auto& st : n->body.stmts) checkStmt(st.get());
-            return;
-        }
-
-        case StmtKind::Extern:
-            // Phase 15.0: signatures already collected by collectSignatures.
-            return;
-
         case StmtKind::Pass:
             return;
 
@@ -1130,6 +1157,7 @@ namespace vayu {
             }
             return Types::Map(Types::Str(), valType);
         }
+
         case ExprKind::TupleLit: {
             auto* n = static_cast<const TupleLitExpr*>(e);
             std::vector<TypePtr> elems;
@@ -1146,6 +1174,7 @@ namespace vayu {
             }
             return Types::Set(elem);
         }
+
         case ExprKind::Slice: {
             auto* n = static_cast<const SliceExpr*>(e);
             TypePtr tgt = checkExpr(n->target.get());
@@ -1158,6 +1187,7 @@ namespace vayu {
                 return tgt;
             error(n->loc, "cannot slice value of type " + tgt->toString());
         }
+
         case ExprKind::Lambda: {
             auto* n = static_cast<const LambdaExpr*>(e);
             pushScope();
@@ -1169,6 +1199,28 @@ namespace vayu {
 
         case ExprKind::Unary: {
             auto* n = static_cast<const UnaryExpr*>(e);
+
+            // Phase 15.2b — &x and *p are permissive.
+            if (n->op == UnOp::AddrOf) {
+                const Expr* op = n->operand.get();
+                if (op->kind == ExprKind::Index) {
+                    auto* ix = static_cast<const IndexExpr*>(op);
+                    TypePtr tgt = checkExpr(ix->target.get());
+                    checkExpr(ix->index.get());
+                    if (tgt->kind == TypeKind::List && !tgt->params.empty())
+                        return Types::Ptr(tgt->params[0]);
+                    return Types::Any();
+                }
+                checkExpr(op);
+                return Types::Any();
+            }
+            if (n->op == UnOp::Deref) {
+                TypePtr t = checkExpr(n->operand.get());
+                if (t->kind == TypeKind::Ptr && !t->params.empty())
+                    return t->params[0];
+                return Types::Any();
+            }
+
             TypePtr t = checkExpr(n->operand.get());
             switch (n->op) {
             case UnOp::Not: return Types::Bool();
@@ -1184,8 +1236,9 @@ namespace vayu {
                 if (t->kind == TypeKind::Error) return t;
                 error(n->loc, "cannot apply unary operator to " +
                     t->toString());
+            default:
+                return Types::Error();
             }
-            return Types::Error();
         }
 
         case ExprKind::Binary: {
@@ -1252,8 +1305,7 @@ namespace vayu {
                 if (lt->kind == TypeKind::List && rt->kind == TypeKind::List) {
                     if (!lt->params[0]->equals(rt->params[0]))
                         error(n->loc, "cannot concatenate " +
-                            lt->toString() + " and " +
-                            rt->toString());
+                            lt->toString() + " and " + rt->toString());
                     return lt;
                 }
                 if (lt->kind == TypeKind::Tuple && rt->kind == TypeKind::Tuple) {
@@ -1261,6 +1313,9 @@ namespace vayu {
                     for (auto& p : rt->params) elems.push_back(p);
                     return Types::Tuple(std::move(elems));
                 }
+                if (lt->kind == TypeKind::Ptr &&
+                    (rt->kind == TypeKind::Int || rt->kind == TypeKind::Any))
+                    return lt;
                 error(n->loc, "cannot add " + lt->toString() +
                     " and " + rt->toString());
             case BinOp::Sub: {
@@ -1332,6 +1387,11 @@ namespace vayu {
             if (tgt->kind == TypeKind::Error || idx->kind == TypeKind::Error)
                 return Types::Error();
             if (tgt->kind == TypeKind::Any) return Types::Any();
+            if (tgt->kind == TypeKind::Ptr) {
+                if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
+                    error(n->loc, "ptr index must be int, got " + idx->toString());
+                return tgt->params.empty() ? Types::Any() : tgt->params[0];
+            }
             if (tgt->kind == TypeKind::List) {
                 if (idx->kind != TypeKind::Int && idx->kind != TypeKind::Any)
                     error(n->loc, "list index must be int, got " +
@@ -1395,7 +1455,6 @@ namespace vayu {
             if (t->kind == TypeKind::Error) return t;
             if (t->kind == TypeKind::Any)   return Types::Any();
 
-            // Phase 12.1: weak<T>.upgrade() -> shared<T>.
             if (t->kind == TypeKind::Weak) {
                 if (n->name != "upgrade")
                     error(n->loc, "weak<...> only supports '.upgrade()' "
@@ -1403,9 +1462,6 @@ namespace vayu {
                 TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
                 return Types::Function({}, Types::Shared(inner));
             }
-            // Phase 12.1: shared<T> and unique<T> both delegate field/method
-            // access straight through to T.  Ownership is a compile-time
-            // discipline; at runtime these are T.
             if (t->kind == TypeKind::Shared || t->kind == TypeKind::Unique) {
                 TypePtr inner = t->params.empty() ? Types::Any() : t->params[0];
                 if (inner->kind == TypeKind::Error || inner->kind == TypeKind::Any)
@@ -1587,27 +1643,10 @@ namespace vayu {
                     }
                 }
                 if (!fromBuiltinModule &&
-                    (attr->name == "center" || attr->name == "ljust" ||
-                        attr->name == "rjust" || attr->name == "rsplit" ||
-                        attr->name == "zfill")) {
-                    for (auto& a : n->args)
-                        checkExpr(a.value.get());
-                    return callee->returnType ? callee->returnType
-                        : Types::None();
-                }
-                if (!fromBuiltinModule && (attr->name == "union" ||
-                    attr->name == "intersection" ||
-                    attr->name == "difference")) {
-                    for (auto& a : n->args) checkExpr(a.value.get());
-                    return callee->returnType ? callee->returnType
-                        : Types::None();
-                }
-                if (!fromBuiltinModule &&
                     (attr->name == "split" || attr->name == "strip")) {
                     std::vector<TypePtr> argTypes;
                     for (auto& a : n->args)
                         argTypes.push_back(checkExpr(a.value.get()));
-                    // Phase 12.0: passing a unique<T> argument moves the source.
                     for (auto& a : n->args) {
                         if (a.value->kind != ExprKind::NameRef) continue;
                         const auto* src = static_cast<const NameRefExpr*>(a.value.get());
@@ -1622,6 +1661,22 @@ namespace vayu {
                         !isAssignable(Types::Str(), argTypes[0]))
                         error(n->args[0].loc, "argument must be str, got " +
                             argTypes[0]->toString());
+                    return callee->returnType ? callee->returnType
+                        : Types::None();
+                }
+                if (!fromBuiltinModule &&
+                    (attr->name == "center" || attr->name == "ljust" ||
+                        attr->name == "rjust" || attr->name == "rsplit" ||
+                        attr->name == "zfill")) {
+                    for (auto& a : n->args)
+                        checkExpr(a.value.get());
+                    return callee->returnType ? callee->returnType
+                        : Types::None();
+                }
+                if (!fromBuiltinModule && (attr->name == "union" ||
+                    attr->name == "intersection" ||
+                    attr->name == "difference")) {
+                    for (auto& a : n->args) checkExpr(a.value.get());
                     return callee->returnType ? callee->returnType
                         : Types::None();
                 }

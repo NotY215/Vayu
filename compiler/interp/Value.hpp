@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -26,6 +27,7 @@ namespace vayu {
     struct GeneratorValue;
     struct TupleValue;
     struct SetValue;
+    struct Reference;
     struct GeneratorCancelled {};
 
     class Value {
@@ -39,13 +41,14 @@ namespace vayu {
         using GeneratorPtr = std::shared_ptr<GeneratorValue>;
         using TuplePtr = std::shared_ptr<TupleValue>;
         using SetPtr = std::shared_ptr<SetValue>;
+        using RefPtr = std::shared_ptr<Reference>;
 
     private:
         enum class Tag : uint8_t {
             None, Bool, Int, Float,
             Str, Callable, Instance, Class,
             List, Map, Module, Generator,
-            Tuple, Set,
+            Tuple, Set, Ref,
         };
 
         union U {
@@ -62,6 +65,7 @@ namespace vayu {
             GeneratorPtr generator;
             TuplePtr    tuple;
             SetPtr      set;
+            RefPtr      ref;
 
             U() noexcept : i(0) {}
             ~U() {}
@@ -92,6 +96,7 @@ namespace vayu {
         Value(GeneratorPtr g) noexcept;
         Value(TuplePtr t)     noexcept;
         Value(SetPtr s)       noexcept;
+        Value(RefPtr r)       noexcept;
 
         Value(const Value& other);
         Value(Value&& other) noexcept;
@@ -114,6 +119,7 @@ namespace vayu {
         bool isGenerator() const noexcept { return tag_ == Tag::Generator; }
         bool isTuple()     const noexcept { return tag_ == Tag::Tuple; }
         bool isSet()       const noexcept { return tag_ == Tag::Set; }
+        bool isRef()       const noexcept { return tag_ == Tag::Ref; }
 
         bool               asBool()    const { return u_.b; }
         long long          asInt()     const { return u_.i; }
@@ -128,6 +134,7 @@ namespace vayu {
         GeneratorPtr asGenerator() const { return u_.generator; }
         TuplePtr     asTuple()     const { return u_.tuple; }
         SetPtr       asSet()       const { return u_.set; }
+        RefPtr       asRef()       const { return u_.ref; }
 
         double asDouble() const noexcept {
             return tag_ == Tag::Int ? (double)u_.i : u_.f;
@@ -167,14 +174,23 @@ namespace vayu {
         std::unordered_map<std::string, Value> staticFields;
     };
 
-    // Phase 14.0: immutable, fixed-length, tagged.
     struct TupleValue {
         std::vector<Value> items;
     };
 
-    // Phase 14.1: order-preserving, dedup-on-insert.
     struct SetValue {
         std::vector<Value> items;
+    };
+
+    // Phase 15.2c–15.2f — a reference to an assignable slot.
+    // `accessor` returns the live slot for the plain case (&x, &obj.f).
+    // When `backing` is set, `offset` is a stride-1 cell index into it,
+    // and `accessor` uses that to serve reads/writes for pointer
+    // arithmetic.
+    struct Reference {
+        std::function<Value& ()> accessor;
+        std::shared_ptr<ListValue> backing;   // null for non-arithmetic refs
+        long long offset = 0;
     };
 
     // ===========================================================================
@@ -218,9 +234,9 @@ namespace vayu {
         std::shared_ptr<Callable>       methodFn;
         std::shared_ptr<ClassObject>    superParent;
 
-        std::shared_ptr<ListValue> boundList;
-        std::shared_ptr<MapValue>  boundMap;
-        std::string                boundStr;
+        std::shared_ptr<ListValue>  boundList;
+        std::shared_ptr<MapValue>   boundMap;
+        std::string                 boundStr;
         std::shared_ptr<TupleValue> boundTuple;
         std::shared_ptr<SetValue>   boundSet;
     };

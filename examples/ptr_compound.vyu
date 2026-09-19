@@ -1,0 +1,28 @@
+xs = [10, 20, 30]
+p = &xs[1]
+print(*p)
+*p = 99
+print(*p)
+print(xs[0])
+print(xs[1])
+print(xs[2])
+
+class Point:
+    px: int
+    py: int
+    def __init__(self, a: int, b: int) -> None:
+        self.px = a
+        self.py = b
+
+pt = Point(1, 2)
+q = &pt.px
+print(*q)
+*q = 42
+print(pt.px)
+print(pt.py)
+
+m = {"a": 1, "b": 2}
+r = &m["a"]
+print(*r)
+*r = 100
+print(m["a"])

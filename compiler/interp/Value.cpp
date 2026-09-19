@@ -17,6 +17,7 @@ namespace vayu {
         case Tag::Generator: u_.generator.~shared_ptr();  break;
         case Tag::Tuple:     u_.tuple.~shared_ptr();      break;
         case Tag::Set:       u_.set.~shared_ptr();        break;
+        case Tag::Ref:       u_.ref.~shared_ptr();        break;
         default: break;
         }
     }
@@ -38,6 +39,7 @@ namespace vayu {
         case Tag::Generator: new (&u_.generator) GeneratorPtr(other.u_.generator); break;
         case Tag::Tuple:     new (&u_.tuple) TuplePtr(other.u_.tuple);       break;
         case Tag::Set:       new (&u_.set) SetPtr(other.u_.set);             break;
+        case Tag::Ref:       new (&u_.ref) RefPtr(other.u_.ref);             break;
         }
     }
 
@@ -58,6 +60,7 @@ namespace vayu {
         case Tag::Generator: new (&u_.generator) GeneratorPtr(std::move(other.u_.generator)); break;
         case Tag::Tuple:     new (&u_.tuple) TuplePtr(std::move(other.u_.tuple));        break;
         case Tag::Set:       new (&u_.set) SetPtr(std::move(other.u_.set));              break;
+        case Tag::Ref:       new (&u_.ref) RefPtr(std::move(other.u_.ref));              break;
         }
     }
 
@@ -78,6 +81,7 @@ namespace vayu {
     Value::Value(GeneratorPtr g) noexcept : tag_(Tag::Generator) { new (&u_.generator) GeneratorPtr(std::move(g)); }
     Value::Value(TuplePtr t)     noexcept : tag_(Tag::Tuple) { new (&u_.tuple)     TuplePtr(std::move(t)); }
     Value::Value(SetPtr s)       noexcept : tag_(Tag::Set) { new (&u_.set)       SetPtr(std::move(s)); }
+    Value::Value(RefPtr r)       noexcept : tag_(Tag::Ref) { new (&u_.ref)       RefPtr(std::move(r)); }
 
     Value::Value(const Value& other) { copyFrom(other); }
     Value::Value(Value&& other) noexcept { moveFrom(std::move(other)); }
@@ -112,6 +116,7 @@ namespace vayu {
         case Tag::Map:   return !u_.map->entries.empty();
         case Tag::Tuple: return !u_.tuple->items.empty();
         case Tag::Set:   return !u_.set->items.empty();
+        case Tag::Ref:   return true;
         default:         return true;
         }
     }
@@ -138,7 +143,8 @@ namespace vayu {
             v.isMap() ? 110 :
             v.isInstance() ? 111 :
             v.isTuple() ? 112 :
-            v.isSet() ? 113 : -1) {
+            v.isSet() ? 113 :
+            v.isRef() ? 114 : -1) {
         case 100: out += "None"; return;
         case 101: out += v.asBool() ? "true" : "false"; return;
         case 102: out += std::to_string(v.asInt()); return;
@@ -148,6 +154,7 @@ namespace vayu {
         case 106: out += "<class " + v.asClass()->name + ">"; return;
         case 107: out += "<module " + v.asModule()->name + ">"; return;
         case 108: out += "<generator>"; return;
+        case 114: out += "<ref>"; return;
         case 109: {
             out += "[";
             const auto& items = v.asList()->items;
@@ -240,6 +247,7 @@ namespace vayu {
         case Tag::Generator: return "generator";
         case Tag::Tuple:     return "tuple";
         case Tag::Set:       return "set";
+        case Tag::Ref:       return "ref";
         }
         return "?";
     }

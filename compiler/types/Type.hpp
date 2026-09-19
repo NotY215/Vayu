@@ -22,6 +22,7 @@ namespace vayu {
         Weak,     // Phase 12.1 — weak<T>, must .upgrade()
         Tuple,    // Phase 14.0
         Set,      // Phase 14.1
+        Ptr,      // Phase 15.2e — ptr<T>
     };
 
     class Type;
@@ -45,12 +46,7 @@ namespace vayu {
         std::unordered_map<std::string, int8_t>  methodVis;
         TypePtr                                  parent;
 
-        // Phase 11.2 — maps user-visible type-param name (`T`) to a fresh
-        // TypeParam node with a unique internal name (`T#0`).  Empty for
-        // non-generic functions/classes.
         std::unordered_map<std::string, TypePtr> typeParams;
-
-        // Phase 11.2c — constraint bound keyed by mangled name (`T#0`).
         std::unordered_map<std::string, TypePtr> typeParamConstraints;
 
         explicit Type(TypeKind k) : kind(k) {}
@@ -75,6 +71,7 @@ namespace vayu {
         TypePtr Weak(TypePtr elem);
         TypePtr Tuple(std::vector<TypePtr> elems);
         TypePtr Set(TypePtr elem);
+        TypePtr Ptr(TypePtr elem);   // Phase 15.2e
     }
 
     bool    isAssignable(const TypePtr& to, const TypePtr& from);

@@ -1,0 +1,24 @@
+x = 10
+p = &x
+print(*p)
+
+*p = 42
+print(x)
+print(*p)
+
+y = 100
+q = &y
+*p = 7
+print(*p)
+print(*q)
+print(x)
+print(y)
+
+def bump(pp: ptr<int>) -> None:
+    *pp = *pp + 1
+
+bump(p)
+bump(p)
+bump(q)
+print(x)
+print(y)

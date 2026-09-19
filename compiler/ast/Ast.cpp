@@ -27,6 +27,8 @@ namespace vayu {
         case UnOp::Pos: return "+";
         case UnOp::Not: return "not";
         case UnOp::BNot: return "~";
+        case UnOp::AddrOf: return "&";
+        case UnOp::Deref:  return "*";
         }
         return "?";
     }

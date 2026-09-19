@@ -241,6 +241,8 @@ namespace vayu {
         if (check(TokenType::Const))  return parseConst();
         if (check(TokenType::Enum))   return parseEnum();
         if (check(TokenType::With))   return parseWith();
+        if (check(TokenType::Extern)) return parseExtern();
+        if (check(TokenType::Unsafe)) return parseUnsafe();
         if (check(TokenType::Yield))  return parseYield();
         if (check(TokenType::Extern)) return parseExtern();
 
@@ -1028,6 +1030,15 @@ namespace vayu {
             throw ParseError("extern block has no declarations", eTok.location);
         return node;
     }
+    // Phase 15.2: `unsafe:` block.  Surface syntax only — the body is
+    // executed exactly like a normal inline block.  Raw-pointer semantics
+    // land in 15.2b.
+    StmtPtr Parser::parseUnsafe() {
+        Token uTok = advance();
+        expect(TokenType::Colon, "':' after 'unsafe'");
+        Block body = parseBlock();
+        return std::make_unique<BlockStmt>(std::move(body), uTok.location);
+    }
 
     StmtPtr Parser::parseFromImport() {
         Token fromTok = advance();
@@ -1291,6 +1302,20 @@ namespace vayu {
         if (match(TokenType::Tilde)) {
             Token t = previous();
             return std::make_unique<UnaryExpr>(UnOp::BNot, parseUnary(),
+                t.location);
+        }
+        // Phase 15.2b: `&x` (address-of) and `*p` (deref).  Both are
+        // unambiguous in unary position, so no tokenizer changes needed.
+        if (check(TokenType::Amp) &&
+            peek(1).type != TokenType::Assign) {
+            Token t = advance();
+            return std::make_unique<UnaryExpr>(UnOp::AddrOf, parseUnary(),
+                t.location);
+        }
+        if (check(TokenType::Star) &&
+            peek(1).type != TokenType::Assign) {
+            Token t = advance();
+            return std::make_unique<UnaryExpr>(UnOp::Deref, parseUnary(),
                 t.location);
         }
         return parsePostfix();

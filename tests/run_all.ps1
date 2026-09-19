@@ -43,6 +43,10 @@ $skip = @(
     "crypto_test.vyu",         # native-only; same reason
     "random_test.vyu",         # native-only; same reason
     "os_test.vyu",             # native-only; same reason
+    "ptr_arith_test.vyu",      # native-only; same reason
+    "ffi_callback_test.vyu",   # native-only; same reason
+    "ffi_test.vyu",
+    "ffi_struct_test.vyu",
     "math_test.vyu"            # tree/VM only; native backend has no float type yet
 )
 

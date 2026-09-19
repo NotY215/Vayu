@@ -1,0 +1,13 @@
+x = 10
+unsafe:
+    print(x + 1)
+    y = x * 2
+    print(y)
+print("done")
+
+def double(n: int) -> int:
+    return n * 2
+
+unsafe:
+    print(double(5))
+    print(double(double(5)))

@@ -1,0 +1,33 @@
+xs = [10, 20, 30, 40]
+p = &xs[1]
+print(*p)
+print(p[0])
+print(p[1])
+print(p[2])
+
+q = p + 1
+print(*q)
+
+r = p + 2
+print(*r)
+
+p[1] = 99
+print(xs[1])
+print(xs[2])
+
+*q = 55
+print(xs[2])
+
+r[0] = 77
+print(xs[3])
+
+def bump(pp: ptr<int>) -> int:
+    return *pp + 1
+
+print(bump(p))
+print(bump(q))
+
+total = 0
+for i in range(0, 3):
+    total = total + p[i]
+print(total)

@@ -45,6 +45,12 @@ namespace vayu {
             s += ">";
             return s;
         }
+        case TypeKind::Ptr: {
+            std::string s = "ptr<";
+            s += params.empty() ? "?" : params[0]->toString();
+            s += ">";
+            return s;
+        }
         case TypeKind::Tuple: {
             std::string s = "(";
             for (size_t i = 0; i < params.size(); ++i) {
@@ -100,7 +106,7 @@ namespace vayu {
         if (kind == TypeKind::List || kind == TypeKind::Map ||
             kind == TypeKind::Unique || kind == TypeKind::Shared ||
             kind == TypeKind::Weak || kind == TypeKind::Tuple ||
-            kind == TypeKind::Set) {
+            kind == TypeKind::Set || kind == TypeKind::Ptr) {
             if (params.size() != other->params.size()) return false;
             for (size_t i = 0; i < params.size(); ++i)
                 if (!params[i]->equals(other->params[i])) return false;
@@ -176,6 +182,11 @@ namespace vayu {
             t->params.push_back(std::move(elem));
             return t;
         }
+        TypePtr Ptr(TypePtr elem) {
+            auto t = std::make_shared<Type>(TypeKind::Ptr);
+            t->params.push_back(std::move(elem));
+            return t;
+        }
     } // namespace Types
 
     bool isAssignable(const TypePtr& to, const TypePtr& from) {
@@ -199,39 +210,32 @@ namespace vayu {
         if (to->kind == TypeKind::Named && from->kind == TypeKind::Named)
             return to->name == from->name;
 
-        // Phase 12.0: unique<T>
+        // Phase 15.2e — ptr<T>
+        if (to->kind == TypeKind::Ptr && from->kind == TypeKind::Ptr) {
+            if (to->params.empty() || from->params.empty()) return true;
+            return to->params[0]->equals(from->params[0]);
+        }
+
         if (to->kind == TypeKind::Unique && from->kind == TypeKind::Unique) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);
         }
-
-        // Phase 12.1: shared<T>
         if (to->kind == TypeKind::Shared && from->kind == TypeKind::Shared) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);
         }
-
-        // Phase 12.1: weak<T>
         if (to->kind == TypeKind::Weak && from->kind == TypeKind::Weak) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);
         }
-
-        // shared<T> -> weak<T> (non-owning view)
         if (to->kind == TypeKind::Weak && from->kind == TypeKind::Shared) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);
         }
-
-        // weak<T> -> shared<T>.  In the current erasure model, the parser
-        // desugars `w.upgrade()` to bare `w`; this rule makes the resulting
-        // bare-name expression assignable to a `shared<T>` slot.
         if (to->kind == TypeKind::Shared && from->kind == TypeKind::Weak) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);
         }
-
-        // Wrap sites: plain T initialises a unique<T> / shared<T> slot.
         if (to->kind == TypeKind::Unique && from->kind != TypeKind::Unique) {
             if (to->params.empty()) return true;
             return isAssignable(to->params[0], from);
@@ -241,12 +245,12 @@ namespace vayu {
             return isAssignable(to->params[0], from);
         }
 
-        // Nothing else crosses the ownership boundary.
         if (from->kind == TypeKind::Unique || from->kind == TypeKind::Shared ||
             from->kind == TypeKind::Weak ||
             to->kind == TypeKind::Unique || to->kind == TypeKind::Shared ||
             to->kind == TypeKind::Weak)
             return false;
+
         if (to->kind == TypeKind::Tuple && from->kind == TypeKind::Tuple) {
             if (to->params.size() != from->params.size()) return false;
             for (size_t i = 0; i < to->params.size(); ++i)
@@ -259,7 +263,6 @@ namespace vayu {
             if (a->kind == TypeKind::Any || b->kind == TypeKind::Any) return true;
             return a->equals(b);
         }
-        // Collections.
         if (to->kind == TypeKind::List && from->kind == TypeKind::List) {
             TypePtr a = to->params.empty() ? Types::Any() : to->params[0];
             TypePtr b = from->params.empty() ? Types::Any() : from->params[0];

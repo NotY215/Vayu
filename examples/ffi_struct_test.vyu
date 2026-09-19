@@ -1,0 +1,16 @@
+class Point:
+    px: int
+    py: int
+
+extern "C":
+    def vayu_ffi_point_new(x: int, y: int) -> Point
+    def vayu_ffi_point_sum(p: Point) -> int
+
+p = vayu_ffi_point_new(10, 20)
+print(p.px)
+print(p.py)
+print(vayu_ffi_point_sum(p))
+
+q = vayu_ffi_point_new(3, 4)
+print(vayu_ffi_point_sum(q))
+print(p.px + q.px)

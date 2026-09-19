@@ -44,7 +44,7 @@ namespace vayu {
 
         enum class VType {
             Int, Bool, Str, List, Map, Obj, Exc, Void, Unknown,
-            Tuple, Set
+            Tuple, Set, Ptr
         };
 
         struct VarInfo {
@@ -200,6 +200,7 @@ namespace vayu {
             std::unordered_map<std::string, int>       fieldGlobals_;
             int                                        nextFieldOffset_ = 0;
             std::unordered_map<std::string, const DefStmt*> topFnDecls_;
+            std::unordered_map<std::string, const ExternFnDecl*> externDecls_;
 
             std::unordered_map<std::string,
                 std::unordered_map<std::string, long long>> enums_;
@@ -597,6 +598,11 @@ namespace vayu {
                         auto* d = static_cast<const DefStmt*>(s.get());
                         topFnDecls_[d->name] = d;
                     }
+                    else if (s->kind == StmtKind::Extern) {
+                        auto* ex = static_cast<const ExternBlockStmt*>(s.get());
+                        for (auto& fn : ex->funcs)
+                            externDecls_[fn.name] = &fn;
+                    }
                 }
             }
 
@@ -822,6 +828,21 @@ namespace vayu {
                             v.elemCls = kk.cls;
                             v.valType = vv.type;
                         }
+                        return;
+                    }
+                    // Phase 15.2: ptr<T> / ref<T> erased to T.
+                    if (g->name == "ptr" || g->name == "ref") {
+                        if (!g->typeArgs.empty())
+                            inferFromAnnotation(g->typeArgs[0].get(), v);
+                        return;
+                    }
+                    if (g->name == "ptr") {
+                        v.type = VType::Ptr;
+                        return;
+                    }
+                    if (g->name == "ref") {
+                        if (!g->typeArgs.empty())
+                            inferFromAnnotation(g->typeArgs[0].get(), v);
                         return;
                     }
                     if (g->name == "unique" || g->name == "shared" ||
@@ -1435,27 +1456,127 @@ namespace vayu {
                 case ExprKind::Unary: {
                     auto* n = static_cast<const UnaryExpr*>(e);
                     Val v = emitExpr(n->operand.get());
-                    switch (n->op) {
-                    case UnOp::Pos: return v;
-                    case UnOp::Neg: {
+                    if (n->op == UnOp::AddrOf) {
+                        const Expr* op = n->operand.get();
+
+                        // Phase 15.4: &topLevelFn → function pointer.
+                        if (op->kind == ExprKind::NameRef) {
+                            const auto* nm =
+                                static_cast<const NameRefExpr*>(op);
+                            std::string lookup = nm->name;
+                            auto fi = fromImports_.find(lookup);
+                            if (fi != fromImports_.end())
+                                lookup = mangle(fi->second) + "_" + nm->name;
+                            bool isVar = slots_.count(lookup) ||
+                                slots_.count(nm->name) ||
+                                globalSlots_.count(nm->name);
+                            if (!isVar && topFnDecls_.count(nm->name)) {
+                                std::string t = newTemp();
+                                line(t + " =l copy $vayu_fn_" +
+                                    mangle(nm->name));
+                                r.ssa = t; r.type = VType::Ptr;
+                                return r;
+                            }
+                        }
+
+                        // &name → address of the slot.
+                        if (op->kind == ExprKind::NameRef) {
+                            const auto* nm =
+                                static_cast<const NameRefExpr*>(op);
+                            std::string lookup = nm->name;
+                            auto fi = fromImports_.find(lookup);
+                            if (fi != fromImports_.end())
+                                lookup = mangle(fi->second) + "_" + nm->name;
+                            else if (!currentModulePrefix_.empty())
+                                lookup = currentModulePrefix_ + nm->name;
+                            const std::string* slotPtr = nullptr;
+                            {
+                                auto s1 = slots_.find(lookup);
+                                if (s1 != slots_.end()) slotPtr = &s1->second;
+                            }
+                            if (!slotPtr) {
+                                auto s2 = slots_.find(nm->name);
+                                if (s2 != slots_.end()) slotPtr = &s2->second;
+                            }
+                            if (!slotPtr) {
+                                auto s3 = globalSlots_.find(nm->name);
+                                if (s3 != globalSlots_.end())
+                                    slotPtr = &s3->second;
+                            }
+                            if (!slotPtr)
+                                throw std::runtime_error(
+                                    "native: cannot take address of undefined "
+                                    "name '" + nm->name + "'");
+                            r.ssa = *slotPtr; r.type = VType::Ptr;
+                            return r;
+                        }
+
+                        // &arr[i]
+                        if (op->kind == ExprKind::Index) {
+                            auto* ix = static_cast<const IndexExpr*>(op);
+                            Val tgt = emitExpr(ix->target.get());
+                            Val idx = emitExpr(ix->index.get());
+                            std::string t = newTemp();
+                            if (tgt.type == VType::List) {
+                                line(t + " =l call $vayu_list_slot(l " +
+                                    tgt.ssa + ", l " + idx.ssa + ")");
+                            }
+                            else if (tgt.type == VType::Map) {
+                                line(t + " =l call $vayu_map_slot(l " +
+                                    tgt.ssa + ", l " + idx.ssa + ")");
+                            }
+                            else {
+                                throw std::runtime_error(
+                                    "native: cannot take address of this index");
+                            }
+                            r.ssa = t; r.type = VType::Ptr;
+                            return r;
+                        }
+
+                        // &obj.field
+                        if (op->kind == ExprKind::Attr) {
+                            auto* at = static_cast<const AttrExpr*>(op);
+                            Val base = emitExpr(at->target.get());
+                            if (base.type != VType::Obj)
+                                throw std::runtime_error(
+                                    "native: cannot take address of field on "
+                                    "non-object");
+                            const ClassInfo* ci = findClass(base.cls);
+                            int fieldOff = -1;
+                            if (ci) {
+                                auto fit = ci->fieldOffsets.find(at->name);
+                                if (fit != ci->fieldOffsets.end())
+                                    fieldOff = fit->second;
+                            }
+                            if (fieldOff < 0) {
+                                auto git = fieldGlobals_.find(at->name);
+                                if (git != fieldGlobals_.end())
+                                    fieldOff = git->second;
+                            }
+                            if (fieldOff < 0)
+                                throw std::runtime_error(
+                                    "native: '" + at->name +
+                                    "' is not a field");
+                            std::string addr = newTemp();
+                            line(addr + " =l add " + base.ssa + ", " +
+                                std::to_string(fieldOff));
+                            r.ssa = addr; r.type = VType::Ptr;
+                            return r;
+                        }
+
+                        // Fallback: heap cell.
+                        std::string cell = newTemp();
+                        line(cell + " =l call $vayu_alloc(l 8)");
+                        line("storel " + v.ssa + ", " + cell);
+                        r.ssa = cell; r.type = VType::Ptr;
+                        return r;
+                    }
+                    if (n->op == UnOp::Deref) {
                         std::string t = newTemp();
-                        line(t + " =l sub 0, " + v.ssa);
-                        r.ssa = t; r.type = VType::Int; return r;
+                        line(t + " =l loadl " + v.ssa);
+                        r.ssa = t; r.type = VType::Int;
+                        return r;
                     }
-                    case UnOp::Not: {
-                        std::string c = newTemp();
-                        line(c + " =w ceql " + v.ssa + ", 0");
-                        std::string ext = newTemp();
-                        line(ext + " =l extsw " + c);
-                        r.ssa = ext; r.type = VType::Bool; return r;
-                    }
-                    case UnOp::BNot: {
-                        std::string t = newTemp();
-                        line(t + " =l xor " + v.ssa + ", -1");
-                        r.ssa = t; r.type = VType::Int; return r;
-                    }
-                    }
-                    return v;
                 }
 
                 case ExprKind::Binary: {
@@ -1514,6 +1635,15 @@ namespace vayu {
                         for (auto& et : b.tupleElemTypes) r.tupleElemTypes.push_back(et);
                         r.tupleElemClsNames = a.tupleElemClsNames;
                         for (auto& ec : b.tupleElemClsNames) r.tupleElemClsNames.push_back(ec);
+                        return r;
+                    }
+                    if (n->op == BinOp::Add && a.type == VType::Ptr) {
+                        // p + n  →  p + n*8
+                        std::string scaled = newTemp();
+                        line(scaled + " =l mul " + b.ssa + ", 8");
+                        std::string t = newTemp();
+                        line(t + " =l add " + a.ssa + ", " + scaled);
+                        r.ssa = t; r.type = VType::Ptr;
                         return r;
                     }
                     switch (n->op) {
@@ -1658,6 +1788,17 @@ namespace vayu {
                     auto* n = static_cast<const IndexExpr*>(e);
                     Val tgt = emitExpr(n->target.get());
                     Val idx = emitExpr(n->index.get());
+                    if (tgt.type == VType::Ptr) {
+                        // p[i]  →  loadl (p + i*8)
+                        std::string scaled = newTemp();
+                        line(scaled + " =l mul " + idx.ssa + ", 8");
+                        std::string addr = newTemp();
+                        line(addr + " =l add " + tgt.ssa + ", " + scaled);
+                        std::string t = newTemp();
+                        line(t + " =l loadl " + addr);
+                        r.ssa = t; r.type = VType::Int;
+                        return r;
+                    }
                     if (tgt.type == VType::List) {
                         std::string t = newTemp();
                         line(t + " =l call $vayu_list_get(l " + tgt.ssa + ", l " + idx.ssa + ")");
@@ -3851,6 +3992,71 @@ namespace vayu {
 
                 const auto* nm = static_cast<const NameRefExpr*>(n->callee.get());
                 std::string name = nm->name;
+                // Phase 15.1: extern "C" call.
+                auto exIt = externDecls_.find(name);
+                if (exIt != externDecls_.end()) {
+                    const ExternFnDecl* ed = exIt->second;
+                    if (n->args.size() != ed->params.size())
+                        throw std::runtime_error(
+                            "native: extern '" + name + "' expects " +
+                            std::to_string(ed->params.size()) +
+                            " argument(s), got " +
+                            std::to_string(n->args.size()));
+                    std::vector<std::string> args;
+                    for (size_t i = 0; i < n->args.size(); ++i) {
+                        Val a = emitExpr(n->args[i].value.get());
+                        std::string argSsa = a.ssa;
+                        const Expr* pType = ed->params[i].type.get();
+                        bool wantStr = (pType &&
+                            pType->kind == ExprKind::NameRef &&
+                            static_cast<const NameRefExpr*>(pType)->name == "str");
+                        if (wantStr && a.type == VType::Str) {
+                            std::string t = newTemp();
+                            line(t + " =l call $vayu_str_cstr(l " + a.ssa + ")");
+                            argSsa = t;
+                        }
+                        args.push_back(argSsa);
+                    }
+                    std::string argsStr;
+                    for (size_t i = 0; i < args.size(); ++i) {
+                        if (i) argsStr += ", ";
+                        argsStr += "l " + args[i];
+                    }
+                    std::string t = newTemp();
+                    line(t + " =l call $" + ed->name + "(" + argsStr + ")");
+
+                    // Return type — default int if unknown; class returns
+                    // become `Obj` with the class name attached.
+                    // Return type — default int if unknown.
+                    VType rType = VType::Int;
+                    std::string rCls;
+                    if (ed->returnType) {
+                        if (ed->returnType->kind == ExprKind::GenericType) {
+                            auto* g = static_cast<const GenericTypeExpr*>(
+                                ed->returnType.get());
+                            if (g->name == "ptr") rType = VType::Ptr;
+                        }
+                        else if (ed->returnType->kind == ExprKind::NameRef) {
+                            const std::string& rn =
+                                static_cast<const NameRefExpr*>(
+                                    ed->returnType.get())->name;
+                            if (rn == "bool") rType = VType::Bool;
+                            else if (rn == "str") {
+                                std::string t2 = newTemp();
+                                line(t2 + " =l call $vayu_cstr_to_str(l " +
+                                    t + ")");
+                                t = t2;
+                                rType = VType::Str;
+                            }
+                            else if (classes_.count(rn)) {
+                                rType = VType::Obj;
+                                rCls = rn;
+                            }
+                        }
+                    }
+                    r.ssa = t; r.type = rType; r.cls = rCls;
+                    return r;
+                }
 
                 if (name == "print") {
                     if (n->args.empty()) {
@@ -4291,6 +4497,14 @@ namespace vayu {
                         Val tgt = emitExpr(ix->target.get());
                         Val idx = emitExpr(ix->index.get());
                         Val v = emitExpr(n->value.get());
+                        if (tgt.type == VType::Ptr) {
+                            std::string scaled = newTemp();
+                            line(scaled + " =l mul " + idx.ssa + ", 8");
+                            std::string addr = newTemp();
+                            line(addr + " =l add " + tgt.ssa + ", " + scaled);
+                            line("storel " + v.ssa + ", " + addr);
+                            return;
+                        }
                         if (tgt.type == VType::List) {
                             line("call $vayu_list_set_tagged(l " + tgt.ssa +
                                 ", l " + idx.ssa + ", l " + v.ssa + ", l " +
@@ -4306,8 +4520,17 @@ namespace vayu {
                             "native: index-assign on unsupported type");
                     }
                     if (n->target->kind != ExprKind::NameRef)
+                    if (n->target->kind == ExprKind::Unary) {
+                        auto* u = static_cast<const UnaryExpr*>(n->target.get());
+                        if (u->op == UnOp::Deref) {
+                            Val p = emitExpr(u->operand.get());
+                            Val v = emitExpr(n->value.get());
+                            line("storel " + v.ssa + ", " + p.ssa);
+                            return;
+                        }
                         throw std::runtime_error(
-                            "native: unsupported assignment target");
+                            "native: unsupported unary assignment target");
+                    }
 
                     auto* nm = static_cast<const NameRefExpr*>(n->target.get());
                     std::string slotName = nm->name;
@@ -5271,6 +5494,12 @@ VayuList* vayu_list_new(void);
 void vayu_list_push(VayuList* l, int64_t v);
 void vayu_list_push_tagged(VayuList* l, int64_t v, int64_t tag);
 
+/* Phase 15.2d: forward decls for vayu_map_slot, which is defined before
+   the map implementation block. */
+static uint64_t hash_str(VayuStr* s);
+static VayuMapEntry* map_find(VayuMap* m, VayuStr* k);
+static void map_grow(VayuMap* m);
+
 static int    g_argc = 0;
 static char** g_argv = NULL;
 
@@ -5307,6 +5536,54 @@ void vayu_print_str_noln(VayuStr* s) {
 void vayu_print_raw(VayuStr* s) {
     fwrite(s->data, 1, (size_t)s->len, stdout);
     fflush(stdout);
+}
+
+/* ---- Phase 15.1: C FFI string bridging ---- */
+char* vayu_str_cstr(VayuStr* s) { return s->data; }
+VayuStr* vayu_cstr_to_str(const char* p) {
+    if (!p) return vayu_mkstr("", 0);
+    return vayu_mkstr_c(p);
+}
+/* ---- Phase 15.2d: compound lvalue addresses ---- */
+int64_t* vayu_list_slot(VayuList* l, int64_t i) {
+    if (i < 0) i += l->len;
+    if (i < 0 || i >= l->len) {
+        vayu_raise_str(vayu_mkstr_c("IndexError"),
+                       vayu_mkstr_c("list index out of range"));
+    }
+    return &l->items[i];
+}
+int64_t* vayu_map_slot(VayuMap* m, VayuStr* k) {
+    VayuMapEntry* e = map_find(m, k);
+    if (e) return &e->value;
+    map_grow(m);
+    uint64_t h = hash_str(k) & (uint64_t)(m->cap - 1);
+    while (m->entries[h].used) h = (h + 1) & (uint64_t)(m->cap - 1);
+    m->entries[h].used = 1;
+    m->entries[h].key = k;
+    m->entries[h].value = 0;
+    m->len++;
+    return &m->entries[h].value;
+}
+
+/* ---- Phase 15.4: C callback test helper ---- */
+int64_t vayu_test_apply(int64_t (*f)(int64_t), int64_t x) {
+    if (!f) return 0;
+    return f(x);
+}
+/* ---- Phase 15.2b / 15.3: FFI test helpers ---- */
+int64_t vayu_ffi_deref(int64_t p) { return *(int64_t*)p; }
+void vayu_ffi_store(int64_t p, int64_t v) { *(int64_t*)p = v; }
+
+void* vayu_ffi_point_new(int64_t x, int64_t y) {
+    int64_t* p = (int64_t*)malloc(16);
+    p[0] = x;
+    p[1] = y;
+    return p;
+}
+int64_t vayu_ffi_point_sum(void* p) {
+    int64_t* ip = (int64_t*)p;
+    return ip[0] + ip[1];
 }
 
 VayuStr* vayu_read_line(void) {
@@ -8607,6 +8884,12 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
             linkLibs = " -lws2_32 -lbcrypt";
 #endif
+            // Phase 15.1: extra link libraries for extern "C" functions.
+            // Space-separated list; usually `-lfoo -lbar` or `.lib` paths.
+            if (const char* extra = std::getenv("VAYU_FFI_LIBS")) {
+                linkLibs += " ";
+                linkLibs += extra;
+            }
             std::string cmd = ccPath_ + " -O2 \"" + objPath + "\" \"" + rtPath +
                 "\" -o \"" + exePath + "\"" + linkLibs;
             int rc = std::system(cmd.c_str());

@@ -78,7 +78,9 @@ namespace vayu {
             }
             case OpCode::LOAD:
             case OpCode::STORE:
-            case OpCode::DEFINE: {
+            case OpCode::DEFINE:
+            case OpCode::ADDR_OF:
+            case OpCode::ADDR_OF_ATTR: {
                 int idx = chunk.readU16(i); i += 2;
                 std::printf(" %d (%s)", idx, chunk.names[idx].c_str());
                 break;
@@ -102,8 +104,6 @@ namespace vayu {
                 std::printf(" %d", cnt);
                 break;
             }
-            case OpCode::SLICE:
-                break;
             case OpCode::MAKE_FN: {
                 int idx = chunk.readU16(i); i += 2;
                 std::printf(" %d", idx);
@@ -146,6 +146,11 @@ namespace vayu {
                 std::printf(" %d", chunk.code[i]); ++i;
                 break;
             }
+            case OpCode::SLICE:
+            case OpCode::DEREF:
+            case OpCode::DEREF_SET:
+            case OpCode::ADDR_OF_INDEX:
+                break;
             default: break;
             }
             std::printf("\n");

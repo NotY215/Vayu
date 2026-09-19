@@ -1,0 +1,9 @@
+extern "C":
+    def strlen(s: str) -> int
+    def llabs(x: int) -> int
+
+print(strlen("hello"))
+print(strlen("world!"))
+print(strlen(""))
+print(llabs(-42))
+print(llabs(42))

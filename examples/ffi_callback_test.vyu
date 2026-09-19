@@ -1,0 +1,11 @@
+extern "C":
+    def vayu_test_apply(f: ptr<int>, x: int) -> int
+
+def double_it(x: int) -> int:
+    return x * 2
+
+def triple_it(x: int) -> int:
+    return x * 3
+
+print(vayu_test_apply(&double_it, 21))
+print(vayu_test_apply(&triple_it, 7))

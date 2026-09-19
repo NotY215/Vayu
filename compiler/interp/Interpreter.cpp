@@ -5,7 +5,6 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
-#include <limits>
 #include "lexer/Lexer.hpp"
 #include "parser/Parser.hpp"
 #include <fstream>
@@ -45,6 +44,7 @@ namespace vayu {
             if (a.isNone() && b.isNone())   return true;
             if (a.isList() && b.isList())   return a.asList() == b.asList();
             if (a.isMap() && b.isMap())    return a.asMap() == b.asMap();
+            if (a.isInstance() && b.isInstance()) return a.asInstance() == b.asInstance();
             if (a.isTuple() && b.isTuple()) {
                 const auto& x = a.asTuple()->items;
                 const auto& y = b.asTuple()->items;
@@ -64,7 +64,6 @@ namespace vayu {
                 }
                 return true;
             }
-            if (a.isInstance() && b.isInstance()) return a.asInstance() == b.asInstance();
             return false;
         }
     } // namespace
@@ -88,6 +87,7 @@ namespace vayu {
             if (s->kind == StmtKind::Class)  registerClass(static_cast<const ClassStmt*>(s.get()));
             if (s->kind == StmtKind::Enum)   registerEnum(static_cast<const EnumStmt*>(s.get()));
         }
+        installExternStubs(program);
         execBlock(program);
     }
 
@@ -102,6 +102,24 @@ namespace vayu {
         return makeException(typeName, msg);
     }
 
+    void Interpreter::installExternStubs(const Block& program) {
+        for (auto& s : program.stmts) {
+            if (s->kind != StmtKind::Extern) continue;
+            auto* ex = static_cast<const ExternBlockStmt*>(s.get());
+            for (auto& fn : ex->funcs) {
+                auto c = std::make_shared<Callable>();
+                c->kind = Callable::Kind::Native;
+                c->name = fn.name;
+                c->nativeFn = [](const std::vector<Value>&) -> Value {
+                    throw std::runtime_error(
+                        "extern C functions can only be called from the "
+                        "native backend");
+                    };
+                globals_->define(fn.name, Value(c));
+            }
+        }
+    }
+
     void Interpreter::registerDeclarations(const Block& program) {
         for (auto& s : program.stmts) {
             if (s->kind == StmtKind::Struct)
@@ -111,6 +129,7 @@ namespace vayu {
             if (s->kind == StmtKind::Enum)
                 registerEnum(static_cast<const EnumStmt*>(s.get()));
         }
+        installExternStubs(program);
         for (auto& s : program.stmts) {
             if (s->kind != StmtKind::Class) continue;
             auto* n = static_cast<const ClassStmt*>(s.get());
@@ -402,14 +421,15 @@ namespace vayu {
             return;
         }
 
-        case StmtKind::Struct:
-        case StmtKind::Enum: return;
         case StmtKind::Block: {
             auto* n = static_cast<const BlockStmt*>(s);
             execBlock(n->body);
             return;
         }
+
         case StmtKind::Extern: return;
+        case StmtKind::Struct:
+        case StmtKind::Enum: return;
         case StmtKind::Pass:     return;
         case StmtKind::Break:    throw BreakSignal{};
         case StmtKind::Continue: throw ContinueSignal{};
@@ -708,7 +728,7 @@ namespace vayu {
         auto mod = std::make_shared<ModuleValue>();
         mod->name = name;
         for (auto& [k, v] : modEnv->localVars()) {
-            mod->members[k] = v;
+            mod->members[k] = *v;
         }
 
         moduleCache_[name] = mod;
@@ -789,6 +809,25 @@ namespace vayu {
 
     void Interpreter::execAssign(const AssignStmt* n) {
         Value v = eval(n->value.get());
+
+        // Phase 15.2c: `*p = v` writes through the reference.
+        if (n->target->kind == ExprKind::Unary) {
+            auto* u = static_cast<const UnaryExpr*>(n->target.get());
+            if (u->op == UnOp::Deref) {
+                Value p = eval(u->operand.get());
+                if (p.isRef()) {
+                    p.asRef()->accessor() = std::move(v);
+                    return;
+                }
+                if (p.isList() && p.asList()->items.size() == 1) {
+                    p.asList()->items[0] = std::move(v);
+                    return;
+                }
+                throw RuntimeError("'*' expects a reference", u->loc);
+            }
+            throw RuntimeError("invalid assignment target", u->loc);
+        }
+
         if (n->target->kind == ExprKind::NameRef) {
             const auto* nm = static_cast<const NameRefExpr*>(n->target.get());
             if (!env_->assign(nm->name, v)) env_->define(nm->name, std::move(v));
@@ -815,6 +854,19 @@ namespace vayu {
             auto* ix = static_cast<const IndexExpr*>(n->target.get());
             Value tgt = eval(ix->target.get());
             Value idx = eval(ix->index.get());
+            if (tgt.isRef()) {
+                auto ref = tgt.asRef();
+                if (!ref->backing)
+                    throw RuntimeError(
+                        "cannot index a non-arithmetic reference", ix->loc);
+                if (!idx.isInt())
+                    throw RuntimeError("pointer index must be int", ix->loc);
+                long long i = ref->offset + idx.asInt();
+                if (i < 0 || i >= (long long)ref->backing->items.size())
+                    throw RuntimeError("pointer index out of range", ix->loc);
+                ref->backing->items[(size_t)i] = std::move(v);
+                return;
+            }
             if (tgt.isList()) {
                 if (!idx.isInt())
                     throw RuntimeError("list index must be int, got " + idx.typeName(), ix->loc);
@@ -878,21 +930,6 @@ namespace vayu {
             }
             return;
         }
-        if (iterable.isGenerator()) {
-            auto gen = iterable.asGenerator();
-            for (;;) {
-                Value v;
-                try {
-                    v = nextGenerator(gen, n->loc);
-                }
-                catch (const RuntimeError&) {
-                    break;
-                }
-                bindVar(v);
-                if (!runBody()) break;
-            }
-            return;
-        }
         if (iterable.isTuple()) {
             const auto& items = iterable.asTuple()->items;
             for (size_t i = 0; i < items.size(); ++i) {
@@ -905,6 +942,21 @@ namespace vayu {
             const auto& items = iterable.asSet()->items;
             for (size_t i = 0; i < items.size(); ++i) {
                 bindVar(items[i]);
+                if (!runBody()) break;
+            }
+            return;
+        }
+        if (iterable.isGenerator()) {
+            auto gen = iterable.asGenerator();
+            for (;;) {
+                Value v;
+                try {
+                    v = nextGenerator(gen, n->loc);
+                }
+                catch (const RuntimeError&) {
+                    break;
+                }
+                bindVar(v);
                 if (!runBody()) break;
             }
             return;
@@ -943,6 +995,90 @@ namespace vayu {
             return eval(static_cast<const GroupingExpr*>(e)->inner.get());
         case ExprKind::Unary: {
             auto* n = static_cast<const UnaryExpr*>(e);
+
+            // Phase 15.2c / 15.2d: &x, &arr[i], &obj.field, &m[k]
+            if (n->op == UnOp::AddrOf) {
+                const Expr* op = n->operand.get();
+
+                if (op->kind == ExprKind::NameRef) {
+                    const auto* nm =
+                        static_cast<const NameRefExpr*>(op);
+                    auto slot = env_->lookupShared(nm->name);
+                    if (!slot)
+                        throw RuntimeError("cannot take address of '" +
+                            nm->name + "' (undefined)", n->loc);
+                    auto ref = std::make_shared<Reference>();
+                    ref->accessor = [slot]() -> Value& { return *slot; };
+                    return Value(ref);
+                }
+
+                if (op->kind == ExprKind::Index) {
+                    auto* ix = static_cast<const IndexExpr*>(op);
+                    Value tgt = eval(ix->target.get());
+                    Value idx = eval(ix->index.get());
+                    if (tgt.isList()) {
+                        if (!idx.isInt())
+                            throw RuntimeError("list index must be int",
+                                ix->loc);
+                        auto lst = tgt.asList();
+                        long long i = idx.asInt();
+                        if (i < 0) i += (long long)lst->items.size();
+                        if (i < 0 || i >= (long long)lst->items.size())
+                            throw RuntimeError("list index out of range",
+                                ix->loc);
+                        auto ref = std::make_shared<Reference>();
+                        ref->backing = lst;
+                        ref->offset = i;
+                        ref->accessor = [lst, i]() -> Value& {
+                            return lst->items[(size_t)i];
+                            };
+                        return Value(ref);
+                    }
+                    if (tgt.isMap()) {
+                        if (!idx.isString())
+                            throw RuntimeError("map key must be str", ix->loc);
+                        auto m = tgt.asMap();
+                        std::string k = idx.asString();
+                        auto ref = std::make_shared<Reference>();
+                        ref->accessor = [m, k]() -> Value& {
+                            return m->entries[k];
+                            };
+                        return Value(ref);
+                    }
+                    throw RuntimeError("cannot take address of this index",
+                        n->loc);
+                }
+
+                if (op->kind == ExprKind::Attr) {
+                    auto* at = static_cast<const AttrExpr*>(op);
+                    Value base = eval(at->target.get());
+                    if (!base.isInstance())
+                        throw RuntimeError(
+                            "cannot take address of field on non-object",
+                            at->loc);
+                    auto inst = base.asInstance();
+                    std::string fn = at->name;
+                    auto ref = std::make_shared<Reference>();
+                    ref->accessor = [inst, fn]() -> Value& {
+                        return inst->fields[fn];
+                        };
+                    return Value(ref);
+                }
+
+                // Fallback: container-of-one (no aliasing).
+                Value inner = eval(op);
+                auto cell = std::make_shared<ListValue>();
+                cell->items.push_back(inner);
+                return Value(cell);
+            }
+            if (n->op == UnOp::Deref) {
+                Value v = eval(n->operand.get());
+                if (v.isRef()) return v.asRef()->accessor();
+                if (v.isList() && v.asList()->items.size() == 1)
+                    return v.asList()->items[0];
+                throw RuntimeError("'*' expects a reference", n->loc);
+            }
+
             Value v = eval(n->operand.get());
             switch (n->op) {
             case UnOp::Not: return Value(!v.truthy());
@@ -956,6 +1092,7 @@ namespace vayu {
             case UnOp::BNot:
                 if (v.isInt()) return Value(~v.asInt());
                 throw RuntimeError("cannot apply '~' to " + v.typeName(), n->loc);
+            default: break;
             }
             return Value();
         }
@@ -966,6 +1103,7 @@ namespace vayu {
         case ExprKind::ListLit:return evalListLit(static_cast<const ListLitExpr*>(e));
         case ExprKind::MapLit: return evalMapLit(static_cast<const MapLitExpr*>(e));
 
+            // Phase 14.0
         case ExprKind::TupleLit: {
             auto* n = static_cast<const TupleLitExpr*>(e);
             auto tup = std::make_shared<TupleValue>();
@@ -973,6 +1111,7 @@ namespace vayu {
             for (auto& el : n->elements) tup->items.push_back(eval(el.get()));
             return Value(tup);
         }
+                               // Phase 14.1
         case ExprKind::SetLit: {
             auto* n = static_cast<const SetLitExpr*>(e);
             auto s = std::make_shared<SetValue>();
@@ -984,7 +1123,7 @@ namespace vayu {
             }
             return Value(s);
         }
-
+                             // Phase 14.4 — slice
         case ExprKind::Slice: {
             auto* n = static_cast<const SliceExpr*>(e);
             Value tgt = eval(n->target.get());
@@ -1090,6 +1229,18 @@ namespace vayu {
     Value Interpreter::evalIndex(const IndexExpr* ix) {
         Value tgt = eval(ix->target.get());
         Value idx = eval(ix->index.get());
+        if (tgt.isRef()) {
+            auto ref = tgt.asRef();
+            if (!ref->backing)
+                throw RuntimeError(
+                    "cannot index a non-arithmetic reference", ix->loc);
+            if (!idx.isInt())
+                throw RuntimeError("pointer index must be int", ix->loc);
+            long long i = ref->offset + idx.asInt();
+            if (i < 0 || i >= (long long)ref->backing->items.size())
+                throw RuntimeError("pointer index out of range", ix->loc);
+            return ref->backing->items[(size_t)i];
+        }
         if (tgt.isList()) {
             if (!idx.isInt())
                 throw RuntimeError("list index must be int, got " + idx.typeName(), ix->loc);
@@ -1423,6 +1574,25 @@ namespace vayu {
                 for (auto& v : r.asTuple()->items) out->items.push_back(v);
                 return Value(out);
             }
+            if (b->op == BinOp::Add && l.isRef() && r.isInt()) {
+                auto ref = l.asRef();
+                if (!ref->backing)
+                    throw RuntimeError(
+                        "cannot perform pointer arithmetic on this reference",
+                        b->loc);
+                long long n = r.asInt();
+                auto out = std::make_shared<Reference>();
+                out->backing = ref->backing;
+                out->offset = ref->offset + n;
+                auto lst = ref->backing;
+                long long off = out->offset;
+                out->accessor = [lst, off]() -> Value& {
+                    if (off < 0 || off >= (long long)lst->items.size())
+                        throw std::runtime_error("pointer out of range");
+                    return lst->items[(size_t)off];
+                    };
+                return Value(out);
+            }
             numFail();
         case BinOp::Sub:
             if (l.isInt() && r.isInt()) return Value(l.asInt() - r.asInt());
@@ -1544,10 +1714,10 @@ namespace vayu {
         }
         case Callable::Kind::SuperMethod:
             throw RuntimeError("cannot call super() directly", loc);
-        case Callable::Kind::TupleMethod: return callTupleMethod(fn, args, loc);
-        case Callable::Kind::SetMethod:   return callSetMethod(fn, args, loc);
         case Callable::Kind::ListMethod:   return callListMethod(fn, args, loc);
         case Callable::Kind::MapMethod:    return callMapMethod(fn, args, loc);
+        case Callable::Kind::TupleMethod:  return callTupleMethod(fn, args, loc);
+        case Callable::Kind::SetMethod:    return callSetMethod(fn, args, loc);
         case Callable::Kind::StringMethod: return callStringMethod(fn, args, loc);
         }
         return Value();
@@ -1812,22 +1982,9 @@ namespace vayu {
     }
 
     // ===========================================================================
-    // String methods
+    // Tuple methods (Phase 14.0)
     // ===========================================================================
 
-    namespace {
-        std::string toLower(const std::string& s) {
-            std::string r = s;
-            for (auto& c : r) c = (char)std::tolower((unsigned char)c);
-            return r;
-        }
-        std::string toUpper(const std::string& s) {
-            std::string r = s;
-            for (auto& c : r) c = (char)std::toupper((unsigned char)c);
-            return r;
-        }
-        bool isWS(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; }
-    } // namespace
     Value Interpreter::callTupleMethod(const std::shared_ptr<Callable>& fn,
         const std::vector<Value>& args,
         SourceLocation loc) {
@@ -1850,6 +2007,10 @@ namespace vayu {
         }
         throw RuntimeError("tuple has no method '" + m + "'", loc);
     }
+
+    // ===========================================================================
+    // Set methods (Phase 14.1)
+    // ===========================================================================
 
     Value Interpreter::callSetMethod(const std::shared_ptr<Callable>& fn,
         const std::vector<Value>& args,
@@ -1930,6 +2091,25 @@ namespace vayu {
         }
         throw RuntimeError("set has no method '" + m + "'", loc);
     }
+
+    // ===========================================================================
+    // String methods
+    // ===========================================================================
+
+    namespace {
+        std::string toLower(const std::string& s) {
+            std::string r = s;
+            for (auto& c : r) c = (char)std::tolower((unsigned char)c);
+            return r;
+        }
+        std::string toUpper(const std::string& s) {
+            std::string r = s;
+            for (auto& c : r) c = (char)std::toupper((unsigned char)c);
+            return r;
+        }
+        bool isWS(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; }
+    } // namespace
+
     Value Interpreter::callStringMethod(const std::shared_ptr<Callable>& fn,
         const std::vector<Value>& args,
         SourceLocation loc) {
@@ -2329,8 +2509,8 @@ namespace vayu {
             if (a[0].isString()) return Value((long long)a[0].asString().size());
             if (a[0].isList())   return Value((long long)a[0].asList()->items.size());
             if (a[0].isMap())    return Value((long long)a[0].asMap()->entries.size());
-            if (a[0].isTuple()) return Value((long long)a[0].asTuple()->items.size());
-            if (a[0].isSet())   return Value((long long)a[0].asSet()->items.size());
+            if (a[0].isTuple())  return Value((long long)a[0].asTuple()->items.size());
+            if (a[0].isSet())    return Value((long long)a[0].asSet()->items.size());
             throw std::runtime_error("len(): unsupported type " + a[0].typeName());
         }
         Value bi_abs(const std::vector<Value>& a) {
@@ -3028,9 +3208,6 @@ namespace vayu {
             for (long long i = 2; i <= n; ++i) r *= i;
             return Value(r);
         }
-    } // namespace
-
-    namespace {
         // ---- Phase 14.0 / 14.1: tuple() and set() builtins ----
         Value bi_tuple(const std::vector<Value>& a) {
             if (a.size() != 1)
@@ -3071,6 +3248,9 @@ namespace vayu {
             }
             throw std::runtime_error("set(): cannot convert " + v.typeName());
         }
+    } // namespace
+
+    namespace {
         Value bi_next(const std::vector<Value>& a) {
             if (a.size() != 1 || !a[0].isGenerator())
                 throw std::runtime_error("next() takes a generator argument");
@@ -3085,8 +3265,6 @@ namespace vayu {
             c->kind = Callable::Kind::Native; c->name = name; c->nativeFn = fn;
             globals_->define(name, Value(c));
             };
-        add("tuple", bi_tuple);
-        add("set", bi_set);
         add("print", bi_print);
         add("str", bi_str);
         add("bool", bi_bool);
@@ -3135,6 +3313,8 @@ namespace vayu {
         add("perm", bi_perm);
         add("isqrt", bi_isqrt);
         add("factorial", bi_factorial);
+        add("tuple", bi_tuple);
+        add("set", bi_set);
         add("setattr", bi_setattr);
         add("delattr", bi_delattr);
         add("next", bi_next);
