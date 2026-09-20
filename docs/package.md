@@ -38,6 +38,17 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
-The package ecosystem is planned and under development. The existence of this document describes the project direction and does not imply that every package-management capability is already implemented.
+The package ecosystem remains under development. The current repository has a source-module system, native compilation, C FFI, external-library linking, built-in modules, and CPython interoperability foundations, but it does not yet provide the complete planned package registry/resolver workflow.
 
 For current project status and roadmap updates, visit the [official Vayu website](https://vayu.gt.tc).
+
+
+## Current Foundation
+
+Vayu already has source modules, `import`/`from ... import ...`, aliases, built-in modules, native compilation, C FFI, external library linking, native dependency capability, and CPython interoperability. These are foundations for the future package ecosystem.
+
+## Current Package Status
+
+The following remain planned rather than complete: project manifests, dependency resolution, lock files, package registry, `nva install`, publishing, package caching, reproducible package builds, and platform-aware native dependency resolution.
+
+The current `nva install <package>` syntax describes the intended package-manager workflow; it should not be interpreted as proof that the full registry/installer is already implemented.
