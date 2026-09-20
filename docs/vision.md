@@ -29,7 +29,7 @@ The latest development history marks **Phase 16 complete**. Phase 17 is the next
 
 ## Roadmap
 
-### Phased implementation plan
+The roadmap below records the project's planned development phases. A phase may contain work that is implemented incrementally across multiple commits.
 
 | Phase | Scope |
 |---:|---|
@@ -49,7 +49,7 @@ The latest development history marks **Phase 16 complete**. Phase 17 is the next
 | **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | `vayu.vyu` supports the compiler's implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
+| **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
 | **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
 | **19** | Window / event / widget layer. |
 | **20** | 2D first, then 3D. |
@@ -63,6 +63,59 @@ The immediate objective is not to rewrite the project from scratch. The existing
 ### Later Ecosystem Direction
 
 After self-hosting, the roadmap continues through developer tooling, GUI/window/event/widget APIs, 2D and then 3D graphics, AI/ML infrastructure, and the package ecosystem. These later phases depend on a stable compiler, runtime, standard library, interoperability layer, and tooling foundation.
+
+## ⚙️ VCB — Vayu Compiler Backend
+
+<a href="https://github.com/NotY215/VCB">
+  <img src="https://raw.githubusercontent.com/NotY215/VCB/master/Assets/VCB_logo.png" alt="VCB Logo" width="160">
+</a>
+
+**[VCB](https://github.com/NotY215/VCB) is a companion project and planned native backend component of the Vayu compiler ecosystem.**
+
+VCB is designed to provide a clean boundary between Vayu's frontend/IR and machine-code generation:
+
+```text
+Vayu Source
+    │
+    ▼
+Lexer → Parser → AST → Semantic Analysis
+    │
+    ▼
+Vayu IR
+    │
+    ▼
+VCB
+├── Analysis
+├── Optimization
+├── Lowering
+└── x86-64 Code Generation
+    │
+    ▼
+Native Assembly
+    │
+    ▼
+Executable
+```
+
+### Why VCB exists
+
+The Vayu project is intended to separate language design from backend engineering. VCB gives the ecosystem a focused backend project where compiler analysis, optimization, lowering, instruction selection, register allocation, calling conventions, and native code generation can be developed independently.
+
+This separation is important for the long-term Vayu architecture: the frontend can evolve its syntax, type system, modules, and language features while the backend can evolve its machine-level implementation without requiring the two areas to become one large codebase.
+
+### Long-term VCB role
+
+VCB is **not a replacement for the Vayu language frontend**. It is intended to become one of the native backend layers through which Vayu programs can eventually reach optimized machine code.
+
+The planned relationship is:
+
+**Vayu → Vayu IR → VCB → Native Assembly → Executable**
+
+As Vayu approaches self-hosting, VCB can provide the native code-generation foundation needed by the bootstrapped compiler and later compiler/runtime tooling.
+
+**[→ View the VCB repository](https://github.com/NotY215/VCB)**
+
+---
 
 ## Benchmarking
 
