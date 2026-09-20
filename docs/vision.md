@@ -8,148 +8,61 @@ Vayu is an independent programming-language project aiming to combine readable P
 
 The current source tree demonstrates a substantially expanded language/compiler foundation including:
 
-- variables and type inference
-- explicit type annotations
+- variables, type inference and explicit type annotations
 - primitive and collection types
-- functions and recursion
-- conditions and loops
-- arithmetic, comparison, and logical expressions
-- lists and maps
-- structs
-- classes and inheritance
-- lambdas and closures
-- exceptions
-- modules and imports
-- math functionality
-- type checking
-- AST generation
-- VM-oriented execution
-- tuples and sets
-- Python-style slicing for lists, tuples, and strings
-- constants and enums
-- static members and visibility modifiers
-- bitwise operations
-- `match`, `with`, and `defer`
-- generators and `yield`
+- functions, recursion, lambdas and closures
+- conditions, loops and compound assignment
+- lists, maps, tuples and sets, including slicing
+- structs, classes, inheritance, overriding and `super()`
+- exceptions and modules
+- constants, enums, static members and visibility
+- bitwise operations, `match`, `with`, `defer`, `yield`, and generators
 - generic/type parameters and constraints
 - ownership/reference types (`unique<T>`, `shared<T>`, `weak<T>`)
-- raw pointers/references and pointer arithmetic
-- `malloc` / `free`
-- C FFI, function pointers, and external library linking
-- native CPython integration and Python value/call bridging
+- raw pointers/references, pointer arithmetic, `malloc` / `free`
+- C FFI, function pointers, external library linking, and supported struct-by-value FFI
+- runtime modules including regex, thread, net, crypto, random, OS, math and related utilities
+- native CPython loading and expanded Python value/call interoperability
+- interpreter, bytecode/VM and native execution paths
 
-The project is being developed incrementally; completed functionality should remain stable while new compiler phases are added.
+The latest development history marks **Phase 16 complete**. Phase 17 is the next development direction: bringing the Vayu compiler toward self-hosting and eventual removal of the C++ bootstrap implementation.
 
 ## Roadmap
 
-### 1. Compiler & Language Stabilization
+### Phased implementation plan
 
-- strengthen lexer and parser behavior
-- expand semantic analysis
-- improve type checking
-- improve diagnostics and error reporting
-- expand regression tests
-- stabilize AST and intermediate representations
+| Phase | Scope |
+|---:|---|
+| **1** | Core lexer, parser, AST, expressions, variables and indentation-based language structure. |
+| **2** | Conditions, loops, `range()`, `break`, `continue`, typed functions, return values and recursion. |
+| **3** | Static type checking, inference, primitive types, generic collections, lists, maps and indexing. |
+| **4** | Lambdas, closures, higher-order functions, structs, classes, constructors, methods, inheritance, overriding and `super()`. |
+| **5** | Runtime behavior, exception handling, nested handlers, re-raising and the module system. |
+| **6** | Peephole optimization on emitted IL to collapse redundant comparison chains. |
+| **7** | Rewrite `vayuc` in Vayu itself, then bootstrap the compiler so Vayu can compile its own compiler. |
+| **8** | Stack-allocate instances whose address never escapes a function, closing the remaining OOP performance gap. |
+| **9** | `nva` · `nova.toml` · `nova.lock` · dependency resolver · registry. |
+| **10** | `regex` · `thread` · `net` · `crypto` · `random` · `os` · math extras. |
+| **11** | `with` · `match/case` · `enum` · `interface` · `namespace` · `const` · `static` · `defer` · `yield` · `is / is_not` · bitwise · compound assignment · visibility. |
+| **12** | `unique<T>` · `shared<T>` · `weak<T>` · move semantics · opt-in borrow checking. |
+| **13** | `repr` · `hash` · `id` · `isinstance` · `enumerate` · `zip` · `reversed` · `round` · `pow` · `divmod` · `sign` · `gcd` · `lcm` · `clamp`. |
+| **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
+| **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
+| **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
+| **17** | `vayu.vyu` supports the compiler's implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
+| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
+| **19** | Window / event / widget layer. |
+| **20** | 2D first, then 3D. |
+| **21** | Tensors · autodiff · ONNX · CUDA. |
+| **22** | `vayu install` · `vypy install` · public index · ecosystem. |
 
-### 2. Runtime, VM & Native Code Generation
+### Phase 17 — Current Direction
 
-The native backend is now a substantial implemented execution path. Current work continues on stabilization, optimization, portability, and broader backend coverage.
+The immediate objective is not to rewrite the project from scratch. The existing C++ `vayuc` remains the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity. Once Vayu can reliably compile the compiler and the bootstrap process is stable, the long-term objective is to drop the C++ compiler backend.
 
-- strengthen bytecode and VM execution
-- introduce/expand IR optimization
-- native machine-code generation
-- linking and executable generation
-- runtime performance improvements
-- platform-specific backends
+### Later Ecosystem Direction
 
-### 3. Memory & Resource Management
-
-- ownership/resource-management model
-- deterministic cleanup
-- smart-pointer concepts such as `unique<T>`, `shared<T>`, and `weak<T>`
-- low-level memory operations where appropriate
-- safe and explicit escape hatches for systems programming
-
-### 4. Standard Library
-
-- collections
-- strings and utilities
-- filesystem
-- processes
-- time/date
-- networking
-- concurrency primitives
-- serialization
-- platform abstractions
-
-### 5. Package Ecosystem
-
-- `nva` package workflow
-- dependency resolution
-- versioning and lock files
-- publishing
-- native dependencies
-- build integration
-
-### 6. Interoperability
-
-C interoperability is now implemented in the native backend, including `extern "C"`, function pointers, external linking, pointers/references, and supported small struct-by-value cases.
-
-Current Python interoperability includes a native CPython loading/calling bridge. Future work is required for richer Python object interoperability and broader C++/Python ecosystem support.
-
-- C interoperability
-- C++ interoperability
-- Python ecosystem/runtime interoperability
-- future JVM integration
-- future .NET integration
-
-### 7. Concurrency & Networking
-
-- threads/tasks
-- synchronization primitives
-- asynchronous execution
-- networking APIs
-- scalable server/application foundations
-
-### 8. Application, GUI & Graphics
-
-- desktop GUI framework
-- cross-platform application APIs
-- OpenGL/Vulkan/DirectX integrations
-- rendering and graphics utilities
-- audio/input/physics foundations for game development
-
-### 9. AI, ML & Scientific Computing
-
-- numerical primitives
-- tensor APIs
-- GPU acceleration
-- CUDA/ROCm integration
-- ONNX support
-- Python AI ecosystem interoperability
-- scientific/data-processing libraries
-
-### 10. Developer Tooling
-
-- formatter
-- package/project tooling
-- debugger
-- language server / LSP
-- IDE integrations
-- profiling and diagnostics
-- documentation tooling
-
-### 11. Metaprogramming & Advanced Language Features
-
-- compile-time capabilities
-- metaprogramming
-- stronger generics
-- advanced type-system features
-- safer low-level abstractions
-
-### 12. Self-Hosting
-
-A long-term goal is a mature Vayu compiler that can be substantially implemented in Vayu itself, reducing dependence on the bootstrap implementation and demonstrating the language's own capabilities.
+After self-hosting, the roadmap continues through developer tooling, GUI/window/event/widget APIs, 2D and then 3D graphics, AI/ML infrastructure, and the package ecosystem. These later phases depend on a stable compiler, runtime, standard library, interoperability layer, and tooling foundation.
 
 ## Benchmarking
 
