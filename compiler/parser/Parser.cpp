@@ -1207,6 +1207,7 @@ namespace vayu {
     // Type expressions
     // =========================================================================
 
+// compiler/parser/Parser.cpp
     static bool isTypeStart(TokenType t) {
         switch (t) {
         case TokenType::Identifier:
@@ -1214,6 +1215,7 @@ namespace vayu {
         case TokenType::StrKw:   case TokenType::CharKw:  case TokenType::BytesKw:
         case TokenType::Ptr:     case TokenType::Ref:
         case TokenType::Unique:  case TokenType::Shared:  case TokenType::Weak:
+        case TokenType::None:                       // <-- ADD THIS LINE
             return true;
         default: return false;
         }

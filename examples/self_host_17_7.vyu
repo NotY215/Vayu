@@ -1,0 +1,42 @@
+# examples/self_host_17_7.vyu
+# 17.7 self-host parity — extern "C", unsafe:, &x, *p, *p = v,
+# &arr[i], &obj.field.
+# Native-only: the extern call into libc can't run on tree-walk/VM.
+
+extern "C":
+    def llabs(x: int) -> int
+
+struct Point:
+    x: int
+    y: int
+
+def main() -> None:
+    # 1. extern "C" — call into libc.
+    r = llabs(0 - 42)
+    print(r)
+
+    # 2. &x / *p / *p = v.
+    unsafe:
+        x: int = 10
+        p = &x
+        print(*p)
+        *p = 20
+        print(x)
+
+    # 3. &arr[i].
+    unsafe:
+        arr: list<int> = [1, 2, 3]
+        q = &arr[1]
+        print(*q)
+        *q = 99
+        print(arr[1])
+
+    # 4. &obj.field.
+    unsafe:
+        pt = Point(5, 7)
+        pf = &pt.x
+        print(*pf)
+        *pf = 55
+        print(pt.x)
+
+main()

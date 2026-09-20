@@ -314,6 +314,10 @@ class Parser:
             return self.parse_const()
         if k == "Enum":
             return self.parse_enum()
+        if k == "Extern":
+            return self.parse_extern()
+        if k == "Unsafe":
+            return self.parse_unsafe()
         if k == "Identifier":
             if self.peek_at(1) == "Colon":
                 return self.parse_annot_assign()
@@ -705,6 +709,54 @@ class Parser:
         self.ast.nodes[node].value = tstr
         return node
 
+    def parse_extern(self) -> int:
+        self.advance()
+        if not self.check("String"):
+            self.parse_error("expected string ABI name after 'extern'")
+        abi_tok = self.advance()
+        self.expect("Colon", "':' after extern ABI")
+        self.expect("Newline", "newline after ':'")
+        self.skip_newlines()
+        if self.check("Indent"):
+            self.advance()
+        else:
+            self.parse_error("expected indented extern block")
+        node = self.ast.add("Extern")
+        self.ast.nodes[node].value = abi_tok.lexeme
+        first = 0
+        last = 0
+        while true:
+            self.skip_newlines()
+            if self.check("Dedent"):
+                self.advance()
+                break
+            if self.check("EOF"):
+                break
+            if not self.check("Def"):
+                self.parse_error("expected 'def' inside extern block")
+            self.advance()
+            name_tok = self.expect("Identifier", "function name")
+            params = self.parse_params()
+            ret_type = 0
+            if self.match("Arrow"):
+                ret_type = self.parse_type_expr()
+            fn = self.ast.add("ExternFn")
+            self.ast.nodes[fn].value = name_tok.lexeme
+            self.ast.nodes[fn].left = params
+            self.ast.nodes[fn].right = ret_type
+            if first == 0:
+                first = fn
+            else:
+                self.ast.nodes[last].extra = fn
+            last = fn
+        self.ast.nodes[node].left = first
+        return node
+
+    def parse_unsafe(self) -> int:
+        self.advance()
+        self.expect("Colon", "':' after 'unsafe'")
+        return self.parse_block()
+
     def parse_try(self) -> int:
         self.advance()   # 'try'
         self.expect("Colon", "':' after try")
@@ -731,7 +783,7 @@ class Parser:
             else:
                 self.ast.nodes[last_exc].extra = ec
             last_exc = ec
-        self.ast.nodes[node].extra = first_exc
+        self.ast.nodes[node].right = first_exc
         if self.check("Finally"):
             self.advance()
             self.expect("Colon", "':' after finally")
@@ -897,6 +949,20 @@ class Parser:
             self.ast.nodes[node].op = "~"
             self.ast.nodes[node].left = operand
             return node
+        if k == "Amp":
+            self.advance()
+            operand = self.parse_unary()
+            node = self.ast.add("Unary")
+            self.ast.nodes[node].op = "&"
+            self.ast.nodes[node].left = operand
+            return node
+        if k == "Star":
+            self.advance()
+            operand = self.parse_unary()
+            node = self.ast.add("Unary")
+            self.ast.nodes[node].op = "*"
+            self.ast.nodes[node].left = operand
+            return node
         return self.parse_postfix()
 
     def parse_postfix(self) -> int:
@@ -984,15 +1050,49 @@ class Parser:
             return idx
         if k == "LParen":
             self.advance()
-            inner = self.parse_expression()
-            self.expect("RParen", "')'")
+            if self.check("RParen"):
+                self.advance()
+                node = self.ast.add("TupleLit")
+                return node
+            first = self.parse_expression()
+            if self.check("Comma"):
+                node = self.ast.add("TupleLit")
+                self.ast.nodes[node].left = first
+                last = first
+                while self.match("Comma"):
+                    if self.check("RParen"):
+                        break
+                    e = self.parse_expression()
+                    self.ast.nodes[last].extra = e
+                    last = e
+                self.expect("RParen", "')' to close tuple")
+                return node
+            self.expect("RParen", "')' to close group")
             idx = self.ast.add("Group")
-            self.ast.nodes[idx].left = inner
+            self.ast.nodes[idx].left = first
             return idx
         if k == "LBracket":
             return self.parse_list_literal()
         if k == "LBrace":
-            return self.parse_map_literal()
+            self.advance()
+            node = self.ast.add("SetLit")
+            first = 0
+            last = 0
+            if not self.check("RBrace"):
+                while true:
+                    e = self.parse_expression()
+                    if first == 0:
+                        first = e
+                    else:
+                        self.ast.nodes[last].extra = e
+                    last = e
+                    if not self.match("Comma"):
+                        break
+                    if self.check("RBrace"):
+                        break
+            self.expect("RBrace", "'}' to close set literal")
+            self.ast.nodes[node].left = first
+            return node
         self.parse_error("expected expression, found '" + self.peek_lexeme() + "'")
         return 0
 
@@ -1105,6 +1205,7 @@ class Codegen:
     loop_stack: list<LoopContext>
     terminated: bool
     class_infos: list<ClassInfo>
+    enum_infos: list<EnumInfo>
     field_names: list<str>
     field_offsets: list<int>
     next_field_offset: int
@@ -1132,7 +1233,7 @@ class Codegen:
         self.loop_stack = []
         self.terminated = false
         self.class_infos = []
-        self.enum_infos: list<EnumInfo> = []
+        self.enum_infos = []
         self.field_names = []
         self.field_offsets = []
         self.next_field_offset = 0
@@ -1141,6 +1242,7 @@ class Codegen:
         self.last_class = ""
         self.last_elem_class = ""
         self.last_val_class = ""
+        self.extern_names = []
         self.final = ""
 
     def emit(self, s: str) -> None:
@@ -1472,6 +1574,48 @@ class Codegen:
                             info.init_decl = p.init_decl
             i = i + 1
 
+    def collect_externs(self, root_idx: int) -> None:
+        root = self.ast.nodes[root_idx]
+        cur = root.left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Extern":
+                fn = n.left
+                while fn != 0:
+                    fn_node = self.ast.nodes[fn]
+                    self.extern_names.append(fn_node.value)
+                    fn = fn_node.extra
+            cur = n.extra
+
+    def is_extern(self, name: str) -> bool:
+        i = 0
+        while i < len(self.extern_names):
+            if self.extern_names[i] == name:
+                return true
+            i = i + 1
+        return false
+
+    def gen_extern_call(self, n: Node, name: str) -> str:
+        args_ssa: list<str> = []
+        cur = n.right
+        while cur != 0:
+            args_ssa.append(self.gen_expr(cur))
+            cur = self.ast.nodes[cur].extra
+        args_str = ""
+        i = 0
+        while i < len(args_ssa):
+            if i > 0:
+                args_str = args_str + ", "
+            args_str = args_str + "l " + args_ssa[i]
+            i = i + 1
+        t = self.new_temp()
+        self.emit(t + " =l call $" + name + "(" + args_str + ")")
+        self.last_kind = "int"
+        self.last_class = ""
+        self.last_elem_class = ""
+        self.last_val_class = ""
+        return t
+
     def collect_assigned(self, idx: int) -> None:
         if idx == 0:
             return
@@ -1563,7 +1707,7 @@ class Codegen:
 
         if n.kind == "Try":
             self.collect_assigned(n.left)
-            exc_node = n.extra
+            exc_node = n.right
             while exc_node != 0:
                 en = self.ast.nodes[exc_node]
                 if en.value != "":
@@ -1582,6 +1726,18 @@ class Codegen:
             self.collect_assigned(n.right)
             return
         if n.kind == "Enum":
+            return
+        if n.kind == "TupleLit":
+            cur = n.left
+            while cur != 0:
+                self.collect_assigned(cur)
+                cur = self.ast.nodes[cur].extra
+            return
+        if n.kind == "SetLit":
+            cur = n.left
+            while cur != 0:
+                self.collect_assigned(cur)
+                cur = self.ast.nodes[cur].extra
             return
         if n.kind == "Index":
             self.collect_assigned(n.left)
@@ -1629,7 +1785,17 @@ class Codegen:
         if n.kind == "Group":
             return self.gen_expr(n.left)
         if n.kind == "Unary":
+            if n.op == "&":
+                return self.gen_addr_of(n.left)
             v = self.gen_expr(n.left)
+            if n.op == "*":
+                t = self.new_temp()
+                self.emit(t + " =l loadl " + v)
+                self.last_kind = "int"
+                self.last_class = ""
+                self.last_elem_class = ""
+                self.last_val_class = ""
+                return t
             if n.op == "-":
                 t = self.new_temp()
                 self.emit(t + " =l sub 0, " + v)
@@ -1661,9 +1827,99 @@ class Codegen:
             return self.gen_index(n)
         if n.kind == "List":
             return self.gen_list_lit(n)
+        if n.kind == "TupleLit":
+            tup = self.new_temp()
+            self.emit(tup + " =l call $vayu_tuple_new()")
+            cur = n.left
+            while cur != 0:
+                v = self.gen_expr(cur)
+                vk = self.last_kind
+                tag = 0
+                if vk == "bool":
+                    tag = 1
+                if vk == "str":
+                    tag = 2
+                self.emit("call $vayu_tuple_push_tagged(l " + tup +
+                          ", l " + v + ", l " + str(tag) + ")")
+                cur = self.ast.nodes[cur].extra
+            self.last_kind = "list"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return tup
+        if n.kind == "SetLit":
+            s = self.new_temp()
+            self.emit(s + " =l call $vayu_set_new()")
+            cur = n.left
+            while cur != 0:
+                v = self.gen_expr(cur)
+                vk = self.last_kind
+                tag = 0
+                if vk == "bool":
+                    tag = 1
+                if vk == "str":
+                    tag = 2
+                self.emit("call $vayu_set_push_tagged(l " + s +
+                          ", l " + v + ", l " + str(tag) + ")")
+                cur = self.ast.nodes[cur].extra
+            self.last_kind = "list"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return s
         if n.kind == "Map":
             return self.gen_map_lit(n)
         print("vayu: unsupported expression kind '" + n.kind + "'")
+        exit(1)
+        return "0"
+
+    def gen_addr_of(self, idx: int) -> str:
+        n = self.ast.nodes[idx]
+        if n.kind == "Name":
+            slot = self.slot_for(n.value)
+            if slot == "":
+                print("vayu: cannot take address of undefined name '" + n.value + "'")
+                exit(1)
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return slot
+        if n.kind == "Index":
+            base = self.gen_expr(n.left)
+            base_kind = self.last_kind
+            idx_val = self.gen_expr(n.right)
+            t = self.new_temp()
+            if base_kind == "list":
+                self.emit(t + " =l call $vayu_list_slot(l " + base + ", l " + idx_val + ")")
+            elif base_kind == "map":
+                self.emit(t + " =l call $vayu_map_slot(l " + base + ", l " + idx_val + ")")
+            else:
+                print("vayu: cannot take address of this index")
+                exit(1)
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if n.kind == "Attr":
+            base = self.gen_expr(n.left)
+            base_class = self.last_class
+            if base_class == "":
+                print("vayu: cannot take address of field on unknown-class value")
+                exit(1)
+            off = self.find_field_offset(n.value)
+            if off < 0:
+                print("vayu: unknown field '" + n.value + "'")
+                exit(1)
+            t = self.new_temp()
+            self.emit(t + " =l add " + base + ", " + str(off))
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        print("vayu: cannot take address of this expression")
         exit(1)
         return "0"
 
@@ -2087,6 +2343,8 @@ class Codegen:
             self.last_elem_class = ""
             self.last_val_class = ""
             return t
+        if self.is_extern(name):
+            return self.gen_extern_call(n, name)
         args_ssa: list<str> = []
         cur = n.right
         while cur != 0:
@@ -2403,11 +2661,43 @@ class Codegen:
             return
         if n.kind == "Enum":
             return
+        if n.kind == "Extern":
+            return
         print("vayu: statement kind '" + n.kind + "' not supported")
         exit(1)
 
     def gen_assign(self, n: Node) -> None:
         lhs = self.ast.nodes[n.left]
+        if lhs.kind == "Unary":
+            if lhs.op == "*":
+                p = self.gen_expr(lhs.left)
+                v = self.gen_expr(n.right)
+                self.emit("storel " + v + ", " + p)
+                self.last_kind = ""
+                self.last_class = ""
+                return
+            print("vayu: unsupported unary assignment target")
+            exit(1)
+        if lhs.kind == "TupleLit":
+            v = self.gen_expr(n.right)
+            i = 0
+            elem = lhs.left
+            while elem != 0:
+                en = self.ast.nodes[elem]
+                if en.kind != "Name":
+                    print("tuple unpack requires simple names")
+                    exit(1)
+                idx_val = self.new_temp()
+                self.emit(idx_val + " =l call $vayu_tuple_get(l " + v +
+                          ", l " + str(i) + ")")
+                dst = self.slot_for(en.value)
+                if dst == "":
+                    dst = self.declare_var(en.value)
+                self.emit("storel " + idx_val + ", " + dst)
+                self.set_var_info(en.value, "int", "", "", "")
+                elem = en.extra
+                i = i + 1
+            return
         if lhs.kind == "Name":
             v = self.gen_expr(n.right)
             vkind = self.last_kind
@@ -2528,7 +2818,7 @@ class Codegen:
         self.emit_raw(exc_label)
         handler_labels: list<str> = []
         next_labels: list<str> = []
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             handler_labels.append(self.new_label("catch_match_"))
             next_labels.append(self.new_label("catch_next_"))
@@ -2539,7 +2829,7 @@ class Codegen:
         self.emit(et + " =l call $vayu_get_exc_type()")
 
         i = 0
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             en = self.ast.nodes[exc_node]
             if en.left != 0:
@@ -2566,7 +2856,7 @@ class Codegen:
         self.emit("jmp " + end_label)
 
         i = 0
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             en = self.ast.nodes[exc_node]
             self.emit_raw(handler_labels[i])
@@ -2954,6 +3244,7 @@ class Codegen:
     def gen_program(self, root_idx: int) -> None:
         self.collect_classes(root_idx)
         self.collect_enums(root_idx)
+        self.collect_externs(root_idx)
         self.resolve_classes()
         self.collect_assigned(root_idx)
 
@@ -3075,6 +3366,8 @@ def keyword_kind(word: str) -> str:
     kw["False"] = "False"
     kw["none"] = "None"
     kw["None"] = "None"
+    kw["extern"] = "Extern"
+    kw["unsafe"] = "Unsafe"
     if word in kw:
         return kw[word]
     return "Identifier"

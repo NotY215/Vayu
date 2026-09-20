@@ -1,4 +1,4 @@
-# vcode.vyu — Vayu source -> QBE IL.
+# vayu.vyu — Unified Vayu compiler: lex -> parse -> codegen.
 def vayu_digit_val(c: str) -> int:
     o = ord(c)
     if o >= 48 and o <= 57:
@@ -314,6 +314,10 @@ class Parser:
             return self.parse_const()
         if k == "Enum":
             return self.parse_enum()
+        if k == "Extern":
+            return self.parse_extern()
+        if k == "Unsafe":
+            return self.parse_unsafe()
         if k == "Identifier":
             if self.peek_at(1) == "Colon":
                 return self.parse_annot_assign()
@@ -490,6 +494,20 @@ class Parser:
     def parse_def(self) -> int:
         self.advance()
         name = self.expect("Identifier", "function name")
+
+        # Phase 11.3: optional type parameter list `<T, U: Constraint>`.
+        # Semantics are erased at runtime, so we only parse and discard.
+        if self.check("Lt"):
+            self.advance()
+            while true:
+                self.expect("Identifier", "type parameter name")
+                if self.check("Colon"):
+                    self.advance()
+                    self.expect("Identifier", "constraint name")
+                if not self.match("Comma"):
+                    break
+            self.expect("Gt", "'>' to close type parameter list")
+
         params = self.parse_params()
         ret_type = 0
         if self.match("Arrow"):
@@ -506,6 +524,19 @@ class Parser:
     def parse_class(self) -> int:
         self.advance()
         name = self.expect("Identifier", "class name")
+
+        # Phase 11.3: optional type parameter list on classes too.
+        if self.check("Lt"):
+            self.advance()
+            while true:
+                self.expect("Identifier", "type parameter name")
+                if self.check("Colon"):
+                    self.advance()
+                    self.expect("Identifier", "constraint name")
+                if not self.match("Comma"):
+                    break
+            self.expect("Gt", "'>' to close type parameter list")
+
         parent = 0
         if self.match("LParen"):
             pname = self.expect("Identifier", "parent class name")
@@ -678,6 +709,54 @@ class Parser:
         self.ast.nodes[node].value = tstr
         return node
 
+    def parse_extern(self) -> int:
+        self.advance()
+        if not self.check("String"):
+            self.parse_error("expected string ABI name after 'extern'")
+        abi_tok = self.advance()
+        self.expect("Colon", "':' after extern ABI")
+        self.expect("Newline", "newline after ':'")
+        self.skip_newlines()
+        if self.check("Indent"):
+            self.advance()
+        else:
+            self.parse_error("expected indented extern block")
+        node = self.ast.add("Extern")
+        self.ast.nodes[node].value = abi_tok.lexeme
+        first = 0
+        last = 0
+        while true:
+            self.skip_newlines()
+            if self.check("Dedent"):
+                self.advance()
+                break
+            if self.check("EOF"):
+                break
+            if not self.check("Def"):
+                self.parse_error("expected 'def' inside extern block")
+            self.advance()
+            name_tok = self.expect("Identifier", "function name")
+            params = self.parse_params()
+            ret_type = 0
+            if self.match("Arrow"):
+                ret_type = self.parse_type_expr()
+            fn = self.ast.add("ExternFn")
+            self.ast.nodes[fn].value = name_tok.lexeme
+            self.ast.nodes[fn].left = params
+            self.ast.nodes[fn].right = ret_type
+            if first == 0:
+                first = fn
+            else:
+                self.ast.nodes[last].extra = fn
+            last = fn
+        self.ast.nodes[node].left = first
+        return node
+
+    def parse_unsafe(self) -> int:
+        self.advance()
+        self.expect("Colon", "':' after 'unsafe'")
+        return self.parse_block()
+
     def parse_try(self) -> int:
         self.advance()   # 'try'
         self.expect("Colon", "':' after try")
@@ -704,7 +783,7 @@ class Parser:
             else:
                 self.ast.nodes[last_exc].extra = ec
             last_exc = ec
-        self.ast.nodes[node].extra = first_exc
+        self.ast.nodes[node].right = first_exc
         if self.check("Finally"):
             self.advance()
             self.expect("Colon", "':' after finally")
@@ -870,6 +949,20 @@ class Parser:
             self.ast.nodes[node].op = "~"
             self.ast.nodes[node].left = operand
             return node
+        if k == "Amp":
+            self.advance()
+            operand = self.parse_unary()
+            node = self.ast.add("Unary")
+            self.ast.nodes[node].op = "&"
+            self.ast.nodes[node].left = operand
+            return node
+        if k == "Star":
+            self.advance()
+            operand = self.parse_unary()
+            node = self.ast.add("Unary")
+            self.ast.nodes[node].op = "*"
+            self.ast.nodes[node].left = operand
+            return node
         return self.parse_postfix()
 
     def parse_postfix(self) -> int:
@@ -957,15 +1050,49 @@ class Parser:
             return idx
         if k == "LParen":
             self.advance()
-            inner = self.parse_expression()
-            self.expect("RParen", "')'")
+            if self.check("RParen"):
+                self.advance()
+                node = self.ast.add("TupleLit")
+                return node
+            first = self.parse_expression()
+            if self.check("Comma"):
+                node = self.ast.add("TupleLit")
+                self.ast.nodes[node].left = first
+                last = first
+                while self.match("Comma"):
+                    if self.check("RParen"):
+                        break
+                    e = self.parse_expression()
+                    self.ast.nodes[last].extra = e
+                    last = e
+                self.expect("RParen", "')' to close tuple")
+                return node
+            self.expect("RParen", "')' to close group")
             idx = self.ast.add("Group")
-            self.ast.nodes[idx].left = inner
+            self.ast.nodes[idx].left = first
             return idx
         if k == "LBracket":
             return self.parse_list_literal()
         if k == "LBrace":
-            return self.parse_map_literal()
+            self.advance()
+            node = self.ast.add("SetLit")
+            first = 0
+            last = 0
+            if not self.check("RBrace"):
+                while true:
+                    e = self.parse_expression()
+                    if first == 0:
+                        first = e
+                    else:
+                        self.ast.nodes[last].extra = e
+                    last = e
+                    if not self.match("Comma"):
+                        break
+                    if self.check("RBrace"):
+                        break
+            self.expect("RBrace", "'}' to close set literal")
+            self.ast.nodes[node].left = first
+            return node
         self.parse_error("expected expression, found '" + self.peek_lexeme() + "'")
         return 0
 
@@ -1024,6 +1151,7 @@ class LoopContext:
         self.continue_label = cont
         self.break_label = brk
 
+
 class EnumInfo:
     name: str
     item_names: list<str>
@@ -1077,6 +1205,7 @@ class Codegen:
     loop_stack: list<LoopContext>
     terminated: bool
     class_infos: list<ClassInfo>
+    enum_infos: list<EnumInfo>
     field_names: list<str>
     field_offsets: list<int>
     next_field_offset: int
@@ -1104,7 +1233,7 @@ class Codegen:
         self.loop_stack = []
         self.terminated = false
         self.class_infos = []
-        self.enum_infos: list<EnumInfo> = []
+        self.enum_infos = []
         self.field_names = []
         self.field_offsets = []
         self.next_field_offset = 0
@@ -1113,6 +1242,7 @@ class Codegen:
         self.last_class = ""
         self.last_elem_class = ""
         self.last_val_class = ""
+        self.extern_names = []
         self.final = ""
 
     def emit(self, s: str) -> None:
@@ -1444,6 +1574,48 @@ class Codegen:
                             info.init_decl = p.init_decl
             i = i + 1
 
+    def collect_externs(self, root_idx: int) -> None:
+        root = self.ast.nodes[root_idx]
+        cur = root.left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Extern":
+                fn = n.left
+                while fn != 0:
+                    fn_node = self.ast.nodes[fn]
+                    self.extern_names.append(fn_node.value)
+                    fn = fn_node.extra
+            cur = n.extra
+
+    def is_extern(self, name: str) -> bool:
+        i = 0
+        while i < len(self.extern_names):
+            if self.extern_names[i] == name:
+                return true
+            i = i + 1
+        return false
+
+    def gen_extern_call(self, n: Node, name: str) -> str:
+        args_ssa: list<str> = []
+        cur = n.right
+        while cur != 0:
+            args_ssa.append(self.gen_expr(cur))
+            cur = self.ast.nodes[cur].extra
+        args_str = ""
+        i = 0
+        while i < len(args_ssa):
+            if i > 0:
+                args_str = args_str + ", "
+            args_str = args_str + "l " + args_ssa[i]
+            i = i + 1
+        t = self.new_temp()
+        self.emit(t + " =l call $" + name + "(" + args_str + ")")
+        self.last_kind = "int"
+        self.last_class = ""
+        self.last_elem_class = ""
+        self.last_val_class = ""
+        return t
+
     def collect_assigned(self, idx: int) -> None:
         if idx == 0:
             return
@@ -1535,7 +1707,7 @@ class Codegen:
 
         if n.kind == "Try":
             self.collect_assigned(n.left)
-            exc_node = n.extra
+            exc_node = n.right
             while exc_node != 0:
                 en = self.ast.nodes[exc_node]
                 if en.value != "":
@@ -1554,6 +1726,18 @@ class Codegen:
             self.collect_assigned(n.right)
             return
         if n.kind == "Enum":
+            return
+        if n.kind == "TupleLit":
+            cur = n.left
+            while cur != 0:
+                self.collect_assigned(cur)
+                cur = self.ast.nodes[cur].extra
+            return
+        if n.kind == "SetLit":
+            cur = n.left
+            while cur != 0:
+                self.collect_assigned(cur)
+                cur = self.ast.nodes[cur].extra
             return
         if n.kind == "Index":
             self.collect_assigned(n.left)
@@ -1589,7 +1773,7 @@ class Codegen:
         if n.kind == "Name":
             slot = self.slot_for(n.value)
             if slot == "":
-                print("vcode: name '" + n.value + "' is not defined")
+                print("vayu: name '" + n.value + "' is not defined")
                 exit(1)
             t = self.new_temp()
             self.emit(t + " =l loadl " + slot)
@@ -1601,7 +1785,17 @@ class Codegen:
         if n.kind == "Group":
             return self.gen_expr(n.left)
         if n.kind == "Unary":
+            if n.op == "&":
+                return self.gen_addr_of(n.left)
             v = self.gen_expr(n.left)
+            if n.op == "*":
+                t = self.new_temp()
+                self.emit(t + " =l loadl " + v)
+                self.last_kind = "int"
+                self.last_class = ""
+                self.last_elem_class = ""
+                self.last_val_class = ""
+                return t
             if n.op == "-":
                 t = self.new_temp()
                 self.emit(t + " =l sub 0, " + v)
@@ -1633,9 +1827,99 @@ class Codegen:
             return self.gen_index(n)
         if n.kind == "List":
             return self.gen_list_lit(n)
+        if n.kind == "TupleLit":
+            tup = self.new_temp()
+            self.emit(tup + " =l call $vayu_tuple_new()")
+            cur = n.left
+            while cur != 0:
+                v = self.gen_expr(cur)
+                vk = self.last_kind
+                tag = 0
+                if vk == "bool":
+                    tag = 1
+                if vk == "str":
+                    tag = 2
+                self.emit("call $vayu_tuple_push_tagged(l " + tup +
+                          ", l " + v + ", l " + str(tag) + ")")
+                cur = self.ast.nodes[cur].extra
+            self.last_kind = "list"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return tup
+        if n.kind == "SetLit":
+            s = self.new_temp()
+            self.emit(s + " =l call $vayu_set_new()")
+            cur = n.left
+            while cur != 0:
+                v = self.gen_expr(cur)
+                vk = self.last_kind
+                tag = 0
+                if vk == "bool":
+                    tag = 1
+                if vk == "str":
+                    tag = 2
+                self.emit("call $vayu_set_push_tagged(l " + s +
+                          ", l " + v + ", l " + str(tag) + ")")
+                cur = self.ast.nodes[cur].extra
+            self.last_kind = "list"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return s
         if n.kind == "Map":
             return self.gen_map_lit(n)
-        print("vcode: unsupported expression kind '" + n.kind + "'")
+        print("vayu: unsupported expression kind '" + n.kind + "'")
+        exit(1)
+        return "0"
+
+    def gen_addr_of(self, idx: int) -> str:
+        n = self.ast.nodes[idx]
+        if n.kind == "Name":
+            slot = self.slot_for(n.value)
+            if slot == "":
+                print("vayu: cannot take address of undefined name '" + n.value + "'")
+                exit(1)
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return slot
+        if n.kind == "Index":
+            base = self.gen_expr(n.left)
+            base_kind = self.last_kind
+            idx_val = self.gen_expr(n.right)
+            t = self.new_temp()
+            if base_kind == "list":
+                self.emit(t + " =l call $vayu_list_slot(l " + base + ", l " + idx_val + ")")
+            elif base_kind == "map":
+                self.emit(t + " =l call $vayu_map_slot(l " + base + ", l " + idx_val + ")")
+            else:
+                print("vayu: cannot take address of this index")
+                exit(1)
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if n.kind == "Attr":
+            base = self.gen_expr(n.left)
+            base_class = self.last_class
+            if base_class == "":
+                print("vayu: cannot take address of field on unknown-class value")
+                exit(1)
+            off = self.find_field_offset(n.value)
+            if off < 0:
+                print("vayu: unknown field '" + n.value + "'")
+                exit(1)
+            t = self.new_temp()
+            self.emit(t + " =l add " + base + ", " + str(off))
+            self.last_kind = "ptr"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        print("vayu: cannot take address of this expression")
         exit(1)
         return "0"
 
@@ -1685,37 +1969,7 @@ class Codegen:
                 self.last_kind = "bool"
                 self.last_class = ""
                 return t
-        if op == "&":
-            t = self.new_temp()
-            self.emit(t + " =l and " + a + ", " + b)
-            self.last_kind = "int"
-            self.last_class = ""
-            return t
-        if op == "|":
-            t = self.new_temp()
-            self.emit(t + " =l or " + a + ", " + b)
-            self.last_kind = "int"
-            self.last_class = ""
-            return t
-        if op == "^":
-            t = self.new_temp()
-            self.emit(t + " =l xor " + a + ", " + b)
-            self.last_kind = "int"
-            self.last_class = ""
-            return t
-        if op == "<<":
-            t = self.new_temp()
-            self.emit(t + " =l shl " + a + ", " + b)
-            self.last_kind = "int"
-            self.last_class = ""
-            return t
-        if op == ">>":
-            t = self.new_temp()
-            self.emit(t + " =l shr " + a + ", " + b)
-            self.last_kind = "int"
-            self.last_class = ""
-            return t
-            print("vcode: 'in' on unsupported type")
+            print("vayu: 'in' on unsupported type")
             exit(1)
         if op == "+":
             t = self.new_temp()
@@ -1831,11 +2085,41 @@ class Codegen:
             self.last_kind = "bool"
             self.last_class = ""
             return ext
-        print("vcode: unsupported binary operator '" + op + "'")
+        if op == "&":
+            t = self.new_temp()
+            self.emit(t + " =l and " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "|":
+            t = self.new_temp()
+            self.emit(t + " =l or " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "^":
+            t = self.new_temp()
+            self.emit(t + " =l xor " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "<<":
+            t = self.new_temp()
+            self.emit(t + " =l shl " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == ">>":
+            t = self.new_temp()
+            self.emit(t + " =l shr " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        print("vayu: unsupported binary operator '" + op + "'")
         exit(1)
         return "0"
 
-        def gen_attr(self, n: Node) -> str:
+    def gen_attr(self, n: Node) -> str:
         if n.left != 0:
             base = self.ast.nodes[n.left]
             if base.kind == "Name":
@@ -1854,11 +2138,11 @@ class Codegen:
         base_ssa = self.gen_expr(n.left)
         base_class = self.last_class
         if base_class == "":
-            print("vcode: attribute access on unknown-class value (field '" + n.value + "')")
+            print("vayu: attribute access on unknown-class value (field '" + n.value + "')")
             exit(1)
         off = self.find_field_offset(n.value)
         if off < 0:
-            print("vcode: unknown field '" + n.value + "'")
+            print("vayu: unknown field '" + n.value + "'")
             exit(1)
         ftype = self.find_field_type_str(base_class, n.value)
         addr = self.new_temp()
@@ -1899,7 +2183,7 @@ class Codegen:
             self.last_elem_class = ""
             self.last_val_class = ""
             return t
-        print("vcode: index on unknown-kind value")
+        print("vayu: index on unknown-kind value")
         exit(1)
         return "0"
 
@@ -1945,7 +2229,7 @@ class Codegen:
                             return self.gen_super_call(n, callee)
             return self.gen_method_call(n, callee)
         if callee.kind != "Name":
-            print("vcode: unsupported call target")
+            print("vayu: unsupported call target")
             exit(1)
         name = callee.value
         if name == "print":
@@ -1953,7 +2237,7 @@ class Codegen:
         if name == "len":
             arg = n.right
             if arg == 0:
-                print("vcode: len() requires 1 argument")
+                print("vayu: len() requires 1 argument")
                 exit(1)
             v = self.gen_expr(arg)
             arg_kind = self.last_kind
@@ -1965,7 +2249,7 @@ class Codegen:
             elif arg_kind == "map":
                 kind_num = 2
             if kind_num < 0:
-                print("vcode: len() argument kind is unknown")
+                print("vayu: len() argument kind is unknown")
                 exit(1)
             t = self.new_temp()
             self.emit(t + " =l call $vayu_len(l " + v + ", l " + str(kind_num) + ")")
@@ -2059,6 +2343,8 @@ class Codegen:
             self.last_elem_class = ""
             self.last_val_class = ""
             return t
+        if self.is_extern(name):
+            return self.gen_extern_call(n, name)
         args_ssa: list<str> = []
         cur = n.right
         while cur != 0:
@@ -2102,24 +2388,24 @@ class Codegen:
 
     def gen_super_call(self, n: Node, callee: Node) -> str:
         if self.current_class == "":
-            print("vcode: super() outside method")
+            print("vayu: super() outside method")
             exit(1)
         ci = self.find_class_idx(self.current_class)
         if ci == -1:
-            print("vcode: unknown current class")
+            print("vayu: unknown current class")
             exit(1)
         parent = self.class_infos[ci].parent_name
         if parent == "":
-            print("vcode: super() in class without parent")
+            print("vayu: super() in class without parent")
             exit(1)
         method_name = callee.value
         owner = self.find_method_owner(parent, method_name)
         if owner == "":
-            print("vcode: parent has no method '" + method_name + "'")
+            print("vayu: parent has no method '" + method_name + "'")
             exit(1)
         self_slot = self.slot_for("self")
         if self_slot == "":
-            print("vcode: super() requires 'self'")
+            print("vayu: super() requires 'self'")
             exit(1)
         self_val = self.new_temp()
         self.emit(self_val + " =l loadl " + self_slot)
@@ -2155,11 +2441,11 @@ class Codegen:
         if recv_kind == "map":
             return self.gen_map_method(recv_ssa, method, n)
         if recv_class == "":
-            print("vcode: method call on unknown-class value")
+            print("vayu: method call on unknown-class value")
             exit(1)
         owner = self.find_method_owner(recv_class, method)
         if owner == "":
-            print("vcode: class '" + recv_class + "' has no method '" + method + "'")
+            print("vayu: class '" + recv_class + "' has no method '" + method + "'")
             exit(1)
         args_ssa: list<str> = []
         cur = n.right
@@ -2237,7 +2523,7 @@ class Codegen:
             self.last_kind = "bool"
             self.last_class = ""
             return t
-        print("vcode: unsupported str method '" + method + "'")
+        print("vayu: unsupported str method '" + method + "'")
         exit(1)
         return "0"
 
@@ -2260,7 +2546,7 @@ class Codegen:
             self.last_kind = "bool"
             self.last_class = ""
             return t
-        print("vcode: unsupported list method '" + method + "'")
+        print("vayu: unsupported list method '" + method + "'")
         exit(1)
         return "0"
 
@@ -2286,7 +2572,7 @@ class Codegen:
             self.last_kind = "bool"
             self.last_class = ""
             return t
-        print("vcode: unsupported map method '" + method + "'")
+        print("vayu: unsupported map method '" + method + "'")
         exit(1)
         return "0"
 
@@ -2329,14 +2615,14 @@ class Codegen:
             return
         if n.kind == "Break":
             if len(self.loop_stack) == 0:
-                print("vcode: 'break' outside loop")
+                print("vayu: 'break' outside loop")
                 exit(1)
             ctx = self.loop_stack[len(self.loop_stack) - 1]
             self.emit("jmp " + ctx.break_label)
             return
         if n.kind == "Continue":
             if len(self.loop_stack) == 0:
-                print("vcode: 'continue' outside loop")
+                print("vayu: 'continue' outside loop")
                 exit(1)
             ctx = self.loop_stack[len(self.loop_stack) - 1]
             self.emit("jmp " + ctx.continue_label)
@@ -2375,11 +2661,43 @@ class Codegen:
             return
         if n.kind == "Enum":
             return
-        print("vcode: statement kind '" + n.kind + "' not supported")
+        if n.kind == "Extern":
+            return
+        print("vayu: statement kind '" + n.kind + "' not supported")
         exit(1)
 
     def gen_assign(self, n: Node) -> None:
         lhs = self.ast.nodes[n.left]
+        if lhs.kind == "Unary":
+            if lhs.op == "*":
+                p = self.gen_expr(lhs.left)
+                v = self.gen_expr(n.right)
+                self.emit("storel " + v + ", " + p)
+                self.last_kind = ""
+                self.last_class = ""
+                return
+            print("vayu: unsupported unary assignment target")
+            exit(1)
+        if lhs.kind == "TupleLit":
+            v = self.gen_expr(n.right)
+            i = 0
+            elem = lhs.left
+            while elem != 0:
+                en = self.ast.nodes[elem]
+                if en.kind != "Name":
+                    print("tuple unpack requires simple names")
+                    exit(1)
+                idx_val = self.new_temp()
+                self.emit(idx_val + " =l call $vayu_tuple_get(l " + v +
+                          ", l " + str(i) + ")")
+                dst = self.slot_for(en.value)
+                if dst == "":
+                    dst = self.declare_var(en.value)
+                self.emit("storel " + idx_val + ", " + dst)
+                self.set_var_info(en.value, "int", "", "", "")
+                elem = en.extra
+                i = i + 1
+            return
         if lhs.kind == "Name":
             v = self.gen_expr(n.right)
             vkind = self.last_kind
@@ -2396,11 +2714,11 @@ class Codegen:
             base = self.gen_expr(lhs.left)
             base_class = self.last_class
             if base_class == "":
-                print("vcode: field assign on unknown-class value")
+                print("vayu: field assign on unknown-class value")
                 exit(1)
             off = self.find_field_offset(lhs.value)
             if off < 0:
-                print("vcode: unknown field '" + lhs.value + "'")
+                print("vayu: unknown field '" + lhs.value + "'")
                 exit(1)
             v = self.gen_expr(n.right)
             addr = self.new_temp()
@@ -2424,9 +2742,9 @@ class Codegen:
                 self.last_kind = ""
                 self.last_class = ""
                 return
-            print("vcode: index-assign on unknown kind")
+            print("vayu: index-assign on unknown kind")
             exit(1)
-        print("vcode: unsupported assignment target")
+        print("vayu: unsupported assignment target")
         exit(1)
 
     def gen_block_from(self, stmt_idx: int) -> None:
@@ -2500,7 +2818,7 @@ class Codegen:
         self.emit_raw(exc_label)
         handler_labels: list<str> = []
         next_labels: list<str> = []
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             handler_labels.append(self.new_label("catch_match_"))
             next_labels.append(self.new_label("catch_next_"))
@@ -2511,7 +2829,7 @@ class Codegen:
         self.emit(et + " =l call $vayu_get_exc_type()")
 
         i = 0
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             en = self.ast.nodes[exc_node]
             if en.left != 0:
@@ -2538,7 +2856,7 @@ class Codegen:
         self.emit("jmp " + end_label)
 
         i = 0
-        exc_node = n.extra
+        exc_node = n.right
         while exc_node != 0:
             en = self.ast.nodes[exc_node]
             self.emit_raw(handler_labels[i])
@@ -2576,18 +2894,18 @@ class Codegen:
     def gen_for(self, n: Node) -> None:
         iter_node = self.ast.nodes[n.left]
         if iter_node.kind != "Call":
-            print("vcode: `for` requires `range(...)`")
+            print("vayu: `for` requires `range(...)`")
             exit(1)
         callee = self.ast.nodes[iter_node.left]
         if callee.kind != "Name":
-            print("vcode: `for` requires `range(...)`")
+            print("vayu: `for` requires `range(...)`")
             exit(1)
         if callee.value != "range":
-            print("vcode: `for` requires `range(...)`")
+            print("vayu: `for` requires `range(...)`")
             exit(1)
         args = iter_node.right
         if args == 0:
-            print("vcode: range() requires at least 1 arg")
+            print("vayu: range() requires at least 1 arg")
             exit(1)
         first_arg = self.ast.nodes[args]
         start_ssa = "0"
@@ -2926,6 +3244,7 @@ class Codegen:
     def gen_program(self, root_idx: int) -> None:
         self.collect_classes(root_idx)
         self.collect_enums(root_idx)
+        self.collect_externs(root_idx)
         self.resolve_classes()
         self.collect_assigned(root_idx)
 
@@ -3047,6 +3366,8 @@ def keyword_kind(word: str) -> str:
     kw["False"] = "False"
     kw["none"] = "None"
     kw["None"] = "None"
+    kw["extern"] = "Extern"
+    kw["unsafe"] = "Unsafe"
     if word in kw:
         return kw[word]
     return "Identifier"
@@ -3489,19 +3810,235 @@ def tokenize(source: str) -> list<Token>:
     toks.append(Token("EOF", "", line, col))
     return toks
 
+def pad_str(s: str, width: int) -> str:
+    while len(s) < width:
+        s = s + " "
+    return s
+
+def print_tokens(toks: list<Token>) -> None:
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        line_str = pad_str(str(t.line), 3)
+        col_str = pad_str(str(t.col), 3)
+        kind_str = pad_str(t.kind, 14)
+        print(line_str + ":" + col_str + "  " + kind_str + "  " + t.lexeme)
+        i = i + 1
+
+def indent_pad(depth: int) -> str:
+    pad = ""
+    i = 0
+    while i < depth:
+        pad = pad + "  "
+        i = i + 1
+    return pad
+
+def print_block(ast: Ast, blk: int, depth: int) -> None:
+    if blk == 0:
+        return
+    cur = ast.nodes[blk].left
+    while cur != 0:
+        print_node(ast, cur, depth)
+        cur = ast.nodes[cur].extra
+
+def print_node(ast: Ast, idx: int, depth: int) -> None:
+    if idx == 0:
+        return
+    n = ast.nodes[idx]
+    pad = indent_pad(depth)
+    if n.kind == "Int":
+        print(pad + "Int(" + n.value + ")")
+    elif n.kind == "Float":
+        print(pad + "Float(" + n.value + ")")
+    elif n.kind == "Str":
+        print(pad + "Str(\"" + n.value + "\")")
+    elif n.kind == "Char":
+        print(pad + "Char('" + n.value + "')")
+    elif n.kind == "Bool":
+        if n.value == "false":
+            print(pad + "Bool(false)")
+        else:
+            print(pad + "Bool(true)")
+    elif n.kind == "None":
+        print(pad + "None")
+    elif n.kind == "Name":
+        print(pad + "Name(" + n.value + ")")
+    elif n.kind == "TypeName":
+        print(pad + "Type(" + n.value + ")")
+    elif n.kind == "Binary":
+        print(pad + "Binary(" + n.op + ")")
+        print_node(ast, n.left, depth + 1)
+        print_node(ast, n.right, depth + 1)
+    elif n.kind == "Unary":
+        print(pad + "Unary(" + n.op + ")")
+        print_node(ast, n.left, depth + 1)
+    elif n.kind == "Group":
+        print(pad + "Group")
+        print_node(ast, n.left, depth + 1)
+    elif n.kind == "Attr":
+        print(pad + "Attr(." + n.value + ")")
+        print_node(ast, n.left, depth + 1)
+    elif n.kind == "Call":
+        print(pad + "Call")
+        print_node(ast, n.left, depth + 1)
+        cur = n.right
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    elif n.kind == "Index":
+        print(pad + "Index")
+        print_node(ast, n.left, depth + 1)
+        print_node(ast, n.right, depth + 1)
+    elif n.kind == "List":
+        print(pad + "List")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    elif n.kind == "Map":
+        print(pad + "Map")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    elif n.kind == "MapEntry":
+        print(pad + "Entry")
+        print_node(ast, n.left, depth + 1)
+        print_node(ast, n.right, depth + 1)
+    elif n.kind == "Lambda":
+        print(pad + "Lambda")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+        print_node(ast, n.right, depth + 1)
+    elif n.kind == "Param":
+        print(pad + "Param(" + n.value + ")")
+        if n.left != 0:
+            print_node(ast, n.left, depth + 1)
+    elif n.kind == "ExprStmt":
+        print(pad + "ExprStmt")
+        print_node(ast, n.left, depth + 1)
+    elif n.kind == "Assign":
+        print(pad + "Assign")
+        print_node(ast, n.left, depth + 1)
+        print_node(ast, n.right, depth + 1)
+    elif n.kind == "AnnotAssign":
+        print(pad + "AnnotAssign(" + n.value + ")")
+        if n.left != 0:
+            print_node(ast, n.left, depth + 1)
+        if n.right != 0:
+            print_node(ast, n.right, depth + 1)
+    elif n.kind == "If":
+        print(pad + "If")
+        print(pad + "  cond:")
+        print_node(ast, n.left, depth + 2)
+        print(pad + "  then:")
+        print_block(ast, n.right, depth + 2)
+        if n.extra2 != 0:
+            print_node(ast, n.extra2, depth + 1)
+    elif n.kind == "Else":
+        print(pad + "Else")
+        print_block(ast, n.right, depth + 1)
+    elif n.kind == "While":
+        print(pad + "While")
+        print(pad + "  cond:")
+        print_node(ast, n.left, depth + 2)
+        print(pad + "  body:")
+        print_block(ast, n.right, depth + 2)
+    elif n.kind == "For":
+        print(pad + "For(" + n.value + ")")
+        print(pad + "  iter:")
+        print_node(ast, n.left, depth + 2)
+        print(pad + "  body:")
+        print_block(ast, n.right, depth + 2)
+    elif n.kind == "Return":
+        print(pad + "Return")
+        if n.left != 0:
+            print_node(ast, n.left, depth + 1)
+    elif n.kind == "Def":
+        print(pad + "Def(" + n.value + ")")
+        if n.left != 0:
+            print(pad + "  params:")
+            cur = n.left
+            while cur != 0:
+                print_node(ast, cur, depth + 2)
+                cur = ast.nodes[cur].extra
+        if n.extra2 != 0:
+            print(pad + "  ret:")
+            print_node(ast, n.extra2, depth + 2)
+        print(pad + "  body:")
+        print_block(ast, n.right, depth + 2)
+    elif n.kind == "Class":
+        print(pad + "Class(" + n.value + ")")
+        if n.right != 0:
+            print(pad + "  parent:")
+            print_node(ast, n.right, depth + 2)
+        if n.left != 0:
+            print(pad + "  members:")
+            cur = n.left
+            while cur != 0:
+                print_node(ast, cur, depth + 2)
+                cur = ast.nodes[cur].extra
+    elif n.kind == "Struct":
+        print(pad + "Struct(" + n.value + ")")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    elif n.kind == "FieldDef":
+        print(pad + "Field(" + n.value + ")")
+        if n.left != 0:
+            print_node(ast, n.left, depth + 1)
+    elif n.kind == "Pass":
+        print(pad + "Pass")
+    elif n.kind == "Break":
+        print(pad + "Break")
+    elif n.kind == "Continue":
+        print(pad + "Continue")
+    elif n.kind == "Program":
+        print(pad + "Program")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    elif n.kind == "Block":
+        print(pad + "Block")
+        cur = n.left
+        while cur != 0:
+            print_node(ast, cur, depth + 1)
+            cur = ast.nodes[cur].extra
+    else:
+        print(pad + "<" + n.kind + ">")
+
+def print_ast(ast: Ast, root_idx: int) -> None:
+    print_node(ast, root_idx, 0)
+
 def main() -> None:
     a = args()
     if len(a) < 1:
-        print("usage: vcode <source.vyu>")
+        print("usage: vayu <source.vyu> [--tokens|--ast]")
         exit(1)
     path = a[0]
+    mode = "il"
+    if len(a) >= 2:
+        if a[1] == "--tokens":
+            mode = "tokens"
+        elif a[1] == "--ast":
+            mode = "ast"
     if not file_exists(path):
-        print("vcode: cannot open " + path)
+        print("vayu: cannot open " + path)
         exit(1)
     src = read_file(path)
     toks = tokenize(src)
+    if mode == "tokens":
+        print_tokens(toks)
+        return
     p = Parser(toks)
     root = p.parse_program()
+    if mode == "ast":
+        print_ast(p.ast, root)
+        return
     cg = Codegen(p.ast)
     cg.gen_program(root)
     print(cg.final)

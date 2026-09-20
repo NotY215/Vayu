@@ -1,0 +1,17 @@
+# self_host_17_6.vyu — Phase 17.6 target: tuple literals + set literals.
+#
+# Tuple unpack `(a, b, c) = t` is not exercised here because the C++
+# TypeChecker still rejects TupleLit as an Assign target. To enable it,
+# apply the TypeChecker patch from the previous drop and Rebuild All.
+# This file works on all three backends as-is.
+
+t = (10, 20, 30)
+print(t[0])
+print(t[1])
+print(t[2])
+
+s = {4, 5, 6}
+print(len(s))
+
+p = (7, 11)
+print(p[0] + p[1])

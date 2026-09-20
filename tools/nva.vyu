@@ -9,6 +9,15 @@
 #   nva build
 #   nva run
 #   nva clean
+#
+# lib/ is resolved as follows (first hit wins):
+#   1. ./lib/         exists -> use it
+#   2. ./lib.zip      exists -> extract to ./lib/, then use it
+#   3. neither        -> prompt to download tools/Lib.zip from GitHub
+
+const LIB_ZIP_URL: str = "https://github.com/NotY215/Vayu/raw/master/tools/Lib.zip"
+const LIB_DIR: str = "lib"
+const LIB_ZIP: str = "lib.zip"
 
 class Dep:
     name: str
@@ -55,8 +64,6 @@ def join_lines(lines: list<str>) -> str:
         i = i + 1
     return out
 
-# The runtime's list.contains() does raw pointer comparison; for strings
-# we need content equality.  native `==` on str emits $vayu_str_eq.
 def str_in_list(s: str, lst: list<str>) -> bool:
     i = 0
     while i < len(lst):
@@ -191,6 +198,51 @@ def resolve_modules(m: Manifest) -> str:
     return out
 
 # ---------------------------------------------------------------------------
+# lib folder / lib.zip management
+# ---------------------------------------------------------------------------
+
+def extract_lib_zip() -> None:
+    print("nva: extracting " + LIB_ZIP + " ...")
+    # Expand-Archive requires PowerShell 5+; DestinationPath '.' puts
+    # the top-level folder (lib/) back in the current directory.
+    cmd = "powershell -NoProfile -Command \"Expand-Archive -Path '" + LIB_ZIP + "' -DestinationPath '.' -Force\""
+    rc = run_command(cmd)
+    if rc != 0:
+        print("nva: failed to extract " + LIB_ZIP)
+        exit(1)
+
+def download_lib_zip() -> bool:
+    print("nva: downloading " + LIB_ZIP + " ...")
+    # Prefer curl.exe (ships with Windows 10+).
+    rc = run_command("curl -L -s -o " + LIB_ZIP + " \"" + LIB_ZIP_URL + "\"")
+    if rc != 0:
+        # Fallback: PowerShell Invoke-WebRequest.
+        cmd = "powershell -NoProfile -Command \"Invoke-WebRequest -UseBasicParsing -Uri '" + LIB_ZIP_URL + "' -OutFile '" + LIB_ZIP + "'\""
+        rc = run_command(cmd)
+    return rc == 0
+
+def ensure_lib() -> None:
+    # Fast path — lib/ already present, nothing to do.
+    if dir_exists(LIB_DIR):
+        return
+    # lib.zip present — extract and go.
+    if file_exists(LIB_ZIP):
+        extract_lib_zip()
+        return
+    # Neither present — ask.
+    print("nva: lib/ is missing and lib.zip was not found.")
+    print("nva: download lib.zip from GitHub? (Y/N)")
+    ans = read_line().strip()
+    if ans == "Y" or ans == "y":
+        if not download_lib_zip():
+            print("nva: download failed.")
+            exit(1)
+        extract_lib_zip()
+    else:
+        print("nva: cancelled — lib/ is required to build.")
+        exit(1)
+
+# ---------------------------------------------------------------------------
 # toml editing
 # ---------------------------------------------------------------------------
 
@@ -218,7 +270,6 @@ def toml_add_dep(path: str, name: str, version: str) -> None:
     new_line = name + " = \"" + version + "\""
     new_lines: list<str> = []
     if dep_start < 0:
-        # no [dependencies] section: append
         k = 0
         while k < len(lines):
             new_lines.append(lines[k])
@@ -227,7 +278,6 @@ def toml_add_dep(path: str, name: str, version: str) -> None:
         new_lines.append("[dependencies]")
         new_lines.append(new_line)
     elif dep_end < 0:
-        # section exists but empty: insert right after header
         k = 0
         while k < len(lines):
             new_lines.append(lines[k])
@@ -235,7 +285,6 @@ def toml_add_dep(path: str, name: str, version: str) -> None:
                 new_lines.append(new_line)
             k = k + 1
     else:
-        # insert after last existing dep line
         k = 0
         while k < len(lines):
             new_lines.append(lines[k])
@@ -411,6 +460,7 @@ def cmd_list() -> None:
     print_dep_tree(m, 1, visited)
 
 def cmd_build() -> str:
+    ensure_lib()
     if not file_exists("nova.toml"):
         print("nva: no nova.toml in this directory")
         exit(1)
@@ -422,7 +472,6 @@ def cmd_build() -> str:
     mod_path = resolve_modules(m)
     mkdir("build")
 
-    # Windows paths must use backslashes; cmd.exe treats '/' as a switch.
     entry_win = m.entry.replace("/", "\\")
     exe_win = "build\\" + m.name + ".exe"
 
@@ -462,9 +511,6 @@ def cmd_clean() -> None:
     if dir_exists("build"):
         run_command("rmdir /s /q build 2>nul")
     if file_exists("nova.lock"):
-        # The lock file is a build artifact only in this trivial sense: it
-        # describes the current dependency graph.  `nva build` regenerates it.
-        # Not deleting by default; users who want a fresh lock can delete it.
         print("nva: kept nova.lock (regenerated on next build)")
     print("nva: cleaned")
 

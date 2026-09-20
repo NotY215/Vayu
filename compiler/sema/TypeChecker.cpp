@@ -756,6 +756,22 @@ namespace vayu {
                     checkExpr(n->value.get());
                     return;
                 }
+                if (n->target->kind == ExprKind::TupleLit) {
+                    auto* tl = static_cast<const TupleLitExpr*>(n->target.get());
+                    checkExpr(n->value.get());
+                    for (auto& el : tl->elements) {
+                        if (el->kind == ExprKind::NameRef) {
+                            const auto* nm =
+                                static_cast<const NameRefExpr*>(el.get());
+                            if (!lookupUserVar(nm->name))
+                                defineVar(nm->name, Types::Any());
+                        }
+                        else {
+                            error(el->loc, "invalid tuple-unpack element");
+                        }
+                    }
+                    return;
+                }
                 error(n->target->loc, "invalid assignment target");
             }
 

@@ -10,7 +10,7 @@ enum Color:
 
 print(MAX)
 print(RATIO)
-print(MAX / RATIO)
+print(MAX // RATIO)
 print(Color.RED)
 print(Color.GREEN)
 print(Color.BLUE)
