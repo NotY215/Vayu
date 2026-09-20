@@ -1,0 +1,22 @@
+def double(x: int) -> int:
+    return x * 2
+
+def shout(s: str) -> str:
+    return s + "!!!"
+
+def main() -> None:
+    py.init()
+
+    cb1 = py.callback(&double, "int")
+    args1: list<int> = [21]
+    r1 = py.call(cb1, args1)
+    print(py.from_int(r1))
+    py.decref(r1)
+    py.decref(cb1)
+
+    cb2 = py.callback(&shout, "str")
+    args2: list<str> = ["hi"]
+    r2 = py.call(cb2, args2)
+    print(py.from_str(r2))
+    py.decref(r2)
+    py.decref(cb2)

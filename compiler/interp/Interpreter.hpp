@@ -26,7 +26,7 @@ namespace vayu {
 
     class Interpreter {
     public:
-        static Interpreter* current_;
+        static thread_local Interpreter* current_;
 
         Interpreter();
         void run(const Block& program);

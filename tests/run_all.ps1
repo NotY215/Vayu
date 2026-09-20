@@ -48,6 +48,10 @@ $skip = @(
     "py_init_test.vyu",        # native-only; same reason
     "py_bridge_test.vyu",      # native-only; same reason
     "py_call_test.vyu",        # native-only; same reason
+    "py_bidi_test.vyu",        # native-only; same reason
+    "py_close_test.vyu",       # native-only; same reason
+    "py_eval_test.vyu",        # native-only; same reason
+    "py_callback_test.vyu",    # native-only; same reason
     "ffi_test.vyu",
     "ffi_struct_test.vyu",
     "ffi_wrap_test.vyu",

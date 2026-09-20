@@ -1,0 +1,57 @@
+# py_bidi_test.vyu — Phase 16.3 + 16.4 combined (top-level script).
+
+def double(x: int) -> int:
+    return x * 2
+
+def shout(s: str) -> str:
+    return s + "!!!"
+
+py.init()
+
+# ---- 16.3: py.eval (int / str / bool) ----
+a = py.eval("21 * 2")
+print(py.from_int(a))
+py.decref(a)
+
+b = py.eval("'hello ' + 'world'")
+print(py.from_str(b))
+py.decref(b)
+
+c = py.eval("1 < 2")
+print(py.from_bool(c))
+py.decref(c)
+
+# ---- 16.4: py.type_name ----
+n1 = py.eval("42")
+print(py.type_name(n1))
+py.decref(n1)
+
+n2 = py.eval("'hi'")
+print(py.type_name(n2))
+py.decref(n2)
+
+# ---- 16.4: py.repr ----
+s1 = py.eval("'world'")
+print(py.repr(s1))
+py.decref(s1)
+
+# ---- 16.4: py.setattr ----
+obj = py.eval("type('T', (), {})()")
+ok = py.setattr(obj, "x", py.int(42))
+print(ok)
+py.decref(obj)
+
+# ---- 16.3: py.callback ----
+cb1 = py.callback(&double, "int")
+args1: list<int> = [21]
+r1 = py.call(cb1, args1)
+print(py.from_int(r1))
+py.decref(r1)
+py.decref(cb1)
+
+cb2 = py.callback(&shout, "str")
+args2: list<str> = ["hi"]
+r2 = py.call(cb2, args2)
+print(py.from_str(r2))
+py.decref(r2)
+py.decref(cb2)

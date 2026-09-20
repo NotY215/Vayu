@@ -14,7 +14,7 @@
 
 namespace vayu {
 
-    Interpreter* Interpreter::current_ = nullptr;
+    thread_local Interpreter* Interpreter::current_ = nullptr;
 
     struct ReturnSignal { Value value; };
     struct BreakSignal {};

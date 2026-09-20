@@ -1,0 +1,38 @@
+# py_close_test.vyu — Phase 16.5 closing test.
+# Native-only: uses py.* which has no tree/VM implementation.
+
+py.init()
+
+# ---- 16.5: py.list ----
+src = py.eval("[10, 20, 30]")
+lst = py.list(src)
+print(len(lst))
+print(py.from_int(lst[0]))
+print(py.from_int(lst[1]))
+print(py.from_int(lst[2]))
+py.decref(src)
+
+# ---- 16.5: py.dict ----
+d_src = py.eval("{'a': 1, 'b': 2, 'c': 3}")
+d = py.dict(d_src)
+print(len(d))
+print(py.from_int(d["a"]))
+print(py.from_int(d["b"]))
+print(py.from_int(d["c"]))
+py.decref(d_src)
+
+# ---- 16.5: py.call_kw ----
+fn = py.eval("lambda *, x, y: x * y")
+kwargs: map<str, int> = {"x": py.int(6), "y": py.int(7)}
+rr = py.call_kw(fn, kwargs)
+print(py.from_int(rr))
+py.decref(rr)
+py.decref(fn)
+
+# ---- 16.5: py.last_error ----
+fn2 = py.eval("lambda *, x, y: x / y")
+bad_kw: map<str, int> = {"x": py.int(1), "y": py.int(0)}
+rbad = py.call_kw(fn2, bad_kw)
+print(py.last_error())
+py.decref(rbad)
+py.decref(fn2)

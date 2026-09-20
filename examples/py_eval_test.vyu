@@ -1,0 +1,14 @@
+def main() -> None:
+    py.init()
+
+    a = py.eval("21 * 2")
+    print(py.from_int(a))
+    py.decref(a)
+
+    b = py.eval("'hello ' + 'world'")
+    print(py.from_str(b))
+    py.decref(b)
+
+    c = py.eval("1 < 2")
+    print(py.from_bool(c))
+    py.decref(c)

@@ -294,9 +294,43 @@ class Parser:
             self.ast.nodes[node].left = expr
             self.ast.nodes[node].right = value
             return node
+        # Phase 17.1: compound assign — x OP= e  desugars to  x = x OP e.
+        op_kind = self.peek_kind()
+        if op_kind == "PlusAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "+")
+        if op_kind == "MinusAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "-")
+        if op_kind == "StarAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "*")
+        if op_kind == "SlashAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "/")
+        if op_kind == "PercentAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "%")
         node = self.ast.add("ExprStmt")
         self.ast.nodes[node].left = expr
         return node
+
+    def build_compound_assign(self, target: int, op_str: str) -> int:
+        rhs = self.parse_expression()
+        target_node = self.ast.nodes[target]
+        if target_node.kind != "Name":
+            print("compound assign requires a simple name target")
+            exit(1)
+        read = self.ast.add("Name")
+        self.ast.nodes[read].value = target_node.value
+        binop = self.ast.add("Binary")
+        self.ast.nodes[binop].op = op_str
+        self.ast.nodes[binop].left = read
+        self.ast.nodes[binop].right = rhs
+        assign = self.ast.add("Assign")
+        self.ast.nodes[assign].left = target
+        self.ast.nodes[assign].right = binop
+        return assign
 
     def parse_return(self) -> int:
         self.advance()
@@ -2754,6 +2788,10 @@ def tokenize(source: str) -> list<Token>:
                 toks.append(Token("StarStar", "**", line, start_col))
                 pos = pos + 2
                 col = col + 2
+            elif nxt == "=":
+                toks.append(Token("StarAssign", "*=", line, start_col))
+                pos = pos + 2
+                col = col + 2
             else:
                 toks.append(Token("Star", "*", line, start_col))
                 pos = pos + 1
@@ -2764,15 +2802,24 @@ def tokenize(source: str) -> list<Token>:
                 toks.append(Token("SlashSlash", "//", line, start_col))
                 pos = pos + 2
                 col = col + 2
+            elif nxt == "=":
+                toks.append(Token("SlashAssign", "/=", line, start_col))
+                pos = pos + 2
+                col = col + 2
             else:
                 toks.append(Token("Slash", "/", line, start_col))
                 pos = pos + 1
                 col = col + 1
             continue
         if c == "%":
-            toks.append(Token("Percent", "%", line, start_col))
-            pos = pos + 1
-            col = col + 1
+            if nxt == "=":
+                toks.append(Token("PercentAssign", "%=", line, start_col))
+                pos = pos + 2
+                col = col + 2
+            else:
+                toks.append(Token("Percent", "%", line, start_col))
+                pos = pos + 1
+                col = col + 1
             continue
         if c == "=":
             if nxt == "=":
