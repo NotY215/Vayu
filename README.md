@@ -37,24 +37,6 @@
 
 <div align="center">
 
-<a href="https://github.com/NotY215/VCB">
-  <img src="https://raw.githubusercontent.com/NotY215/VCB/master/Assets/VCB_logo.png" alt="VCB Logo" width="180">
-</a>
-
-### ⚙️ VCB — Vayu Compiler Backend
-
-**VCB is the native backend project being developed alongside Vayu for IR analysis, optimization, lowering, and x86-64 code generation.**
-
-<a href="https://github.com/NotY215/VCB">
-  <img src="https://img.shields.io/badge/VCB-Vayu%20Compiler%20Backend-111827?style=for-the-badge" alt="VCB">
-</a>
-
-</div>
-
----
-
-<div align="center">
-
 ## ⚡ Write Simple. Run Native. Control Everything.
 
 **Vayu** brings together Python-inspired readability, native-performance goals, low-level control, modern typing, AI/ML ambitions, and application-development capabilities in one language.
@@ -517,7 +499,7 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, native backend, FFI layer, and Python/CPython interoperability.
 
-**Phase 16 is complete. Phase 17 is the current development direction.**
+**Phase 23 is the current long-term toolchain direction. Phase 17 remains the active self-hosting/compiler-bootstrap development track, while VCB is being developed as the native backend for the Phase 23 single-binary toolchain.**
 
 Current implemented areas include:
 
@@ -568,46 +550,11 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **20** | 2D first, then 3D. |
 | **21** | Tensors · autodiff · ONNX · CUDA. |
 | **22** | `vayu install` · `vypy install` · public index · ecosystem. |
+| **23** | **Single-binary native toolchain — retire QBE + GCC backend chain; VCB emits native machine code directly. Windows-first, then ELF/Mach-O.** |
 
 > The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
 
 For benchmark information and website updates, see the **[official Vayu website](https://vayu.gt.tc)**.
-
----
-# ⚙️ VCB — Vayu Compiler Backend
-
-<a href="https://github.com/NotY215/VCB">
-  <img src="https://raw.githubusercontent.com/NotY215/VCB/master/Assets/VCB_logo.png" alt="VCB Logo" width="160">
-</a>
-
-**[VCB — Vayu Compiler Backend](https://github.com/NotY215/VCB)** is a companion project in the Vayu compiler ecosystem.
-
-VCB is being developed as a dedicated native backend/code-generation layer for the Vayu compiler pipeline:
-
-```text
-Vayu Source
-    │
-    ▼
-Vayu Frontend
-    │
-    ▼
-Vayu IR
-    │
-    ▼
-VCB — Analysis → Optimization → Lowering → Codegen
-    │
-    ▼
-x86-64 Assembly
-    │
-    ▼
-Native Executable
-```
-
-The long-term role of VCB is to provide Vayu with a modular native backend that can evolve independently from the language frontend. Its work includes IR analysis, optimization, lowering, instruction selection, and native code generation.
-
-VCB is being developed separately so the backend can mature as its own focused compiler component while remaining tightly aligned with Vayu's language and compiler architecture.
-
-**[→ Explore VCB](https://github.com/NotY215/VCB)**
 
 ---
 
