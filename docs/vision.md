@@ -29,7 +29,7 @@ The latest development history marks **Phase 16 complete**. Phase 17 is the next
 
 ## Roadmap
 
-### Phased implementation plan
+The roadmap below records the project's planned development phases. A phase may contain work that is implemented incrementally across multiple commits.
 
 | Phase | Scope |
 |---:|---|
@@ -49,7 +49,7 @@ The latest development history marks **Phase 16 complete**. Phase 17 is the next
 | **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | `vayu.vyu` supports the compiler's implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
+| **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
 | **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
 | **19** | Window / event / widget layer. |
 | **20** | 2D first, then 3D. |
