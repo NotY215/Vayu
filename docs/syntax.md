@@ -2,7 +2,7 @@
 
 ### Python-inspired syntax · Static type checking · Native-language foundations
 
-This document describes syntax currently demonstrated by the Vayu compiler and examples. Planned features are not presented as implemented behavior.
+This document describes the language surface currently represented by the Vayu compiler, interpreter, VM, native backend, and current tests/examples. Backend-specific limitations are called out where relevant.
 
 **Official source extension: `.vyu`**
 
@@ -227,7 +227,7 @@ print(3 in nums)
 print(len(nums))
 ```
 
-**List slicing is not currently implemented.** Syntax such as `nums[1:4]` should not be considered supported yet.
+**List slicing is implemented.** Python-style slicing is currently supported for lists, tuples, and strings across the parser, AST/type-checking, VM/runtime, and native code-generation paths.
 
 # 12. Maps
 
@@ -248,7 +248,21 @@ print(len(ages))
 
 Map indexing, assignment, `put()`, `remove()`, `contains()`, `keys()`, `len()`, membership, and iteration over keys are demonstrated by the current implementation.
 
-# 13. Structs
+# 13. Tuples & Sets
+
+Tuples and sets are now first-class collection types.
+
+Tuples support creation/conversion, indexing, iteration, stringification, slicing, and concatenation. Sets support creation/conversion, iteration, stringification, and set operations such as `add()`, `remove()`, and `union()`.
+
+```vyu
+a = (1, 2, 3)
+b = (4, 5)
+c = a + b
+s = set([1, 2, 3])
+s.add(4)
+```
+
+# 14. Structs
 
 Structs provide named fields:
 
@@ -264,7 +278,7 @@ p.score = 200
 
 Positional and keyword construction, field access/modification, and nested structs are demonstrated.
 
-# 14. Classes & Inheritance
+# 15. Classes & Inheritance
 
 Classes support fields, `__init__`, `self`, methods, inheritance, overriding, and `super()`.
 
@@ -282,7 +296,7 @@ p.greet()
 
 Inheritance and multi-level inheritance are demonstrated by the current examples.
 
-# 15. Lambdas & Higher-Order Functions
+# 16. Lambdas & Higher-Order Functions
 
 The current implementation demonstrates function values, lambdas, closures, and:
 
@@ -296,7 +310,7 @@ all()
 sum()
 ```
 
-# 16. Exceptions
+# 17. Exceptions
 
 Vayu supports `try`, `except`, `finally`, and `raise`:
 
@@ -311,7 +325,7 @@ finally:
 
 The current implementation demonstrates `Exception`, `RuntimeError`, `TypeError`, `ValueError`, and `ZeroDivisionError`, plus exception variables, multiple handlers, bare `except`, nested exceptions, re-raising, raising another exception, and raising a string.
 
-# 17. Modules
+# 18. Modules
 
 ```vyu
 import math_helpers
@@ -322,7 +336,7 @@ from math_helpers import helper as h
 
 Module constants, functions, structs, aliases, and chained member access are demonstrated. Modules use `.vyu` files.
 
-# 18. Math Library
+# 19. Math Library
 
 Current math functionality includes:
 
@@ -341,7 +355,7 @@ e
 abs()
 ```
 
-# 19. Expressions & Attribute Access
+# 20. Expressions & Attribute Access
 
 Expression statements, attribute chains, and indexing are supported:
 
@@ -351,7 +365,7 @@ items[0]
 grid[0][1]
 ```
 
-# 20. Type Checking
+# 21. Type Checking
 
 Vayu includes a type-checking stage for explicit annotations and supported type relationships.
 
@@ -361,11 +375,11 @@ x: int = "hello"
 
 This is invalid because a string cannot be assigned to an `int`.
 
-# 21. AST
+# 22. AST
 
 The compiler can generate/dump an AST representation for supported programs. The AST is used as a structured representation between parsing and later compiler stages.
 
-# 22. Verification Examples
+# 23. Verification Examples
 
 Arithmetic has been exercised with:
 
@@ -401,7 +415,7 @@ Output:
 sum 1..10 = 55
 ```
 
-# 23. Current Syntax Status
+# 24. Current Syntax Status
 
 The reference documents implemented or demonstrated behavior only. Current areas include variables, types, functions, recursion, conditions, loops, arithmetic, comparisons, logical expressions, collections, structs, classes, inheritance, lambdas/closures, exceptions, modules, math functionality, type checking, AST generation, and VM-oriented execution.
 
@@ -416,3 +430,49 @@ The official Vayu source extension is **`.vyu`**.
 For the latest roadmap, project updates, and benchmark information, visit the **[official Vayu website →](https://vayu.gt.tc)**.
 
 **Vayu — Python-inspired syntax. Native ambition. One language.**
+
+
+# 25. Current Advanced Language Features
+
+The current source additionally includes:
+
+- `const` declarations
+- `enum` declarations
+- static class members
+- `public`, `protected`, and `private` visibility
+- bitwise operators
+- `match` statements
+- `with` statements
+- `defer` statements
+- generators and `yield`
+- generator state and `next()`
+- generic/type parameters and constraints
+- `unique<T>`, `shared<T>`, and `weak<T>` ownership types
+- `ptr<T>` pointer/reference types
+- address-of, dereference, and pointer arithmetic
+- `malloc()` and `free()`
+- `extern "C"` declarations
+- C FFI and function pointers
+- native struct-by-value FFI support for supported small single-field cases
+
+## Reflection and utility built-ins
+
+The current runtime/native implementation includes `hash()`, `id()`, `callable()`, `repr()`, `round()`, `pow()`, `divmod()`, `sign()`, `gcd()`, `lcm()`, `clamp()`, `enumerate()`, `zip()`, `reversed()`, `isinstance()`, `issubclass()`, `hasattr()`, `getattr()`, `dir()`, `setattr()`, and `delattr()`.
+
+## Runtime modules
+
+Current built-in/runtime module registrations include `math`, `fs`, `time`, `json`, `regex`, `thread`, `net`, `crypto`, `random`, `os`, and `py`.
+
+## Python / CPython integration
+
+The native backend currently exposes a `py` module with `init()`, `version()`, `run()`, `exec()`, primitive value bridging, Python module import, attribute access, Python calls, and reference-count operations. The interpreter/VM path provides stubs that report when the native backend is required.
+
+The Python bridge is therefore an implemented native interoperability layer, not yet a complete Python object-model replacement.
+
+## Backend note
+
+Vayu currently has interpreter, bytecode/VM, and native execution paths. Native-only functionality includes the C FFI, raw native integration, and CPython bridge. The test suite explicitly separates tests that require the native backend.
+
+## Current phase
+
+**Phase 15 is complete. Phase 16 is currently in progress**, expanding the native Python/CPython interoperability layer.
