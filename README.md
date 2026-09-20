@@ -342,7 +342,7 @@ The official language name is **Vayu** and the official source extension is **`.
 | [`docs/syntax.md`](docs/syntax.md) | Complete language syntax and implemented features |
 | [`docs/package.md`](docs/package.md) | Package manager and ecosystem |
 | [`docs/ai.md`](docs/ai.md) | AI/ML direction and ecosystem |
-| [`docs/vision.md`](docs/vision.md) | Long-term vision and future roadmap |
+| [`docs/vision.md`](docs/vision.md) | Long-term vision, phased roadmap, and current development status |
 | [`CODE OF CONDUCT.md`](CODE%20OF%20CONDUCT.md) | Community standards and contributor conduct |
 
 ---
@@ -489,38 +489,65 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 # 📊 Current Status
 
-Vayu is an **early-stage independent programming language project**.
+Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, native backend, FFI layer, and Python/CPython interoperability.
 
-The compiler currently demonstrates core language capabilities including:
+Recent development history records **Phase 16 as complete**. The latest Phase 16 work added compound assignment operators and expanded the native Python bridge with features including `py.eval`, `py.exec_file`, `py.callback`, `py.setattr`, `py.repr`, `py.type_name`, `py.call_kw`, `py.list`, `py.dict`, and `py.last_error`, alongside thread-safety improvements and tests.
 
-- Variables
-- Type inference
-- Type annotations
-- Functions
-- Recursion
-- Conditions
-- Loops
-- Collections
-- Structs
-- Classes
-- Inheritance
-- Lambdas
-- Exceptions
-- Modules
-- Standard-library functionality
-- Type checking
-- AST generation
+Current implemented areas include:
 
-The language will continue to expand incrementally.
+- indentation-based `.vyu` syntax
+- static type checking and type inference
+- functions, recursion, lambdas, closures and higher-order functions
+- lists, maps, tuples and sets, including slicing
+- structs, classes, inheritance, overriding and `super()`
+- exceptions and modules
+- `const`, `enum`, static members and visibility modifiers
+- `match`, `with`, `defer`, `yield` and generators
+- bitwise operators and compound assignment
+- ownership/reference types such as `unique<T>`, `shared<T>`, and `weak<T>`
+- raw pointers, references, pointer arithmetic, `malloc()` and `free()`
+- C FFI, function pointers, external-library linking and supported struct-by-value FFI
+- runtime modules including math, filesystem/OS, regex, threading, networking, crypto, random, time and JSON
+- native CPython loading and Python value/call interoperability
 
-### Current development focus
+### Current Development Direction
 
-The project is progressing toward a stronger compiler/runtime foundation, broader standard-library support, memory/resource management, native code generation, interoperability, tooling, and the larger roadmap described in the project documentation.
+**Phase 17 — Vayu self-hosting / compiler bootstrap**
 
-For the latest roadmap progress and benchmark information, see the **[official Vayu website](https://vayu.gt.tc)**.
+The next major milestone is to move the compiler implementation toward Vayu itself so that the language can eventually compile its own compiler. The C++ implementation remains the bootstrap/reference implementation while feature parity and bootstrap infrastructure are developed.
+
+### Vayu Roadmap
+
+_| Phase | Scope |
+|---:|---|
+| **1** | Core lexer, parser, AST, expressions, variables and indentation-based language structure. |
+| **2** | Conditions, loops, `range()`, `break`, `continue`, typed functions, return values and recursion. |
+| **3** | Static type checking, inference, primitive types, generic collections, lists, maps and indexing. |
+| **4** | Lambdas, closures, higher-order functions, structs, classes, constructors, methods, inheritance, overriding and `super()`. |
+| **5** | Runtime behavior, exception handling, nested handlers, re-raising and the module system. |
+| **6** | Peephole optimization on emitted IL to collapse redundant comparison chains. |
+| **7** | Rewrite `vayuc` in Vayu itself, then bootstrap the compiler so Vayu can compile its own compiler. |
+| **8** | Stack-allocate instances whose address never escapes a function, closing the remaining OOP performance gap. |
+| **9** | `nva` · `nova.toml` · `nova.lock` · dependency resolver · registry. |
+| **10** | `regex` · `thread` · `net` · `crypto` · `random` · `os` · math extras. |
+| **11** | `with` · `match/case` · `enum` · `interface` · `namespace` · `const` · `static` · `defer` · `yield` · `is / is_not` · bitwise · compound assignment · visibility. |
+| **12** | `unique<T>` · `shared<T>` · `weak<T>` · move semantics · opt-in borrow checking. |
+| **13** | `repr` · `hash` · `id` · `isinstance` · `enumerate` · `zip` · `reversed` · `round` · `pow` · `divmod` · `sign` · `gcd` · `lcm` · `clamp`. |
+| **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
+| **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
+| **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
+| **17** | `vayu.vyu` supports the compiler's implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
+| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
+| **19** | Window / event / widget layer. |
+| **20** | 2D first, then 3D. |
+| **21** | Tensors · autodiff · ONNX · CUDA. |
+| **22** | `vayu install` · `vypy install` · public index · ecosystem. |_
+
+> The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
+
+For benchmark information and website updates, see the **[official Vayu website](https://vayu.gt.tc)**.
 
 ---
-
 # 🌱 The Goal
 
 Vayu is not trying to simply become:
