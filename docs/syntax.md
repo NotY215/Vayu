@@ -475,4 +475,6 @@ Vayu currently has interpreter, bytecode/VM, and native execution paths. Native-
 
 ## Current phase
 
-**Phase 15 is complete. Phase 16 is currently in progress**, expanding the native Python/CPython interoperability layer.
+**Phase 16 is complete. Phase 17 is the current development direction.**
+
+Phase 16 expanded native CPython interoperability and compound assignment support. The next roadmap milestone is to bring the compiler toward self-hosting: the Vayu implementation must reach feature parity with the implemented C++ `vayuc` bootstrap compiler before the C++ bootstrap can eventually be retired.

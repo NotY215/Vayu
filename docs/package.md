@@ -52,3 +52,8 @@ Vayu already has source modules, `import`/`from ... import ...`, aliases, built-
 The following remain planned rather than complete: project manifests, dependency resolution, lock files, package registry, `nva install`, publishing, package caching, reproducible package builds, and platform-aware native dependency resolution.
 
 The current `nva install <package>` syntax describes the intended package-manager workflow; it should not be interpreted as proof that the full registry/installer is already implemented.
+
+
+## Roadmap Alignment
+
+The long-term package roadmap expands beyond the current planned `nva` workflow into `vayu install`, `vypy install`, a public package index, dependency resolution, lockfiles, reproducible builds, caching, publishing, and platform-aware native dependency handling. These remain roadmap capabilities rather than claims about the current registry implementation.

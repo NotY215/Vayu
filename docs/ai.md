@@ -57,4 +57,4 @@ The current language/runtime also provides `ptr<T>`, address-of/dereference, poi
 
 ## Phase Position
 
-Phase 15 has ended. Phase 16 is currently expanding Python/CPython interoperability, which is an important prerequisite for practical access to the existing Python AI ecosystem.
+Phase 16 is complete. Its expanded CPython bridge strengthens the interoperability foundation for practical access to the existing Python AI ecosystem. The later AI/ML roadmap targets tensors, autodiff, ONNX, and CUDA as dedicated capabilities.
