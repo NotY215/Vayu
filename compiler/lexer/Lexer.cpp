@@ -32,6 +32,7 @@ namespace vayu {
             {"in", TokenType::In}, {"is", TokenType::Is},
             {"lambda", TokenType::Lambda}, {"yield", TokenType::Yield},
             {"true", TokenType::True}, {"false", TokenType::False}, {"none", TokenType::None},
+            {"True", TokenType::True}, {"False", TokenType::False}, {"None", TokenType::None},
             {"int", TokenType::IntKw}, {"float", TokenType::FloatKw},
             {"bool", TokenType::BoolKw}, {"str", TokenType::StrKw},
             {"char", TokenType::CharKw}, {"bytes", TokenType::BytesKw},

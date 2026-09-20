@@ -310,6 +310,10 @@ class Parser:
             return self.parse_try()
         if k == "Raise":
             return self.parse_raise()
+        if k == "Const":
+            return self.parse_const()
+        if k == "Enum":
+            return self.parse_enum()
         if k == "Identifier":
             if self.peek_at(1) == "Colon":
                 return self.parse_annot_assign()
@@ -595,6 +599,65 @@ class Parser:
             else:
                 self.ast.nodes[last].extra = fnode
             last = fnode
+        self.ast.nodes[node].left = first
+        return node
+
+    def parse_const(self) -> int:
+        self.advance()
+        name = self.expect("Identifier", "constant name")
+        typ = 0
+        if self.check("Colon"):
+            self.advance()
+            typ = self.parse_type_expr()
+        self.expect("Assign", "'=' in const declaration")
+        value = self.parse_expression()
+        node = self.ast.add("Const")
+        self.ast.nodes[node].value = name.lexeme
+        self.ast.nodes[node].left = typ
+        self.ast.nodes[node].right = value
+        return node
+
+    def parse_enum(self) -> int:
+        self.advance()
+        name = self.expect("Identifier", "enum name")
+        self.expect("Colon", "':' after enum name")
+        self.expect("Newline", "newline after ':'")
+        self.skip_newlines()
+        if self.check("Indent"):
+            self.advance()
+        else:
+            self.parse_error("expected indented enum body")
+        node = self.ast.add("Enum")
+        self.ast.nodes[node].value = name.lexeme
+        next_val = 0
+        first = 0
+        last = 0
+        while true:
+            self.skip_newlines()
+            if self.check("Dedent"):
+                self.advance()
+                break
+            if self.check("EOF"):
+                break
+            item_name = self.expect("Identifier", "enum item name")
+            item = self.ast.add("EnumItem")
+            self.ast.nodes[item].value = item_name.lexeme
+            if self.match("Assign"):
+                val = self.parse_expression()
+                self.ast.nodes[item].left = val
+                vn = self.ast.nodes[val]
+                if vn.kind == "Int":
+                    next_val = vayu_parse_int_lit(vn.value) + 1
+            else:
+                lit = self.ast.add("Int")
+                self.ast.nodes[lit].value = str(next_val)
+                self.ast.nodes[item].left = lit
+                next_val = next_val + 1
+            if first == 0:
+                first = item
+            else:
+                self.ast.nodes[last].extra = item
+            last = item
         self.ast.nodes[node].left = first
         return node
 
@@ -988,6 +1051,17 @@ class LoopContext:
         self.continue_label = cont
         self.break_label = brk
 
+
+class EnumInfo:
+    name: str
+    item_names: list<str>
+    item_values: list<int>
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.item_names = []
+        self.item_values = []
+
 class ClassInfo:
     name: str
     parent_name: str
@@ -1058,6 +1132,7 @@ class Codegen:
         self.loop_stack = []
         self.terminated = false
         self.class_infos = []
+        self.enum_infos: list<EnumInfo> = []
         self.field_names = []
         self.field_offsets = []
         self.next_field_offset = 0
@@ -1193,6 +1268,37 @@ class Codegen:
         i = 0
         while i < len(self.class_infos):
             if self.class_infos[i].name == name:
+                return i
+            i = i + 1
+        return -1
+
+    def collect_enums(self, root_idx: int) -> None:
+        root = self.ast.nodes[root_idx]
+        cur = root.left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Enum":
+                info = EnumInfo(n.value)
+                item = n.left
+                while item != 0:
+                    im = self.ast.nodes[item]
+                    info.item_names.append(im.value)
+                    if im.left != 0:
+                        vn = self.ast.nodes[im.left]
+                        if vn.kind == "Int":
+                            info.item_values.append(vayu_parse_int_lit(vn.value))
+                        else:
+                            info.item_values.append(0)
+                    else:
+                        info.item_values.append(0)
+                    item = im.extra
+                self.enum_infos.append(info)
+            cur = n.extra
+
+    def find_enum_idx(self, name: str) -> int:
+        i = 0
+        while i < len(self.enum_infos):
+            if self.enum_infos[i].name == name:
                 return i
             i = i + 1
         return -1
@@ -1471,7 +1577,12 @@ class Codegen:
             if n.left != 0:
                 self.collect_assigned(n.left)
             return
-
+        if n.kind == "Const":
+            self.declare_var(n.value)
+            self.collect_assigned(n.right)
+            return
+        if n.kind == "Enum":
+            return
         if n.kind == "Index":
             self.collect_assigned(n.left)
             self.collect_assigned(n.right)
@@ -1753,6 +1864,21 @@ class Codegen:
         return "0"
 
     def gen_attr(self, n: Node) -> str:
+        if n.left != 0:
+            base = self.ast.nodes[n.left]
+            if base.kind == "Name":
+                ei = self.find_enum_idx(base.value)
+                if ei != -1:
+                    info = self.enum_infos[ei]
+                    j = 0
+                    while j < len(info.item_names):
+                        if info.item_names[j] == n.value:
+                            self.last_kind = "int"
+                            self.last_class = ""
+                            self.last_elem_class = ""
+                            self.last_val_class = ""
+                            return str(info.item_values[j])
+                        j = j + 1
         base_ssa = self.gen_expr(n.left)
         base_class = self.last_class
         if base_class == "":
@@ -2264,6 +2390,18 @@ class Codegen:
             return
         if n.kind == "Raise":
             self.gen_raise(n)
+            return
+        if n.kind == "Const":
+            v = self.gen_expr(n.right)
+            vkind = self.last_kind
+            vcls = self.last_class
+            slot = self.slot_for(n.value)
+            if slot == "":
+                slot = self.declare_var(n.value)
+            self.emit("storel " + v + ", " + slot)
+            self.set_var_info(n.value, vkind, vcls, "", "")
+            return
+        if n.kind == "Enum":
             return
         print("vayu: statement kind '" + n.kind + "' not supported")
         exit(1)
@@ -2815,6 +2953,7 @@ class Codegen:
 
     def gen_program(self, root_idx: int) -> None:
         self.collect_classes(root_idx)
+        self.collect_enums(root_idx)
         self.resolve_classes()
         self.collect_assigned(root_idx)
 
@@ -2913,6 +3052,8 @@ def keyword_kind(word: str) -> str:
     kw["while"] = "While"
     kw["for"] = "For"
     kw["break"] = "Break"
+    kw["const"] = "Const"
+    kw["enum"]  = "Enum"
     kw["continue"] = "Continue"
     kw["pass"] = "Pass"
     kw["class"] = "Class"

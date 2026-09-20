@@ -1,0 +1,16 @@
+# self_host_17_5.vyu — Phase 17.5 target: const + enum.
+
+const MAX: int = 100
+const RATIO: int = 3
+
+enum Color:
+    RED
+    GREEN = 5
+    BLUE
+
+print(MAX)
+print(RATIO)
+print(MAX / RATIO)
+print(Color.RED)
+print(Color.GREEN)
+print(Color.BLUE)

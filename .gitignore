@@ -6,3 +6,4 @@ examples/bench/cpp/*.exe
 *.s
 *.ssa
 *.o
+tools/Lib/
