@@ -1214,6 +1214,7 @@ class Codegen:
     last_class: str
     last_elem_class: str
     last_val_class: str
+    extern_names: list<str>
     final: str
 
     def __init__(self, ast: Ast) -> None:
