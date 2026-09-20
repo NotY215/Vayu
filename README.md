@@ -491,7 +491,7 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, native backend, FFI layer, and Python/CPython interoperability.
 
-Recent development history records **Phase 16 as complete**. The latest Phase 16 work added compound assignment operators and expanded the native Python bridge with features including `py.eval`, `py.exec_file`, `py.callback`, `py.setattr`, `py.repr`, `py.type_name`, `py.call_kw`, `py.list`, `py.dict`, and `py.last_error`, alongside thread-safety improvements and tests.
+**Phase 16 is complete. Phase 17 is the current development direction.**
 
 Current implemented areas include:
 
@@ -508,17 +508,17 @@ Current implemented areas include:
 - raw pointers, references, pointer arithmetic, `malloc()` and `free()`
 - C FFI, function pointers, external-library linking and supported struct-by-value FFI
 - runtime modules including math, filesystem/OS, regex, threading, networking, crypto, random, time and JSON
-- native CPython loading and Python value/call interoperability
+- native CPython loading and expanded Python value/call interoperability
 
 ### Current Development Direction
 
 **Phase 17 — Vayu self-hosting / compiler bootstrap**
 
-The next major milestone is to move the compiler implementation toward Vayu itself so that the language can eventually compile its own compiler. The C++ implementation remains the bootstrap/reference implementation while feature parity and bootstrap infrastructure are developed.
+The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu itself is developed toward feature parity. The long-term objective is for Vayu to compile its own compiler and eventually allow the C++ bootstrap implementation to be dropped.
 
 ### Vayu Roadmap
 
-_| Phase | Scope |
+| Phase | Scope |
 |---:|---|
 | **1** | Core lexer, parser, AST, expressions, variables and indentation-based language structure. |
 | **2** | Conditions, loops, `range()`, `break`, `continue`, typed functions, return values and recursion. |
@@ -536,12 +536,12 @@ _| Phase | Scope |
 | **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | `vayu.vyu` supports the compiler's implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
+| **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
 | **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
 | **19** | Window / event / widget layer. |
 | **20** | 2D first, then 3D. |
 | **21** | Tensors · autodiff · ONNX · CUDA. |
-| **22** | `vayu install` · `vypy install` · public index · ecosystem. |_
+| **22** | `vayu install` · `vypy install` · public index · ecosystem. |
 
 > The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
 
