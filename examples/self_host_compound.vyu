@@ -2,10 +2,10 @@
 
 def main() -> None:
     x: int = 10
-    x += 5
-    x -= 3
-    x *= 2
-    x /= 4
+    x += 5      # 15
+    x -= 3      # 12
+    x *= 2      # 24
+    x %= 5      # 4
     print(x)
 
 main()

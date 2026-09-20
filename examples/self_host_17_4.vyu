@@ -1,0 +1,12 @@
+# self_host_17_4.vyu — Phase 17.4 target.
+
+a: int = 0b1100
+b: int = 0o17
+c: int = 0xFF
+d: int = 42
+
+print(a)   # 12
+print(b)   # 15
+print(c)   # 255
+print(d)   # 42
+print(a + b + c + d)  # 324

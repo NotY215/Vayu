@@ -1,4 +1,41 @@
 # vcode.vyu — Vayu source -> QBE IL.
+def vayu_digit_val(c: str) -> int:
+    o = ord(c)
+    if o >= 48 and o <= 57:
+        return o - 48
+    if o >= 97 and o <= 122:
+        return o - 97 + 10
+    if o >= 65 and o <= 90:
+        return o - 65 + 10
+    return -1
+
+def vayu_parse_int_lit(s: str) -> int:
+    if len(s) < 1:
+        return 0
+    base = 10
+    start = 0
+    if len(s) >= 2 and s[0] == "0":
+        c = s[1]
+        if c == "b" or c == "B":
+            base = 2
+            start = 2
+        elif c == "o" or c == "O":
+            base = 8
+            start = 2
+        elif c == "x" or c == "X":
+            base = 16
+            start = 2
+    acc = 0
+    i = start
+    while i < len(s):
+        d = vayu_digit_val(s[i])
+        if d < 0:
+            break
+        if d >= base:
+            break
+        acc = acc * base + d
+        i = i + 1
+    return acc
 
 def type_kind_of(tstr: str) -> str:
     if tstr == "int":
@@ -269,6 +306,10 @@ class Parser:
         if k == "Continue":
             self.advance()
             return self.ast.add("Continue")
+        if k == "Try":
+            return self.parse_try()
+        if k == "Raise":
+            return self.parse_raise()
         if k == "Identifier":
             if self.peek_at(1) == "Colon":
                 return self.parse_annot_assign()
@@ -311,6 +352,27 @@ class Parser:
         if op_kind == "PercentAssign":
             self.advance()
             return self.build_compound_assign(expr, "%")
+        if op_kind == "StarStarAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "**")
+        if op_kind == "SlashSlashAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "//")
+        if op_kind == "AmpAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "&")
+        if op_kind == "PipeAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "|")
+        if op_kind == "CaretAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "^")
+        if op_kind == "ShlAssign":
+            self.advance()
+            return self.build_compound_assign(expr, "<<")
+        if op_kind == "ShrAssign":
+            self.advance()
+            return self.build_compound_assign(expr, ">>")
         node = self.ast.add("ExprStmt")
         self.ast.nodes[node].left = expr
         return node
@@ -553,6 +615,52 @@ class Parser:
         self.ast.nodes[node].value = tstr
         return node
 
+    def parse_try(self) -> int:
+        self.advance()   # 'try'
+        self.expect("Colon", "':' after try")
+        try_body = self.parse_block()
+        node = self.ast.add("Try")
+        self.ast.nodes[node].left = try_body
+        first_exc = 0
+        last_exc = 0
+        while self.check("Except"):
+            self.advance()
+            ec = self.ast.add("Except")
+            if not self.check("Colon"):
+                t = self.parse_type_expr()
+                self.ast.nodes[ec].left = t
+                if self.check("As"):
+                    self.advance()
+                    vname = self.expect("Identifier", "name after 'as'")
+                    self.ast.nodes[ec].value = vname.lexeme
+            self.expect("Colon", "':' after except")
+            ebody = self.parse_block()
+            self.ast.nodes[ec].right = ebody
+            if first_exc == 0:
+                first_exc = ec
+            else:
+                self.ast.nodes[last_exc].extra = ec
+            last_exc = ec
+        self.ast.nodes[node].extra = first_exc
+        if self.check("Finally"):
+            self.advance()
+            self.expect("Colon", "':' after finally")
+            fbody = self.parse_block()
+            self.ast.nodes[node].extra2 = fbody
+        if first_exc == 0 and self.ast.nodes[node].extra2 == 0:
+            print("try requires at least one except or a finally")
+            exit(1)
+        return node
+
+    def parse_raise(self) -> int:
+        self.advance()   # 'raise'
+        node = self.ast.add("Raise")
+        k = self.peek_kind()
+        if k != "Newline" and k != "Dedent" and k != "EOF":
+            exc = self.parse_expression()
+            self.ast.nodes[node].left = exc
+        return node
+
     def parse_expression(self) -> int:
         return self.parse_binary(1)
 
@@ -577,6 +685,16 @@ class Parser:
             return 4
         if kind == "Is":
             return 4
+        if kind == "Pipe":
+            return 4
+        if kind == "Caret":
+            return 5
+        if kind == "Amp":
+            return 6
+        if kind == "Shl":
+            return 7
+        if kind == "Shr":
+            return 7
         if kind == "Plus":
             return 5
         if kind == "Minus":
@@ -628,6 +746,16 @@ class Parser:
             return "in"
         if kind == "Is":
             return "is"
+        if kind == "Amp":
+            return "&"
+        if kind == "Pipe":
+            return "|"
+        if kind == "Caret":
+            return "^"
+        if kind == "Shl":
+            return "<<"
+        if kind == "Shr":
+            return ">>"
         return "?"
 
     def parse_binary(self, min_prec: int) -> int:
@@ -670,6 +798,13 @@ class Parser:
             operand = self.parse_unary()
             node = self.ast.add("Unary")
             self.ast.nodes[node].op = "not"
+            self.ast.nodes[node].left = operand
+            return node
+        if k == "Tilde":
+            self.advance()
+            operand = self.parse_unary()
+            node = self.ast.add("Unary")
+            self.ast.nodes[node].op = "~"
             self.ast.nodes[node].left = operand
             return node
         return self.parse_postfix()
@@ -724,7 +859,7 @@ class Parser:
         if k == "Int":
             tok = self.advance()
             idx = self.ast.add("Int")
-            self.ast.nodes[idx].value = tok.lexeme
+            self.ast.nodes[idx].value = str(vayu_parse_int_lit(tok.lexeme))
             return idx
         if k == "Float":
             tok = self.advance()
@@ -1292,6 +1427,24 @@ class Codegen:
         if n.kind == "Attr":
             self.collect_assigned(n.left)
             return
+
+        if n.kind == "Try":
+            self.collect_assigned(n.left)
+            exc_node = n.extra
+            while exc_node != 0:
+                en = self.ast.nodes[exc_node]
+                if en.value != "":
+                    self.declare_var(en.value)
+                self.collect_assigned(en.right)
+                exc_node = en.extra
+            if n.extra2 != 0:
+                self.collect_assigned(n.extra2)
+            return
+        if n.kind == "Raise":
+            if n.left != 0:
+                self.collect_assigned(n.left)
+            return
+
         if n.kind == "Index":
             self.collect_assigned(n.left)
             self.collect_assigned(n.right)
@@ -1342,6 +1495,12 @@ class Codegen:
             if n.op == "-":
                 t = self.new_temp()
                 self.emit(t + " =l sub 0, " + v)
+                self.last_kind = "int"
+                self.last_class = ""
+                return t
+            if n.op == "~":
+                t = self.new_temp()
+                self.emit(t + " =l xor " + v + ", -1")
                 self.last_kind = "int"
                 self.last_class = ""
                 return t
@@ -1416,6 +1575,36 @@ class Codegen:
                 self.last_kind = "bool"
                 self.last_class = ""
                 return t
+        if op == "&":
+            t = self.new_temp()
+            self.emit(t + " =l and " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "|":
+            t = self.new_temp()
+            self.emit(t + " =l or " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "^":
+            t = self.new_temp()
+            self.emit(t + " =l xor " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "<<":
+            t = self.new_temp()
+            self.emit(t + " =l shl " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == ">>":
+            t = self.new_temp()
+            self.emit(t + " =l shr " + a + ", " + b)
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
             print("vcode: 'in' on unsupported type")
             exit(1)
         if op == "+":
@@ -1451,6 +1640,12 @@ class Codegen:
         if op == "%":
             t = self.new_temp()
             self.emit(t + " =l call $vayu_mod(l " + a + ", l " + b + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+        if op == "**":
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_pow_int(l " + a + ", l " + b + ")")
             self.last_kind = "int"
             self.last_class = ""
             return t
@@ -1677,6 +1872,16 @@ class Codegen:
             self.last_kind = "int"
             self.last_class = ""
             return v
+
+        if name == "ord":
+            arg = n.right
+            v = self.gen_expr(arg)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_ord(l " + v + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            return t
+
         if name == "read_file":
             arg = n.right
             v = self.gen_expr(arg)
@@ -2027,6 +2232,12 @@ class Codegen:
         if n.kind == "Block":
             self.gen_block_from(n.left)
             return
+        if n.kind == "Try":
+            self.gen_try(n)
+            return
+        if n.kind == "Raise":
+            self.gen_raise(n)
+            return
         print("vcode: statement kind '" + n.kind + "' not supported")
         exit(1)
 
@@ -2129,6 +2340,101 @@ class Codegen:
         if not self.terminated:
             self.emit("jmp " + cond_label)
         self.emit_raw(end_label)
+
+    def gen_try(self, n: Node) -> None:
+        try_label = self.new_label("try_body_")
+        exc_label = self.new_label("try_exc_")
+        end_label = self.new_label("try_end_")
+
+        fid = self.new_temp()
+        self.emit(fid + " =l call $vayu_try_push()")
+        buf = self.new_temp()
+        self.emit(buf + " =l call $vayu_try_buf(l " + fid + ")")
+        rv = self.new_temp()
+        self.emit(rv + " =w call $setjmp(l " + buf + ")")
+        self.emit("jnz " + rv + ", " + exc_label + ", " + try_label)
+
+        self.emit_raw(try_label)
+        self.gen_block_from(self.ast.nodes[n.left].left)
+        if not self.terminated:
+            self.emit("call $vayu_try_pop()")
+            self.emit("jmp " + end_label)
+
+        self.emit_raw(exc_label)
+        handler_labels: list<str> = []
+        next_labels: list<str> = []
+        exc_node = n.extra
+        while exc_node != 0:
+            handler_labels.append(self.new_label("catch_match_"))
+            next_labels.append(self.new_label("catch_next_"))
+            exc_node = self.ast.nodes[exc_node].extra
+        reraise_label = self.new_label("try_reraise_")
+
+        et = self.new_temp()
+        self.emit(et + " =l call $vayu_get_exc_type()")
+
+        i = 0
+        exc_node = n.extra
+        while exc_node != 0:
+            en = self.ast.nodes[exc_node]
+            if en.left != 0:
+                type_str = self.ast.nodes[en.left].value
+                type_lbl = self.intern_str(type_str)
+                if type_str == "Exception":
+                    self.emit("jmp " + handler_labels[i])
+                else:
+                    cond = self.new_temp()
+                    self.emit(cond + " =w call $vayu_str_eq(l " + et +
+                              ", l " + type_lbl + ")")
+                    next_tgt = reraise_label
+                    if i + 1 < len(next_labels):
+                        next_tgt = next_labels[i + 1]
+                    self.emit("jnz " + cond + ", " + handler_labels[i] +
+                              ", " + next_tgt)
+            else:
+                self.emit("jmp " + handler_labels[i])
+            exc_node = en.extra
+            i = i + 1
+
+        self.emit_raw(reraise_label)
+        self.emit("call $vayu_reraise()")
+        self.emit("jmp " + end_label)
+
+        i = 0
+        exc_node = n.extra
+        while exc_node != 0:
+            en = self.ast.nodes[exc_node]
+            self.emit_raw(handler_labels[i])
+            if en.value != "":
+                exc_val = self.new_temp()
+                self.emit(exc_val + " =l call $vayu_get_exc_value()")
+                slot = self.declare_var(en.value)
+                self.emit("storel " + exc_val + ", " + slot)
+                self.set_var_info(en.value, "obj", "", "", "")
+            self.gen_block_from(self.ast.nodes[en.right].left)
+            if not self.terminated:
+                self.emit("call $vayu_try_pop()")
+                self.emit("jmp " + end_label)
+            exc_node = en.extra
+            i = i + 1
+
+        self.emit_raw(end_label)
+        if n.extra2 != 0:
+            self.gen_block_from(self.ast.nodes[n.extra2].left)
+
+    def gen_raise(self, n: Node) -> None:
+        if n.left != 0:
+            v = self.gen_expr(n.left)
+            vkind = self.last_kind
+            if vkind == "str":
+                type_lbl = self.intern_str("Exception")
+                t = self.new_temp()
+                self.emit(t + " =l call $vayu_mkexc(l " + type_lbl +
+                          ", l " + v + ")")
+                v = t
+            self.emit("call $vayu_raise(l " + v + ")")
+        else:
+            self.emit("call $vayu_reraise()")
 
     def gen_for(self, n: Node) -> None:
         iter_node = self.ast.nodes[n.left]
@@ -2584,6 +2890,11 @@ def keyword_kind(word: str) -> str:
     kw["pass"] = "Pass"
     kw["class"] = "Class"
     kw["struct"] = "Struct"
+    kw["try"] = "Try"
+    kw["except"] = "Except"
+    kw["finally"] = "Finally"
+    kw["with"] = "With"
+    kw["raise"] = "Raise"
     kw["and"] = "And"
     kw["or"] = "Or"
     kw["not"] = "Not"
@@ -2707,7 +3018,58 @@ def tokenize(source: str) -> list<Token>:
         if c.is_digit():
             start_col = col
             text = ""
-            while true:
+            if c == "0" and pos + 1 < n:
+                nxt2 = source[pos + 1]
+                if nxt2 == "b" or nxt2 == "B":
+                    text = "0b"
+                    pos = pos + 2
+                    col = col + 2
+                    while pos < n:
+                        cc = source[pos]
+                        if cc == "0" or cc == "1":
+                            text = text + cc
+                            pos = pos + 1
+                            col = col + 1
+                        else:
+                            break
+                    toks.append(Token("Int", text, line, start_col))
+                    continue
+                if nxt2 == "o" or nxt2 == "O":
+                    text = "0o"
+                    pos = pos + 2
+                    col = col + 2
+                    while pos < n:
+                        o = ord(source[pos])
+                        if o >= 48 and o <= 55:
+                            text = text + source[pos]
+                            pos = pos + 1
+                            col = col + 1
+                        else:
+                            break
+                    toks.append(Token("Int", text, line, start_col))
+                    continue
+                if nxt2 == "x" or nxt2 == "X":
+                    text = "0x"
+                    pos = pos + 2
+                    col = col + 2
+                    while pos < n:
+                        o = ord(source[pos])
+                        keep = false
+                        if o >= 48 and o <= 57:
+                            keep = true
+                        if o >= 97 and o <= 102:
+                            keep = true
+                        if o >= 65 and o <= 70:
+                            keep = true
+                        if keep:
+                            text = text + source[pos]
+                            pos = pos + 1
+                            col = col + 1
+                        else:
+                            break
+                    toks.append(Token("Int", text, line, start_col))
+                    continue
+            while True:
                 if pos >= n:
                     break
                 if not source[pos].is_digit():
@@ -2759,6 +3121,41 @@ def tokenize(source: str) -> list<Token>:
         nxt = ""
         if pos + 1 < n:
             nxt = source[pos + 1]
+        if c == "&":
+            if nxt == "=":
+                toks.append(Token("AmpAssign", "&=", line, start_col))
+                pos = pos + 2
+                col = col + 2
+            else:
+                toks.append(Token("Amp", "&", line, start_col))
+                pos = pos + 1
+                col = col + 1
+            continue
+        if c == "|":
+            if nxt == "=":
+                toks.append(Token("PipeAssign", "|=", line, start_col))
+                pos = pos + 2
+                col = col + 2
+            else:
+                toks.append(Token("Pipe", "|", line, start_col))
+                pos = pos + 1
+                col = col + 1
+            continue
+        if c == "^":
+            if nxt == "=":
+                toks.append(Token("CaretAssign", "^=", line, start_col))
+                pos = pos + 2
+                col = col + 2
+            else:
+                toks.append(Token("Caret", "^", line, start_col))
+                pos = pos + 1
+                col = col + 1
+            continue
+        if c == "~":
+            toks.append(Token("Tilde", "~", line, start_col))
+            pos = pos + 1
+            col = col + 1
+            continue
         if c == "+":
             if nxt == "=":
                 toks.append(Token("PlusAssign", "+=", line, start_col))
@@ -2785,9 +3182,14 @@ def tokenize(source: str) -> list<Token>:
             continue
         if c == "*":
             if nxt == "*":
-                toks.append(Token("StarStar", "**", line, start_col))
-                pos = pos + 2
-                col = col + 2
+                if pos + 2 < n and source[pos + 2] == "=":
+                    toks.append(Token("StarStarAssign", "**=", line, start_col))
+                    pos = pos + 3
+                    col = col + 3
+                else:
+                    toks.append(Token("StarStar", "**", line, start_col))
+                    pos = pos + 2
+                    col = col + 2
             elif nxt == "=":
                 toks.append(Token("StarAssign", "*=", line, start_col))
                 pos = pos + 2
@@ -2799,9 +3201,14 @@ def tokenize(source: str) -> list<Token>:
             continue
         if c == "/":
             if nxt == "/":
-                toks.append(Token("SlashSlash", "//", line, start_col))
-                pos = pos + 2
-                col = col + 2
+                if pos + 2 < n and source[pos + 2] == "=":
+                    toks.append(Token("SlashSlashAssign", "//=", line, start_col))
+                    pos = pos + 3
+                    col = col + 3
+                else:
+                    toks.append(Token("SlashSlash", "//", line, start_col))
+                    pos = pos + 2
+                    col = col + 2
             elif nxt == "=":
                 toks.append(Token("SlashAssign", "/=", line, start_col))
                 pos = pos + 2
@@ -2838,7 +3245,16 @@ def tokenize(source: str) -> list<Token>:
                 col = col + 2
             continue
         if c == "<":
-            if nxt == "=":
+            if nxt == "<":
+                if pos + 2 < n and source[pos + 2] == "=":
+                    toks.append(Token("ShlAssign", "<<=", line, start_col))
+                    pos = pos + 3
+                    col = col + 3
+                else:
+                    toks.append(Token("Shl", "<<", line, start_col))
+                    pos = pos + 2
+                    col = col + 2
+            elif nxt == "=":
                 toks.append(Token("LtEq", "<=", line, start_col))
                 pos = pos + 2
                 col = col + 2
@@ -2848,7 +3264,16 @@ def tokenize(source: str) -> list<Token>:
                 col = col + 1
             continue
         if c == ">":
-            if nxt == "=":
+            if nxt == ">":
+                if pos + 2 < n and source[pos + 2] == "=":
+                    toks.append(Token("ShrAssign", ">>=", line, start_col))
+                    pos = pos + 3
+                    col = col + 3
+                else:
+                    toks.append(Token("Shr", ">>", line, start_col))
+                    pos = pos + 2
+                    col = col + 2
+            elif nxt == "=":
                 toks.append(Token("GtEq", ">=", line, start_col))
                 pos = pos + 2
                 col = col + 2

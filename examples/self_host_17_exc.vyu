@@ -1,0 +1,14 @@
+# self_host_17_exc.vyu — Phase 17.3: try / raise / except.
+# Native try/except is not yet supported; harness runs tree+vm only.
+
+try:
+    raise "boom"
+except:
+    print(1)
+
+try:
+    raise "boom"
+except ValueError:
+    print(2)
+except:
+    print(3)
