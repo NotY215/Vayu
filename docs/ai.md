@@ -42,7 +42,7 @@ The planned direction includes:
 
 Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area.
 
-For the latest roadmap and project updates, visit the [official Vayu website](https://vayu.gt.tc).
+For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
 
 
 ## Current Native Python Foundation
@@ -55,6 +55,14 @@ This is an implemented interoperability foundation, not yet complete NumPy/PyTor
 
 The current language/runtime also provides `ptr<T>`, address-of/dereference, pointer arithmetic, `malloc()`, `free()`, `unique<T>`, `shared<T>`, `weak<T>`, C FFI, external library linking, tuples, sets, slicing, and expanded math/utility built-ins. These are foundations for future numerical and AI libraries.
 
+## Tooling and Current Integration
+
+Vayu's current developer tooling includes the Vayu Language Server (`vls`), formatter (`vfmt`), linter (`vlint`), and the official VS Code extension. These tools improve the workflow for developing AI-oriented Vayu code, while the actual tensor/ML runtime remains a future ecosystem layer.
+
+The native compiler also supports `--emit-runtime` for exporting the native runtime C source and `--opt <0-3>` for native optimization-level selection.
+
 ## Phase Position
 
-Phase 16 is complete. Its expanded CPython bridge strengthens the interoperability foundation for practical access to the existing Python AI ecosystem. The later AI/ML roadmap targets tensors, autodiff, ONNX, and CUDA as dedicated capabilities.
+**Phase 16 is complete. Phase 17 is complete. Phase 18 is the current/most recently completed developer-tooling phase.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration.
+
+The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
