@@ -25,7 +25,9 @@ The current source tree demonstrates a substantially expanded language/compiler 
 - native CPython loading and expanded Python value/call interoperability
 - interpreter, bytecode/VM and native execution paths
 
-The latest development history marks **Phase 16 complete**. Phase 17 is the next development direction: bringing the Vayu compiler toward self-hosting and eventual removal of the C++ bootstrap implementation.
+The current development history places **Phase 17 as completed and Phase 18 as the current/most recently completed developer-tooling phase**. Phase 18 introduced the Vayu Language Server, formatter, linter, VS Code integration, additional LSP capabilities, compiler optimization/runtime options, and related tooling infrastructure.
+
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. The long-term native-backend direction is being developed separately through VCB.
 
 ## Roadmap
 
@@ -49,16 +51,36 @@ The roadmap below records the project's planned development phases. A phase may 
 | **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
-| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
+| **17** | Self-hosting/compiler-bootstrap work: bring the Vayu implementation toward the C++ `vayuc` feature set and stabilize the bootstrap path. **Completed development phase; the C++ compiler remains the current reference/bootstrap implementation.** |
+| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling improvements. **Current/most recently completed tooling phase.** |
 | **19** | Window / event / widget layer. |
-| **20** | 2D first, then 3D. |
-| **21** | Tensors · autodiff · ONNX · CUDA. |
-| **22** | `vayu install` · `vypy install` · public index · ecosystem. |
+| **20** | 2D first, then 3D graphics and rendering. |
+| **21** | Tensors · autodiff · ONNX · CUDA/GPU AI infrastructure. |
+| **22** | Package ecosystem: `vayu install` · `vypy install` · public index · dependency resolution · lockfiles · publishing. |
+| **23** | **Single-binary native toolchain:** retire the existing QBE/GCC backend chain and move toward VCB emitting native machine code directly; Windows-first, then ELF/Mach-O targets. |
 
-### Phase 17 — Current Direction
+### Phase 18 — Developer Tooling
 
-The immediate objective is not to rewrite the project from scratch. The existing C++ `vayuc` remains the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity. Once Vayu can reliably compile the compiler and the bootstrap process is stable, the long-term objective is to drop the C++ compiler backend.
+The current tooling layer is now a major part of the repository. It includes:
+
+- `vls` — Vayu Language Server
+- `vfmt` — Vayu formatter
+- `vlint` — Vayu linter
+- VS Code extension for `.vyu`
+- diagnostics, hover, completion and go-to-definition
+- references, rename and signature help
+- formatter and linter integration
+- compiler `--opt` and runtime-emission tooling
+
+The official VS Code extension is published as `Fliczo.vayu`.
+
+**Marketplace:** https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu
+
+**Direct install:** `vscode:extension/Fliczo.vayu`
+
+### Self-Hosting Direction
+
+The immediate compiler objective remains self-hosting rather than rewriting the project from scratch. The existing C++ `vayuc` remains the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity. Once Vayu can reliably compile the compiler and the bootstrap process is stable, the long-term objective is to remove dependence on the C++ bootstrap implementation.
 
 ### Later Ecosystem Direction
 
@@ -134,8 +156,34 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phase 15 is complete. Phase 16 is active.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 has begun native CPython integration and is expanding it with primitive value bridging, Python import/attribute/call support, reference-count handling, and bundled Python tooling.
+**Phase 16 is complete, Phase 17 is complete, and Phase 18 is the current/most recently completed tooling phase.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
-The project is currently moving from broad core-language/runtime capability toward stronger interoperability and ecosystem foundations. The next major areas are compiler/native-backend stabilization, memory/resource correctness, broader Python/C++ interoperability, standard-library growth, package tooling, concurrency, and eventually GUI/graphics/scientific/AI ecosystems.
+The project is moving from broad core-language/runtime capability toward a complete development ecosystem. The immediate areas are compiler/bootstrap stabilization, self-hosting, memory/resource correctness, native backend evolution, standard-library growth, package tooling, concurrency, and continued developer-tooling improvements.
+
+Longer-term work expands into GUI/event/widget APIs, graphics, scientific computing, AI/ML, package distribution, and the VCB-based native toolchain.
+
+## Architecture Direction
+
+```text
+Vayu Source (.vyu)
+        ↓
+Lexer → Parser → AST → Semantic / Type Checking
+        ↓
+   Vayu IR / compiler pipeline
+        ↓
+Interpreter / VM / Native compilation
+        ↓
+   Future VCB backend
+        ↓
+Native Assembly / Machine Code
+        ↓
+Executable
+```
+
+VCB is a companion project, not a replacement for the Vayu frontend. Its long-term role is to provide the native machine-code backend boundary for the compiler ecosystem.
+
+## Developer Ecosystem
+
+The current editor-facing ecosystem consists of the compiler plus `vls`, `vfmt`, `vlint`, and the official VS Code extension. This establishes the tooling foundation required before the later GUI, AI, package, and native-backend phases can become a cohesive development platform.
