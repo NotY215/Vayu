@@ -38,6 +38,11 @@ namespace vayu {
         if (const char* p = std::getenv("VAYU_QBE"))        qbePath_ = p;
         if (const char* p = std::getenv("VAYU_CC"))         ccPath_ = p;
         if (const char* p = std::getenv("VAYU_QBE_TARGET")) qbeTarget_ = p;
+        if (const char* p = std::getenv("VAYU_CC_OPT")) {
+            int n = std::atoi(p);
+            if (n >= 0 && n <= 3) optLevel_ = n;
+        }
+        optLevel_ = 2;   // -O2: fastest runtime.  Compile time is ~1.4x -O1.
     }
 
     namespace {
@@ -10205,8 +10210,8 @@ int main(int argc, char** argv) {
         }
 
         {
-            std::string cmd = ccPath_ + " -c -O2 \"" + asmPath +
-                "\" -o \"" + objPath + "\"";
+            std::string cmd = ccPath_ + " -c -O" + std::to_string(optLevel_) +
+                " \"" + asmPath + "\" -o \"" + objPath + "\"";
             int rc = std::system(cmd.c_str());
             if (rc != 0) {
                 lastError_ = "assembler failed. .s at " + asmPath;
@@ -10227,7 +10232,8 @@ int main(int argc, char** argv) {
                 linkLibs += " ";
                 linkLibs += extra;
             }
-            std::string cmd = ccPath_ + " -O2 \"" + objPath + "\" \"" + rtPath +
+            std::string cmd = ccPath_ + " -O" + std::to_string(optLevel_) +
+                " \"" + objPath + "\" \"" + rtPath +
                 "\" -o \"" + exePath + "\"" + linkLibs;
             int rc = std::system(cmd.c_str());
             if (rc != 0) {

@@ -52,9 +52,13 @@ static void usage() {
         "  --dump-ir            print the QBE IL\n"
         "\n"
         "Flags:\n"
+        "  --opt <0-3>          gcc optimization level (default 2)\n"
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
-        "  --bench [N]          run the program N times (default 5)\n");
+        "  --bench [N]          run the program N times (default 5)\n"
+        "\n"
+        "Utility:\n"
+        "  --emit-runtime <path>  write the native runtime C source to <path>\n");
 }
 
 namespace {
@@ -87,9 +91,7 @@ int main(int argc, char** argv) {
 
     if (argc < 2) { usage(); return 1; }
 
-    // Phase F: --emit-runtime <path> — dump the embedded full runtime to a
-    // file.  Handled before the usual file-argument parsing because it takes
-    // no .vyu input.
+    // --emit-runtime <path>  (handled before any other arg parsing)
     if (std::strcmp(argv[1], "--emit-runtime") == 0) {
         if (argc < 3) {
             std::fprintf(stderr, "vayuc: --emit-runtime requires a path\n");
@@ -102,6 +104,35 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+
+    // Pre-scan for --opt <n>.  Removed from the argument list so the rest of
+    // main can keep treating argv[1] as the input file regardless of where
+    // --opt appeared.
+    int g_optLevel = 2;
+    std::vector<char*> nargv;
+    nargv.push_back(argv[0]);
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--opt") == 0) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "vayuc: --opt requires a level (0-3)\n");
+                return 1;
+            }
+            char* end = nullptr;
+            long v = std::strtol(argv[i + 1], &end, 10);
+            if (!end || *end != '\0' || v < 0 || v > 3) {
+                std::fprintf(stderr, "vayuc: --opt level must be 0, 1, 2, or 3\n");
+                return 1;
+            }
+            g_optLevel = (int)v;
+            ++i;
+            continue;
+        }
+        nargv.push_back(argv[i]);
+    }
+    argc = (int)nargv.size();
+    argv = nargv.data();
+
+    if (argc < 2) { usage(); return 1; }
 
     std::string file = argv[1];
 
@@ -223,15 +254,16 @@ int main(int argc, char** argv) {
     // ---------- dump-ir ----------
     if (mode == Mode::DumpIR) {
         vayu::NativeCompiler nc;
+        nc.setOptLevel(g_optLevel);
         nc.dumpIR(program, srcDir);
         return nc.lastError().empty() ? 0 : 1;
     }
 
     // ---------- native ----------
     if (mode == Mode::Native) {
-        // --native-out <path>: compile only, do not run
         if (!nativeOutPath.empty()) {
             vayu::NativeCompiler nc;
+            nc.setOptLevel(g_optLevel);
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
             if (rc != 0) {
@@ -244,6 +276,7 @@ int main(int argc, char** argv) {
         if (benchRuns > 0) {
             runBenchmark("native (includes compile)", benchRuns, [&]() {
                 vayu::NativeCompiler nc;
+                nc.setOptLevel(g_optLevel);
                 if (nc.compileAndRun(program, srcDir) != 0) {
                     std::fprintf(stderr, "native: %s\n",
                         nc.lastError().c_str());
@@ -254,6 +287,7 @@ int main(int argc, char** argv) {
         }
 
         vayu::NativeCompiler nc;
+        nc.setOptLevel(g_optLevel);
         return nc.compileAndRun(program, srcDir);
     }
 

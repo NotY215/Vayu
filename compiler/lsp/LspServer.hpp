@@ -27,7 +27,6 @@ namespace vayu::lsp {
 
         void handleMessage(const std::string& body);
 
-        // Request handlers
         void onInitialize(int id, const JsonPtr& params);
         void onShutdown(int id);
         void onDidOpen(const JsonPtr& params);
@@ -36,16 +35,16 @@ namespace vayu::lsp {
         void onHover(int id, const JsonPtr& params);
         void onDefinition(int id, const JsonPtr& params);
         void onCompletion(int id, const JsonPtr& params);
+        void onReferences(int id, const JsonPtr& params);
+        void onRename(int id, const JsonPtr& params);
+        void onSignatureHelp(int id, const JsonPtr& params);
 
-        // Response helpers
         void sendResponse(int id, const JsonPtr& result);
         void sendError(int id, int code, const std::string& msg);
         void sendNotification(const std::string& method, const JsonPtr& params);
 
-        // Diagnostics
         void publishDiagnostics(const std::string& uri, const std::string& text);
 
-        // Parse cache for hover/def/completion
         bool parseDoc(const std::string& uri,
             std::vector<vayu::Token>& tokens,
             std::shared_ptr<vayu::Block>& program);

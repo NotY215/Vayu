@@ -14,14 +14,17 @@ namespace vayu {
         /// If set, compileAndRun writes the executable here and does NOT run it.
         void setOutputExe(const std::string& path) { outputExe_ = path; }
 
+        /// Optimisation level passed to gcc: 0..3.  Default 2.
+        void setOptLevel(int n) { if (n >= 0 && n <= 3) optLevel_ = n; }
+
+        /// Dump the embedded native runtime to `path`.  Used by the fixpoint
+        /// harness (vayuc --emit-runtime).
+        bool writeRuntimeC(const std::string& path) const;
+
         const std::string& lastError() const { return lastError_; }
         void setQbePath(const std::string& p) { qbePath_ = p; }
         void setCcPath(const std::string& p) { ccPath_ = p; }
         void setQbeTarget(const std::string& t) { qbeTarget_ = t; }
-
-        /// Phase F: dump the embedded full runtime to a path.  Used by the
-        /// fixpoint harness so it does not need the stripped vayu_rt.c.
-        bool writeRuntimeC(const std::string& path) const;
 
     private:
         std::string lastError_;
@@ -29,6 +32,7 @@ namespace vayu {
         std::string ccPath_;
         std::string qbeTarget_;
         std::string outputExe_;
+        int         optLevel_ = 2;
         std::string buildQBE(const Block& program, const std::string& sourceDir);
     };
 

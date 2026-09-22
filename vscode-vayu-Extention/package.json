@@ -1,0 +1,64 @@
+{
+  "name": "vayu",
+  "displayName": "Vayu",
+  "description": "Language support for Vayu: syntax, LSP, formatter, linter.",
+  "version": "0.1.0",
+  "publisher": "Fliczo",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": [ "Programming Languages" ],
+  "activationEvents": [
+    "onLanguage:vayu"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "vayu",
+        "aliases": [ "Vayu", "vayu" ],
+        "extensions": [ ".vyu" ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vayu",
+        "scopeName": "source.vayu",
+        "path": "./syntaxes/vayu.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vayu.formatFile",
+        "title": "Vayu: Format File"
+      },
+      {
+        "command": "vayu.lintFile",
+        "title": "Vayu: Lint File"
+      },
+      {
+        "command": "vayu.restartServer",
+        "title": "Vayu: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "Vayu",
+      "properties": {
+        "vayu.vlsPath": {
+          "type": "string",
+          "default": "build/x64-debug/bin/vls.exe",
+          "description": "Path to vls.exe (relative to workspace root, or absolute)."
+        },
+        "vayu.vfmtPath": {
+          "type": "string",
+          "default": "build/x64-debug/bin/vfmt.exe",
+          "description": "Path to vfmt.exe."
+        },
+        "vayu.vlintPath": {
+          "type": "string",
+          "default": "build/x64-debug/bin/vlint.exe",
+          "description": "Path to vlint.exe."
+        }
+      }
+    }
+  }
+}

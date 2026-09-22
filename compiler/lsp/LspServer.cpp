@@ -11,6 +11,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <functional>
 
 namespace vayu::lsp {
 
@@ -129,6 +130,9 @@ namespace vayu::lsp {
         if (method == "textDocument/hover") { onHover(id, paramsNode); return; }
         if (method == "textDocument/definition") { onDefinition(id, paramsNode); return; }
         if (method == "textDocument/completion") { onCompletion(id, paramsNode); return; }
+        if (method == "textDocument/references") { onReferences(id, paramsNode); return; }
+        if (method == "textDocument/rename") { onRename(id, paramsNode); return; }
+        if (method == "textDocument/signatureHelp") { onSignatureHelp(id, paramsNode); return; }
 
         if (hasId) sendError(id, -32601, "method not found: " + method);
     }
@@ -147,12 +151,24 @@ namespace vayu::lsp {
 
         jsonSet(caps, "hoverProvider", jsonBool(true));
         jsonSet(caps, "definitionProvider", jsonBool(true));
+        jsonSet(caps, "referencesProvider", jsonBool(true));
+
+        auto rename = jsonObject();
+        jsonSet(rename, "prepareProvider", jsonBool(false));
+        jsonSet(caps, "renameProvider", rename);
 
         auto comp = jsonObject();
         auto trigger = jsonArray();
         jsonPush(trigger, jsonString("."));
         jsonSet(comp, "triggerCharacters", trigger);
         jsonSet(caps, "completionProvider", comp);
+
+        auto sig = jsonObject();
+        auto sigTrig = jsonArray();
+        jsonPush(sigTrig, jsonString("("));
+        jsonPush(sigTrig, jsonString(","));
+        jsonSet(sig, "triggerCharacters", sigTrig);
+        jsonSet(caps, "signatureHelpProvider", sig);
 
         auto info = jsonObject();
         jsonSet(info, "name", jsonString("vls"));
@@ -528,6 +544,411 @@ namespace vayu::lsp {
         auto result = jsonObject();
         jsonSet(result, "isIncomplete", jsonBool(false));
         jsonSet(result, "items", items);
+        sendResponse(id, result);
+    }
+
+    // ------------------------------------------------------------------
+    // AST walker (used by references + rename)
+    // ------------------------------------------------------------------
+
+    namespace {
+
+        void walkExprLsp(const vayu::Expr* e,
+            const std::function<void(const vayu::Expr*)>& f);
+
+        void walkStmtLsp(const vayu::Stmt* s,
+            const std::function<void(const vayu::Expr*)>& fe);
+
+        void walkBlockLsp(const vayu::Block& b,
+            const std::function<void(const vayu::Expr*)>& fe) {
+            for (auto& s : b.stmts) walkStmtLsp(s.get(), fe);
+        }
+
+        void walkExprLsp(const vayu::Expr* e,
+            const std::function<void(const vayu::Expr*)>& f) {
+            if (!e) return;
+            f(e);
+            switch (e->kind) {
+            case vayu::ExprKind::Unary:
+                walkExprLsp(static_cast<const vayu::UnaryExpr*>(e)->operand.get(), f);
+                break;
+            case vayu::ExprKind::Binary: {
+                auto* n = static_cast<const vayu::BinaryExpr*>(e);
+                walkExprLsp(n->lhs.get(), f);
+                walkExprLsp(n->rhs.get(), f);
+                break;
+            }
+            case vayu::ExprKind::Grouping:
+                walkExprLsp(static_cast<const vayu::GroupingExpr*>(e)->inner.get(), f);
+                break;
+            case vayu::ExprKind::Call: {
+                auto* n = static_cast<const vayu::CallExpr*>(e);
+                walkExprLsp(n->callee.get(), f);
+                for (auto& a : n->args) walkExprLsp(a.value.get(), f);
+                break;
+            }
+            case vayu::ExprKind::Attr:
+                walkExprLsp(static_cast<const vayu::AttrExpr*>(e)->target.get(), f);
+                break;
+            case vayu::ExprKind::Index: {
+                auto* n = static_cast<const vayu::IndexExpr*>(e);
+                walkExprLsp(n->target.get(), f);
+                walkExprLsp(n->index.get(), f);
+                break;
+            }
+            case vayu::ExprKind::ListLit:
+                for (auto& el : static_cast<const vayu::ListLitExpr*>(e)->elements)
+                    walkExprLsp(el.get(), f);
+                break;
+            case vayu::ExprKind::MapLit: {
+                auto* n = static_cast<const vayu::MapLitExpr*>(e);
+                for (auto& en : n->entries) {
+                    walkExprLsp(en.key.get(), f);
+                    walkExprLsp(en.value.get(), f);
+                }
+                break;
+            }
+            case vayu::ExprKind::TupleLit:
+                for (auto& el : static_cast<const vayu::TupleLitExpr*>(e)->elements)
+                    walkExprLsp(el.get(), f);
+                break;
+            case vayu::ExprKind::SetLit:
+                for (auto& el : static_cast<const vayu::SetLitExpr*>(e)->elements)
+                    walkExprLsp(el.get(), f);
+                break;
+            case vayu::ExprKind::Slice: {
+                auto* n = static_cast<const vayu::SliceExpr*>(e);
+                walkExprLsp(n->target.get(), f);
+                if (n->start) walkExprLsp(n->start.get(), f);
+                if (n->end)   walkExprLsp(n->end.get(), f);
+                break;
+            }
+            case vayu::ExprKind::Lambda:
+                walkExprLsp(static_cast<const vayu::LambdaExpr*>(e)->body.get(), f);
+                break;
+            case vayu::ExprKind::GenericType:
+                for (auto& t : static_cast<const vayu::GenericTypeExpr*>(e)->typeArgs)
+                    walkExprLsp(t.get(), f);
+                break;
+            default: break;
+            }
+        }
+
+        void walkStmtLsp(const vayu::Stmt* s,
+            const std::function<void(const vayu::Expr*)>& fe) {
+            if (!s) return;
+            switch (s->kind) {
+            case vayu::StmtKind::Expr:
+                walkExprLsp(static_cast<const vayu::ExprStmt*>(s)->expr.get(), fe);
+                break;
+            case vayu::StmtKind::Assign: {
+                auto* n = static_cast<const vayu::AssignStmt*>(s);
+                walkExprLsp(n->target.get(), fe);
+                walkExprLsp(n->value.get(), fe);
+                break;
+            }
+            case vayu::StmtKind::AnnotAssign: {
+                auto* n = static_cast<const vayu::AnnotAssignStmt*>(s);
+                if (n->value) walkExprLsp(n->value.get(), fe);
+                break;
+            }
+            case vayu::StmtKind::If: {
+                auto* n = static_cast<const vayu::IfStmt*>(s);
+                walkExprLsp(n->cond.get(), fe);
+                walkBlockLsp(n->thenBody, fe);
+                for (auto& ec : n->elifs) {
+                    walkExprLsp(ec.cond.get(), fe);
+                    walkBlockLsp(ec.body, fe);
+                }
+                if (n->elseBody) walkBlockLsp(*n->elseBody, fe);
+                break;
+            }
+            case vayu::StmtKind::While: {
+                auto* n = static_cast<const vayu::WhileStmt*>(s);
+                walkExprLsp(n->cond.get(), fe);
+                walkBlockLsp(n->body, fe);
+                break;
+            }
+            case vayu::StmtKind::For: {
+                auto* n = static_cast<const vayu::ForStmt*>(s);
+                walkExprLsp(n->iterable.get(), fe);
+                walkBlockLsp(n->body, fe);
+                break;
+            }
+            case vayu::StmtKind::Def:
+                walkBlockLsp(static_cast<const vayu::DefStmt*>(s)->body, fe);
+                break;
+            case vayu::StmtKind::Return: {
+                auto* n = static_cast<const vayu::ReturnStmt*>(s);
+                if (n->value) walkExprLsp(n->value.get(), fe);
+                break;
+            }
+            case vayu::StmtKind::Class: {
+                auto* n = static_cast<const vayu::ClassStmt*>(s);
+                for (auto& sf : n->staticFields)
+                    if (sf.init) walkExprLsp(sf.init.get(), fe);
+                for (auto& m : n->methods) walkBlockLsp(m->body, fe);
+                break;
+            }
+            case vayu::StmtKind::Try: {
+                auto* n = static_cast<const vayu::TryStmt*>(s);
+                walkBlockLsp(n->tryBody, fe);
+                for (auto& h : n->handlers) walkBlockLsp(h.body, fe);
+                if (n->finallyBody) walkBlockLsp(*n->finallyBody, fe);
+                break;
+            }
+            case vayu::StmtKind::Raise: {
+                auto* n = static_cast<const vayu::RaiseStmt*>(s);
+                if (n->exception) walkExprLsp(n->exception.get(), fe);
+                break;
+            }
+            case vayu::StmtKind::Const:
+                walkExprLsp(static_cast<const vayu::ConstStmt*>(s)->value.get(), fe);
+                break;
+            case vayu::StmtKind::Yield: {
+                auto* n = static_cast<const vayu::YieldStmt*>(s);
+                if (n->value) walkExprLsp(n->value.get(), fe);
+                break;
+            }
+            case vayu::StmtKind::Block:
+                walkBlockLsp(static_cast<const vayu::BlockStmt*>(s)->body, fe);
+                break;
+            default: break;
+            }
+        }
+
+    } // namespace
+
+    // ------------------------------------------------------------------
+    // References
+    // ------------------------------------------------------------------
+
+    void LspServer::onReferences(int id, const JsonPtr& params) {
+        if (!params || !params->isObject()) { sendResponse(id, jsonArray()); return; }
+        auto doc = params->get("textDocument");
+        auto pos = params->get("position");
+        if (!doc || !pos) { sendResponse(id, jsonArray()); return; }
+        auto uriN = doc->get("uri");
+        auto lineN = pos->get("line");
+        auto colN = pos->get("character");
+        if (!uriN || !lineN || !colN) { sendResponse(id, jsonArray()); return; }
+
+        std::string uri = uriN->asString();
+        int line0 = (int)lineN->asInt();
+        int col0 = (int)colN->asInt();
+
+        std::vector<vayu::Token> tokens;
+        std::shared_ptr<vayu::Block> program;
+        if (!parseDoc(uri, tokens, program)) { sendResponse(id, jsonArray()); return; }
+
+        const vayu::Token* t = findTokenAt(tokens, line0, col0);
+        if (!t || t->type != vayu::TokenType::Identifier) {
+            sendResponse(id, jsonArray()); return;
+        }
+        std::string target = t->lexeme;
+
+        auto arr = jsonArray();
+
+        // Definition sites.
+        std::vector<std::pair<std::string, vayu::SourceLocation>> topNames;
+        collectTopNames(*program, topNames);
+        for (auto& kv : topNames) {
+            if (kv.first != target) continue;
+            auto loc = jsonObject();
+            jsonSet(loc, "uri", jsonString(uri));
+            jsonSet(loc, "range", makeRange(kv.second.line, kv.second.column,
+                kv.second.column + (int)kv.first.size()));
+            jsonPush(arr, loc);
+        }
+
+        // Use sites.
+        auto cb = [&](const vayu::Expr* e) {
+            if (e->kind != vayu::ExprKind::NameRef) return;
+            auto* n = static_cast<const vayu::NameRefExpr*>(e);
+            if (n->name != target) return;
+            auto loc = jsonObject();
+            jsonSet(loc, "uri", jsonString(uri));
+            jsonSet(loc, "range", makeRange(n->loc.line, n->loc.column,
+                n->loc.column + (int)n->name.size()));
+            jsonPush(arr, loc);
+            };
+        walkBlockLsp(*program, cb);
+
+        sendResponse(id, arr);
+    }
+
+    // ------------------------------------------------------------------
+    // Rename
+    // ------------------------------------------------------------------
+
+    void LspServer::onRename(int id, const JsonPtr& params) {
+        if (!params || !params->isObject()) { sendResponse(id, jsonNull()); return; }
+        auto doc = params->get("textDocument");
+        auto pos = params->get("position");
+        auto newNameN = params->get("newName");
+        if (!doc || !pos || !newNameN) { sendResponse(id, jsonNull()); return; }
+        auto uriN = doc->get("uri");
+        auto lineN = pos->get("line");
+        auto colN = pos->get("character");
+        if (!uriN || !lineN || !colN) { sendResponse(id, jsonNull()); return; }
+
+        std::string uri = uriN->asString();
+        std::string newName = newNameN->asString();
+        int line0 = (int)lineN->asInt();
+        int col0 = (int)colN->asInt();
+
+        std::vector<vayu::Token> tokens;
+        std::shared_ptr<vayu::Block> program;
+        if (!parseDoc(uri, tokens, program)) { sendResponse(id, jsonNull()); return; }
+
+        const vayu::Token* t = findTokenAt(tokens, line0, col0);
+        if (!t || t->type != vayu::TokenType::Identifier) {
+            sendResponse(id, jsonNull()); return;
+        }
+        std::string target = t->lexeme;
+
+        auto edits = jsonArray();
+
+        std::vector<std::pair<std::string, vayu::SourceLocation>> topNames;
+        collectTopNames(*program, topNames);
+        for (auto& kv : topNames) {
+            if (kv.first != target) continue;
+            auto e = jsonObject();
+            jsonSet(e, "range", makeRange(kv.second.line, kv.second.column,
+                kv.second.column + (int)kv.first.size()));
+            jsonSet(e, "newText", jsonString(newName));
+            jsonPush(edits, e);
+        }
+
+        auto cb = [&](const vayu::Expr* e) {
+            if (e->kind != vayu::ExprKind::NameRef) return;
+            auto* n = static_cast<const vayu::NameRefExpr*>(e);
+            if (n->name != target) return;
+            auto ed = jsonObject();
+            jsonSet(ed, "range", makeRange(n->loc.line, n->loc.column,
+                n->loc.column + (int)n->name.size()));
+            jsonSet(ed, "newText", jsonString(newName));
+            jsonPush(edits, ed);
+            };
+        walkBlockLsp(*program, cb);
+
+        auto changes = jsonObject();
+        jsonSet(changes, uri, edits);
+        auto result = jsonObject();
+        jsonSet(result, "changes", changes);
+        sendResponse(id, result);
+    }
+
+    // ------------------------------------------------------------------
+    // Signature help
+    // ------------------------------------------------------------------
+
+    void LspServer::onSignatureHelp(int id, const JsonPtr& params) {
+        if (!params || !params->isObject()) { sendResponse(id, jsonNull()); return; }
+        auto doc = params->get("textDocument");
+        auto pos = params->get("position");
+        if (!doc || !pos) { sendResponse(id, jsonNull()); return; }
+        auto uriN = doc->get("uri");
+        auto lineN = pos->get("line");
+        auto colN = pos->get("character");
+        if (!uriN || !lineN || !colN) { sendResponse(id, jsonNull()); return; }
+
+        std::string uri = uriN->asString();
+        int line0 = (int)lineN->asInt();
+        int col0 = (int)colN->asInt();
+
+        auto it = docs_.find(uri);
+        if (it == docs_.end()) { sendResponse(id, jsonNull()); return; }
+        const std::string& text = it->second;
+
+        // Cursor byte offset.
+        size_t p = 0;
+        int curLine = 0;
+        while (p < text.size() && curLine < line0) {
+            if (text[p] == '\n') ++curLine;
+            ++p;
+        }
+        size_t cursor = p + (size_t)col0;
+        if (cursor > text.size()) cursor = text.size();
+
+        // Last unmatched '(' before cursor.
+        int depth = 0;
+        size_t parenPos = std::string::npos;
+        size_t scan = cursor;
+        while (scan > 0) {
+            --scan;
+            char c = text[scan];
+            if (c == ')') ++depth;
+            else if (c == '(') {
+                if (depth == 0) { parenPos = scan; break; }
+                --depth;
+            }
+        }
+        if (parenPos == std::string::npos) { sendResponse(id, jsonNull()); return; }
+
+        // Identifier before '('.
+        size_t idEnd = parenPos;
+        while (idEnd > 0 && (text[idEnd - 1] == ' ' || text[idEnd - 1] == '\t')) --idEnd;
+        size_t idStart = idEnd;
+        while (idStart > 0) {
+            char c = text[idStart - 1];
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                (c >= '0' && c <= '9') || c == '_') --idStart;
+            else break;
+        }
+        std::string fname = text.substr(idStart, idEnd - idStart);
+        if (fname.empty()) { sendResponse(id, jsonNull()); return; }
+
+        // Active parameter = commas between parenPos+1 and cursor at depth 0.
+        int activeParam = 0;
+        int d2 = 0;
+        for (size_t q = parenPos + 1; q < cursor && q < text.size(); ++q) {
+            char c = text[q];
+            if (c == '(' || c == '[' || c == '{') ++d2;
+            else if (c == ')' || c == ']' || c == '}') --d2;
+            else if (c == ',' && d2 == 0) ++activeParam;
+        }
+
+        // Lookup.
+        std::vector<vayu::Token> tokens;
+        std::shared_ptr<vayu::Block> program;
+        if (!parseDoc(uri, tokens, program)) { sendResponse(id, jsonNull()); return; }
+
+        const vayu::DefStmt* def = nullptr;
+        for (auto& s : program->stmts) {
+            if (s->kind != vayu::StmtKind::Def) continue;
+            auto* d = static_cast<const vayu::DefStmt*>(s.get());
+            if (d->name == fname) { def = d; break; }
+        }
+        if (!def) { sendResponse(id, jsonNull()); return; }
+
+        std::string sig = fname + "(";
+        auto paramLabels = jsonArray();
+        for (size_t i = 0; i < def->params.size(); ++i) {
+            if (i) sig += ", ";
+            size_t startOff = sig.size();
+            sig += def->params[i].name;
+            size_t endOff = sig.size();
+            auto pl = jsonObject();
+            auto range = jsonArray();
+            jsonPush(range, jsonInt((long long)startOff));
+            jsonPush(range, jsonInt((long long)endOff));
+            jsonSet(pl, "label", range);
+            jsonPush(paramLabels, pl);
+        }
+        sig += ")";
+
+        auto sigInfo = jsonObject();
+        jsonSet(sigInfo, "label", jsonString(sig));
+        jsonSet(sigInfo, "parameters", paramLabels);
+
+        auto sigs = jsonArray();
+        jsonPush(sigs, sigInfo);
+
+        auto result = jsonObject();
+        jsonSet(result, "signatures", sigs);
+        jsonSet(result, "activeSignature", jsonInt(0));
+        jsonSet(result, "activeParameter", jsonInt(activeParam));
         sendResponse(id, result);
     }
 

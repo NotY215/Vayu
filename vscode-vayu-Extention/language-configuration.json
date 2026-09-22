@@ -1,0 +1,45 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [
+    [ "{", "}" ],
+    [ "[", "]" ],
+    [ "(", ")" ]
+  ],
+  "autoClosingPairs": [
+    {
+      "open": "{",
+      "close": "}"
+    },
+    {
+      "open": "[",
+      "close": "]"
+    },
+    {
+      "open": "(",
+      "close": ")"
+    },
+    {
+      "open": "\"",
+      "close": "\"",
+      "notIn": [ "string" ]
+    },
+    {
+      "open": "'",
+      "close": "'",
+      "notIn": [ "string", "comment" ]
+    }
+  ],
+  "surroundingPairs": [
+    [ "{", "}" ],
+    [ "[", "]" ],
+    [ "(", ")" ],
+    [ "\"", "\"" ],
+    [ "'", "'" ]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(def|class|struct|if|elif|else|while|for|try|except|finally|with|match|case|unsafe|namespace|extern)\\b.*:\\s*$",
+    "decreaseIndentPattern": "^\\s*(elif|else|except|finally|case)\\b"
+  }
+}

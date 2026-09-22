@@ -25,3 +25,15 @@ add_executable(vls
     lsp/LspServer.cpp
 )
 target_link_libraries(vls PRIVATE vayu_compiler)
+
+add_executable(vfmt
+    fmt/main.cpp
+    fmt/Formatter.cpp
+)
+target_link_libraries(vfmt PRIVATE vayu_compiler)
+
+add_executable(vlint
+    lint/main.cpp
+    lint/Linter.cpp
+)
+target_link_libraries(vlint PRIVATE vayu_compiler)
