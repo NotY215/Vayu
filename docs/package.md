@@ -1,5 +1,7 @@
 # Vayu Package System
 
+> Current implementation status: **package ecosystem foundation present; full registry/resolver workflow is still roadmap work.**
+
 Vayu is intended to have a dedicated package ecosystem for distributing libraries, applications, native integrations, and reusable language components.
 
 ## Package Command
@@ -38,7 +40,19 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
-The package ecosystem remains under development. The current repository has a source-module system, native compilation, C FFI, external-library linking, built-in modules, and CPython interoperability foundations, but it does not yet provide the complete planned package registry/resolver workflow.
+The package ecosystem remains under development. The current repository already provides the language/module foundations needed by packages:
+
+- `.vyu` source modules
+- `import` / `from ... import ...`
+- module aliases
+- built-in runtime modules
+- native compilation
+- C FFI and external-library linking
+- native dependency support
+- CPython interoperability
+- compiler and developer tooling through `vls`, `vfmt`, and `vlint`
+
+The complete package registry, dependency resolver, lockfile workflow, publishing pipeline, and reproducible package-build system are **not yet complete**.
 
 For current project status and roadmap updates, visit the [official Vayu website](https://vayu.gt.tc).
 
@@ -56,4 +70,42 @@ The current `nva install <package>` syntax describes the intended package-manage
 
 ## Roadmap Alignment
 
-The long-term package roadmap expands beyond the current planned `nva` workflow into `vayu install`, `vypy install`, a public package index, dependency resolution, lockfiles, reproducible builds, caching, publishing, and platform-aware native dependency handling. These remain roadmap capabilities rather than claims about the current registry implementation.
+The long-term package roadmap expands beyond the current `nva` design into:
+
+- project manifests
+- dependency resolution
+- lockfiles
+- package caching
+- publishing
+- a public package index
+- reproducible builds
+- platform-aware native dependency resolution
+- `vayu install`
+- `vypy install`
+
+These remain roadmap capabilities rather than claims that the full registry/installer is already implemented.
+
+
+## Relationship to the Compiler
+
+Packages are intended to become a layer above the existing source/module system rather than replacing it. The long-term flow is:
+
+```text
+Vayu project
+    ↓
+Package manifest
+    ↓
+Dependency resolver
+    ↓
+Package cache / registry
+    ↓
+Vayu compiler + native toolchain
+    ↓
+Executable / library
+```
+
+The future package system must also account for native dependencies, compiler versions, target platforms, and the native backend transition toward VCB.
+
+## VS Code and Developer Tooling
+
+The official [Vayu VS Code extension](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu) is part of the current developer ecosystem. Package-aware editor features can build on the existing LSP and configuration infrastructure as the package system matures.
