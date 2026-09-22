@@ -1,15 +1,22 @@
 {
   "name": "vayu",
   "displayName": "Vayu",
-  "description": "Language support for Vayu: syntax, LSP, formatter, linter.",
+  "description": "Language support for Vayu: syntax highlighting, language server, formatter, linter.",
   "version": "0.1.0",
   "publisher": "Fliczo",
   "engines": { "vscode": "^1.75.0" },
   "categories": [ "Programming Languages" ],
+  "icon": "logo.ico",
   "activationEvents": [
     "onLanguage:vayu"
   ],
   "main": "./extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NotY215/Vayu.git"
+  },
+  "license": "Apache-2.0",
+  "keywords": [ "vayu", "vyu", "language", "lsp" ],
   "contributes": {
     "languages": [
       {

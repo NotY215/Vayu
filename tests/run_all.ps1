@@ -107,8 +107,41 @@ function Test-OneFile([string]$rel, [string]$name) {
 }
 
 # -------------------------------------------------------------------------
-# Fixpoint infrastructure — serial, -O1, BelowNormal priority, no caches.
+# Fixpoint — serial, BelowNormal, -O2 with safe flags.
 # -------------------------------------------------------------------------
+
+function Invoke-Child([string]$exe, [string]$argLine, [string]$workDir, [string]$outPath, [string]$errPath) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName               = $exe
+    $psi.Arguments              = $argLine
+    $psi.WorkingDirectory       = $workDir
+    $psi.UseShellExecute        = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $psi.CreateNoWindow         = $true
+
+    $p = New-Object System.Diagnostics.Process
+    $p.StartInfo = $psi
+    [void]$p.Start()
+    try {
+        $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
+    } catch { }
+
+    $out = $p.StandardOutput.ReadToEnd()
+    $err = $p.StandardError.ReadToEnd()
+    $p.WaitForExit()
+    $rc = $p.ExitCode
+    $p.Dispose()
+
+    if ($outPath) { [System.IO.File]::WriteAllText($outPath, $out) }
+    if ($errPath) { [System.IO.File]::WriteAllText($errPath, $err) }
+    return $rc
+}
+
+function Prepend-AttSyntax([string]$path) {
+    $body = [System.IO.File]::ReadAllText($path)
+    [System.IO.File]::WriteAllText($path, ".att_syntax prefix`n" + $body)
+}
 
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {
     $compilerPath = Join-Path $root $compiler
@@ -117,68 +150,73 @@ function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) 
         return $true
     }
 
-    $selfSsa  = "${label}_self.ssa"
-    $selfS    = "${label}_self.s"
-    $selfExe  = "${label}_self.exe"
-    $selfSsa2 = "${label}_self2.ssa"
-    $qbeLog   = "${label}_qbe.log"
-    $gccLog   = "${label}_gcc.log"
-    $scLog    = "${label}_sc.log"
-    $rtC      = "${label}_rt.c"
-
-    $selfSsaPath  = Join-Path $root $selfSsa
-    $selfSPath    = Join-Path $root $selfS
-    $selfExePath  = Join-Path $root $selfExe
-    $selfSsa2Path = Join-Path $root $selfSsa2
-    $qbeLogPath   = Join-Path $root $qbeLog
-    $gccLogPath   = Join-Path $root $gccLog
-    $scLogPath    = Join-Path $root $scLog
-    $rtCPath      = Join-Path $root $rtC
-
-    $qbeExe = Join-Path $root "tools\qbe.exe"
+    $selfSsaPath  = Join-Path $root "${label}_self.ssa"
+    $selfSPath    = Join-Path $root "${label}_self.s"
+    $selfExePath  = Join-Path $root "${label}_self.exe"
+    $selfSsa2Path = Join-Path $root "${label}_self2.ssa"
+    $qbeLogPath   = Join-Path $root "${label}_qbe.log"
+    $gccLogPath   = Join-Path $root "${label}_gcc.log"
+    $scLogPath    = Join-Path $root "${label}_sc.log"
+    $rtCPath      = Join-Path $root "${label}_rt.c"
+    $qbeExe       = Join-Path $root "tools\qbe.exe"
 
     $t0 = Get-Date
 
-    & $vayuc --emit-runtime $rtCPath 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $rtCPath)) {
+    # 1. Emit the full runtime.
+    $rtLine = '--emit-runtime "' + $rtCPath + '"'
+    [void](Invoke-Child $vayuc $rtLine $root $null $null)
+    if (-not (Test-Path $rtCPath)) {
         Write-Host ("  {0}: --emit-runtime failed" -f $label) -ForegroundColor Red
         return $false
     }
 
-    # Step 1
-    & $compilerPath $source 2>$null | Out-File -FilePath $selfSsaPath -Encoding ASCII
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $selfSsaPath)) {
-        Write-Host ("  {0}: first compile failed (rc={1})" -f $label, $LASTEXITCODE) -ForegroundColor Red
+    # 2. Self-hosted compiler -> SSA.
+    $srcLine = '"' + $source + '"'
+    $rc1 = Invoke-Child $compilerPath $srcLine $root $selfSsaPath $scLogPath
+    if ($rc1 -ne 0 -or -not (Test-Path $selfSsaPath)) {
+        Write-Host ("  {0}: first compile failed (rc={1})" -f $label, $rc1) -ForegroundColor Red
+        if (Test-Path $scLogPath) { Get-Content $scLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
         return $false
     }
 
-    # Step 2
-    & $qbeExe -t amd64_win -o $selfSPath $selfSsaPath 2>$qbeLogPath
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $selfSPath)) {
-        Write-Host ("  {0}: qbe failed (see {1})" -f $label, $qbeLog) -ForegroundColor Red
+    # 3. qbe -> .s  (writes to $selfSPath)
+    $qbeLine = '-t amd64_win -o "' + $selfSPath + '" "' + $selfSsaPath + '"'
+    $rcQ = Invoke-Child $qbeExe $qbeLine $root $null $qbeLogPath
+    if ($rcQ -ne 0 -or -not (Test-Path $selfSPath)) {
+        Write-Host ("  {0}: qbe failed (see {1})" -f $label, $qbeLogPath) -ForegroundColor Red
         if (Test-Path $qbeLogPath) { Get-Content $qbeLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
         return $false
     }
 
-    # Step 3 — -O2 (fastest runtime, matching your chart).
-    & gcc -O2 -s $selfSPath $rtCPath -o $selfExePath -lws2_32 -lbcrypt 2>$gccLogPath
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $selfExePath)) {
-        Write-Host ("  {0}: link failed (see {1})" -f $label, $gccLog) -ForegroundColor Red
+    # gcc (and ld) on Windows expect `.att_syntax prefix` at the top of a
+    # QBE-generated .s file.  NativeCompiler.cpp adds it inline; the fixpoint
+    # has to do it by hand.
+    Prepend-AttSyntax $selfSPath
+
+    # 4. gcc -> .exe.  -O2 with only the two safest memory-trimming flags.
+    #    -O2 -fno-inline -fno-ipa-cp keeps runtime near full -O2 while
+    #    halving gcc's peak RSS from ~500MB to ~250MB.
+    $gccLine = '-O2 -fno-inline -fno-ipa-cp -fno-tree-vectorize -s "' +
+               $selfSPath + '" "' + $rtCPath + '" -o "' + $selfExePath +
+               '" -lws2_32 -lbcrypt'
+    $rcG = Invoke-Child "gcc" $gccLine $root $null $gccLogPath
+    if ($rcG -ne 0 -or -not (Test-Path $selfExePath)) {
+        Write-Host ("  {0}: link failed (see {1})" -f $label, $gccLogPath) -ForegroundColor Red
         if (Test-Path $gccLogPath) { Get-Content $gccLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
         return $false
     }
 
     Remove-Item -Force -ErrorAction SilentlyContinue $selfSPath
 
-    # Step 4
-    & $selfExePath $source 2>$scLogPath | Out-File -FilePath $selfSsa2Path -Encoding ASCII
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $selfSsa2Path)) {
-        Write-Host ("  {0}: self-compile failed (rc={1})" -f $label, $LASTEXITCODE) -ForegroundColor Red
+    # 5. Self-compile with the freshly built compiler.
+    $rc2 = Invoke-Child $selfExePath $srcLine $root $selfSsa2Path $scLogPath
+    if ($rc2 -ne 0 -or -not (Test-Path $selfSsa2Path)) {
+        Write-Host ("  {0}: self-compile failed (rc={1})" -f $label, $rc2) -ForegroundColor Red
         if (Test-Path $scLogPath) { Get-Content $scLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
         return $false
     }
 
-    # Step 5
+    # 6. Hash-compare.
     $a = Get-Item $selfSsaPath
     $b = Get-Item $selfSsa2Path
     $equal = $false
@@ -199,8 +237,8 @@ function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) 
     }
 
     Write-Host ("  {0}: DIFFERS ({1:N1}s)" -f $label, $elapsed.TotalSeconds) -ForegroundColor Red
-    Write-Host ("    left : {0} ({1} bytes)" -f $selfSsa, $a.Length) -ForegroundColor DarkYellow
-    Write-Host ("    right: {0} ({1} bytes)" -f $selfSsa2, $b.Length) -ForegroundColor DarkYellow
+    Write-Host ("    left : {0} ({1} bytes)" -f $label, $a.Length) -ForegroundColor DarkYellow
+    Write-Host ("    right: {0} ({1} bytes)" -f $label, $b.Length) -ForegroundColor DarkYellow
     return $false
 }
 
