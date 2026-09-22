@@ -1,0 +1,28 @@
+def might_fail(x: int) -> int:
+    if x < 0:
+        raise "negative"
+    return x
+
+def main() -> None:
+    try:
+        r = might_fail(5)
+        print(r)
+    except Exception:
+        print("caught1")
+
+    try:
+        r = might_fail(0 - 1)
+        print(r)
+    except Exception:
+        print("caught2")
+
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        print("caught3")
+    except Exception:
+        print("wrong")
+
+    print("done")
+
+main()

@@ -166,11 +166,15 @@ class Parser:
     toks: list<Token>
     pos: int
     ast: Ast
+    namespace_names: list<str>
+    match_counter: int
 
     def __init__(self, tokens: list<Token>) -> None:
         self.toks = tokens
         self.pos = 0
         self.ast = Ast()
+        self.namespace_names = []
+        self.match_counter = 0
 
     def peek_kind(self) -> str:
         if self.pos >= len(self.toks):
@@ -243,6 +247,18 @@ class Parser:
             if self.check("Dedent"):
                 self.advance()
                 continue
+            if self.check("Identifier") and self.peek_lexeme() == "namespace" and self.peek_at(1) == "Identifier":
+                ns_body = self.parse_namespace()
+                cur = self.ast.nodes[ns_body].left
+                while cur != 0:
+                    nxt = self.ast.nodes[cur].extra
+                    if first == 0:
+                        first = cur
+                    else:
+                        self.ast.nodes[last].extra = cur
+                    last = cur
+                    cur = nxt
+                continue
             stmt = self.parse_statement()
             if first == 0:
                 first = stmt
@@ -262,6 +278,8 @@ class Parser:
             self.parse_error("expected an indented block")
         first = 0
         last = 0
+        defer_exprs: list<int> = []
+        saw_non_defer = false
         while true:
             self.skip_newlines()
             if self.check("Dedent"):
@@ -272,13 +290,66 @@ class Parser:
             if self.check("Indent"):
                 self.advance()
                 continue
+
+            if self.check("Identifier") and self.peek_lexeme() == "namespace" and self.peek_at(1) == "Identifier":
+                ns_body = self.parse_namespace()
+                cur = self.ast.nodes[ns_body].left
+                while cur != 0:
+                    nxt = self.ast.nodes[cur].extra
+                    if first == 0:
+                        first = cur
+                    else:
+                        self.ast.nodes[last].extra = cur
+                    last = cur
+                    cur = nxt
+                saw_non_defer = true
+                continue
+
+            if self.check("Identifier") and self.peek_lexeme() == "defer":
+                k2 = self.peek_at(1)
+                is_defer = true
+                if k2 == "Assign":
+                    is_defer = false
+                if k2 == "PlusAssign" or k2 == "MinusAssign" or k2 == "StarAssign" or k2 == "SlashAssign":
+                    is_defer = false
+                if k2 == "Dot" or k2 == "LBracket" or k2 == "Colon":
+                    is_defer = false
+                if is_defer:
+                    if saw_non_defer:
+                        self.parse_error("'defer' must appear at the top of a block")
+                    self.advance()
+                    e = self.parse_expression()
+                    defer_exprs.append(e)
+                    continue
+
+            saw_non_defer = true
             stmt = self.parse_statement()
             if first == 0:
                 first = stmt
             else:
                 self.ast.nodes[last].extra = stmt
             last = stmt
+
         self.ast.nodes[blk].left = first
+
+        if len(defer_exprs) > 0:
+            result_idx = blk
+            i = len(defer_exprs) - 1
+            while i >= 0:
+                fin = self.ast.add("Block")
+                es = self.ast.add("ExprStmt")
+                self.ast.nodes[es].left = defer_exprs[i]
+                self.ast.nodes[fin].left = es
+                ts = self.ast.add("Try")
+                self.ast.nodes[ts].left = result_idx
+                self.ast.nodes[ts].right = 0
+                self.ast.nodes[ts].extra2 = fin
+                wrapper = self.ast.add("Block")
+                self.ast.nodes[wrapper].left = ts
+                result_idx = wrapper
+                i = i - 1
+            return result_idx
+
         return blk
 
     def parse_statement(self) -> int:
@@ -314,11 +385,26 @@ class Parser:
             return self.parse_const()
         if k == "Enum":
             return self.parse_enum()
-        if k == "Extern":
-            return self.parse_extern()
-        if k == "Unsafe":
-            return self.parse_unsafe()
+        if k == "Yield":
+            return self.parse_yield()
+        if k == "With":
+            return self.parse_with()
         if k == "Identifier":
+            if self.peek_lexeme() == "match":
+                k2 = self.peek_at(1)
+                skip = false
+                if k2 == "LParen":
+                    skip = true
+                if k2 == "Assign":
+                    skip = true
+                if k2 == "PlusAssign" or k2 == "MinusAssign" or k2 == "StarAssign" or k2 == "SlashAssign":
+                    skip = true
+                if k2 == "Dot":
+                    skip = true
+                if k2 == "Colon":
+                    skip = true
+                if not skip:
+                    return self.parse_match()
             if self.peek_at(1) == "Colon":
                 return self.parse_annot_assign()
         return self.parse_expr_or_assign()
@@ -525,7 +611,6 @@ class Parser:
         self.advance()
         name = self.expect("Identifier", "class name")
 
-        # Phase 11.3: optional type parameter list on classes too.
         if self.check("Lt"):
             self.advance()
             while true:
@@ -562,6 +647,24 @@ class Parser:
                 break
             if self.check("EOF"):
                 break
+
+            if self.check("Identifier") and self.peek_lexeme() == "public":
+                self.advance()
+            elif self.check("Identifier") and self.peek_lexeme() == "private":
+                self.advance()
+            elif self.check("Identifier") and self.peek_lexeme() == "protected":
+                self.advance()
+
+            if self.check("Identifier") and self.peek_lexeme() == "static":
+                self.advance()
+                member = self.parse_static_field()
+                if first == 0:
+                    first = member
+                else:
+                    self.ast.nodes[last].extra = member
+                last = member
+                continue
+
             member = self.parse_statement()
             if first == 0:
                 first = member
@@ -693,6 +796,13 @@ class Parser:
                     if depth > 0:
                         tstr = tstr + ">"
                     self.advance()
+                elif self.check("Shr"):
+                    self.advance()
+                    depth = depth - 2
+                    if depth > 0:
+                        tstr = tstr + ">>"
+                    elif depth == 0:
+                        tstr = tstr + ">"
                 elif self.check("Comma"):
                     tstr = tstr + ","
                     self.advance()
@@ -804,6 +914,8 @@ class Parser:
         return node
 
     def parse_expression(self) -> int:
+        if self.check("Lambda"):
+            return self.parse_lambda()
         return self.parse_binary(1)
 
     def bin_prec(self, kind: str) -> int:
@@ -971,6 +1083,20 @@ class Parser:
             if self.check("Dot"):
                 self.advance()
                 name = self.advance()
+                if self.ast.nodes[e].kind == "Name":
+                    ename = self.ast.nodes[e].value
+                    is_ns = false
+                    i = 0
+                    while i < len(self.namespace_names):
+                        if self.namespace_names[i] == ename:
+                            is_ns = true
+                            break
+                        i = i + 1
+                    if is_ns:
+                        combined = self.ast.add("Name")
+                        self.ast.nodes[combined].value = ename + "." + name.lexeme
+                        e = combined
+                        continue
                 attr = self.ast.add("Attr")
                 self.ast.nodes[attr].value = name.lexeme
                 self.ast.nodes[attr].left = e
@@ -1074,27 +1200,49 @@ class Parser:
         if k == "LBracket":
             return self.parse_list_literal()
         if k == "LBrace":
-            self.advance()
-            node = self.ast.add("SetLit")
-            first = 0
-            last = 0
-            if not self.check("RBrace"):
-                while true:
-                    e = self.parse_expression()
-                    if first == 0:
-                        first = e
-                    else:
-                        self.ast.nodes[last].extra = e
-                    last = e
-                    if not self.match("Comma"):
-                        break
-                    if self.check("RBrace"):
-                        break
-            self.expect("RBrace", "'}' to close set literal")
-            self.ast.nodes[node].left = first
-            return node
+            return self.parse_brace_literal()
         self.parse_error("expected expression, found '" + self.peek_lexeme() + "'")
         return 0
+
+    def parse_brace_literal(self) -> int:
+        self.advance()
+        if self.check("RBrace"):
+            self.advance()
+            return self.ast.add("Map")
+        first = self.parse_expression()
+        if self.check("Colon"):
+            self.advance()
+            node = self.ast.add("Map")
+            first_v = self.parse_expression()
+            entry = self.ast.add("MapEntry")
+            self.ast.nodes[entry].left = first
+            self.ast.nodes[entry].right = first_v
+            self.ast.nodes[node].left = entry
+            last = entry
+            while self.match("Comma"):
+                if self.check("RBrace"):
+                    break
+                k2 = self.parse_expression()
+                self.expect("Colon", "':' between key and value")
+                v2 = self.parse_expression()
+                e2 = self.ast.add("MapEntry")
+                self.ast.nodes[e2].left = k2
+                self.ast.nodes[e2].right = v2
+                self.ast.nodes[last].extra = e2
+                last = e2
+            self.expect("RBrace", "'}' to close map")
+            return node
+        node = self.ast.add("SetLit")
+        self.ast.nodes[node].left = first
+        last = first
+        while self.match("Comma"):
+            if self.check("RBrace"):
+                break
+            e = self.parse_expression()
+            self.ast.nodes[last].extra = e
+            last = e
+        self.expect("RBrace", "'}' to close set literal")
+        return node
 
     def parse_list_literal(self) -> int:
         self.advance()
@@ -1142,6 +1290,339 @@ class Parser:
         self.expect("RBrace", "'}'")
         self.ast.nodes[node].left = first
         return node
+
+    def parse_lambda(self) -> int:
+        self.advance()
+        node = self.ast.add("Lambda")
+        first = 0
+        last = 0
+        if not self.check("Colon"):
+            while true:
+                pname = self.expect("Identifier", "lambda parameter")
+                pnode = self.ast.add("Param")
+                self.ast.nodes[pnode].value = pname.lexeme
+                if first == 0:
+                    first = pnode
+                else:
+                    self.ast.nodes[last].extra = pnode
+                last = pnode
+                if not self.match("Comma"):
+                    break
+        self.ast.nodes[node].left = first
+        self.expect("Colon", "':' after lambda parameters")
+        self.ast.nodes[node].right = self.parse_expression()
+        return node
+
+    def parse_yield(self) -> int:
+        self.advance()
+        node = self.ast.add("Yield")
+        k = self.peek_kind()
+        if k != "Newline" and k != "Dedent" and k != "EOF":
+            self.ast.nodes[node].left = self.parse_expression()
+        return node
+
+    def parse_with(self) -> int:
+        w_tok = self.advance()
+        res = self.parse_expression()
+        name = ""
+        if self.match("As"):
+            n = self.expect("Identifier", "name after 'as'")
+            name = n.lexeme
+        self.expect("Colon", "':' after with")
+        body = self.parse_block()
+
+        tmp_name = "__with_val_" + str(self.match_counter)
+        self.match_counter = self.match_counter + 1
+
+        out_blk = self.ast.add("Block")
+        bf = 0
+        bl = 0
+
+        a1 = self.ast.add("Assign")
+        a1n = self.ast.add("Name")
+        self.ast.nodes[a1n].value = tmp_name
+        self.ast.nodes[a1].left = a1n
+        self.ast.nodes[a1].right = res
+        bf = a1
+        bl = a1
+
+        if name != "":
+            call_enter = self.ast.add("Call")
+            attr_enter = self.ast.add("Attr")
+            attr_enter_t = self.ast.add("Name")
+            self.ast.nodes[attr_enter_t].value = tmp_name
+            self.ast.nodes[attr_enter].left = attr_enter_t
+            self.ast.nodes[attr_enter].value = "__enter__"
+            self.ast.nodes[call_enter].left = attr_enter
+            a2 = self.ast.add("Assign")
+            a2n = self.ast.add("Name")
+            self.ast.nodes[a2n].value = name
+            self.ast.nodes[a2].left = a2n
+            self.ast.nodes[a2].right = call_enter
+            self.ast.nodes[bl].extra = a2
+            bl = a2
+
+        ts = self.ast.add("Try")
+        self.ast.nodes[ts].left = body
+        self.ast.nodes[ts].right = 0
+
+        fin = self.ast.add("Block")
+        call_exit = self.ast.add("Call")
+        attr_exit = self.ast.add("Attr")
+        attr_exit_t = self.ast.add("Name")
+        self.ast.nodes[attr_exit_t].value = tmp_name
+        self.ast.nodes[attr_exit].left = attr_exit_t
+        self.ast.nodes[attr_exit].value = "__exit__"
+        self.ast.nodes[call_exit].left = attr_exit
+        fin_es = self.ast.add("ExprStmt")
+        self.ast.nodes[fin_es].left = call_exit
+        self.ast.nodes[fin].left = fin_es
+        self.ast.nodes[ts].extra2 = fin
+
+        self.ast.nodes[bl].extra = ts
+        bl = ts
+
+        self.ast.nodes[out_blk].left = bf
+        return out_blk
+
+    def parse_match(self) -> int:
+        m_tok = self.advance()
+        subject = self.parse_expression()
+        self.expect("Colon", "':' after match subject")
+        self.expect("Newline", "newline after ':'")
+        self.skip_newlines()
+        if self.check("Indent"):
+            self.advance()
+        else:
+            self.parse_error("expected indented match body")
+
+        case_patterns: list<int> = []
+        case_binders: list<str> = []
+        case_tuple_flat: list<str> = []
+        case_tuple_counts: list<int> = []
+        case_guards: list<int> = []
+        case_bodies: list<int> = []
+
+        while true:
+            self.skip_newlines()
+            if self.check("Dedent"):
+                self.advance()
+                break
+            if self.check("EOF"):
+                break
+            if not (self.check("Identifier") and self.peek_lexeme() == "case"):
+                self.parse_error("expected 'case' in match body")
+            self.advance()
+
+            pattern = 0
+            binder = ""
+            tuple_start = len(case_tuple_flat)
+
+            if self.check("Identifier") and self.peek_lexeme() == "_" and (self.peek_at(1) == "Colon" or self.peek_at(1) == "If"):
+                self.advance()
+            elif self.check("Identifier") and (self.peek_at(1) == "Colon" or self.peek_at(1) == "If"):
+                n = self.advance()
+                binder = n.lexeme
+            elif self.check("LParen"):
+                self.advance()
+                if not self.check("RParen"):
+                    while true:
+                        pn = self.expect("Identifier", "tuple pattern name")
+                        case_tuple_flat.append(pn.lexeme)
+                        if not self.match("Comma"):
+                            break
+                        if self.check("RParen"):
+                            break
+                self.expect("RParen", "')' to close tuple pattern")
+            else:
+                pattern = self.parse_expression()
+
+            guard = 0
+            if self.match("If"):
+                guard = self.parse_expression()
+
+            self.expect("Colon", "':' after case pattern")
+            body = self.parse_block()
+
+            case_patterns.append(pattern)
+            case_binders.append(binder)
+            case_tuple_counts.append(len(case_tuple_flat) - tuple_start)
+            case_guards.append(guard)
+            case_bodies.append(body)
+
+        out_blk = self.ast.add("Block")
+        bf = 0
+        bl = 0
+
+        subj_name = "__match_subject_" + str(self.match_counter)
+        done_name = "__match_done_" + str(self.match_counter)
+        self.match_counter = self.match_counter + 1
+
+        s1 = self.ast.add("Assign")
+        s1n = self.ast.add("Name")
+        self.ast.nodes[s1n].value = subj_name
+        self.ast.nodes[s1].left = s1n
+        self.ast.nodes[s1].right = subject
+        bf = s1
+        bl = s1
+
+        s2 = self.ast.add("Assign")
+        s2n = self.ast.add("Name")
+        self.ast.nodes[s2n].value = done_name
+        self.ast.nodes[s2].left = s2n
+        bfalse = self.ast.add("Bool")
+        self.ast.nodes[bfalse].value = "false"
+        self.ast.nodes[s2].right = bfalse
+        self.ast.nodes[bl].extra = s2
+        bl = s2
+
+        flat_cursor = 0
+        i = 0
+        while i < len(case_patterns):
+            cond_not_done = self.ast.add("Unary")
+            self.ast.nodes[cond_not_done].op = "not"
+            dn = self.ast.add("Name")
+            self.ast.nodes[dn].value = done_name
+            self.ast.nodes[cond_not_done].left = dn
+
+            cond = cond_not_done
+            if case_patterns[i] != 0:
+                eq = self.ast.add("Binary")
+                self.ast.nodes[eq].op = "=="
+                sn = self.ast.add("Name")
+                self.ast.nodes[sn].value = subj_name
+                self.ast.nodes[eq].left = sn
+                self.ast.nodes[eq].right = case_patterns[i]
+                and_node = self.ast.add("Binary")
+                self.ast.nodes[and_node].op = "and"
+                self.ast.nodes[and_node].left = cond
+                self.ast.nodes[and_node].right = eq
+                cond = and_node
+
+            case_body = self.ast.add("Block")
+            cbf = 0
+            cbl = 0
+
+            if case_binders[i] != "":
+                bn = self.ast.add("Assign")
+                bnn = self.ast.add("Name")
+                self.ast.nodes[bnn].value = case_binders[i]
+                self.ast.nodes[bn].left = bnn
+                sn2 = self.ast.add("Name")
+                self.ast.nodes[sn2].value = subj_name
+                self.ast.nodes[bn].right = sn2
+                cbf = bn
+                cbl = bn
+
+            j = 0
+            count = case_tuple_counts[i]
+            while j < count:
+                nm = case_tuple_flat[flat_cursor]
+                flat_cursor = flat_cursor + 1
+                tn = self.ast.add("Assign")
+                tnn = self.ast.add("Name")
+                self.ast.nodes[tnn].value = nm
+                self.ast.nodes[tn].left = tnn
+                ix = self.ast.add("Index")
+                sn3 = self.ast.add("Name")
+                self.ast.nodes[sn3].value = subj_name
+                self.ast.nodes[ix].left = sn3
+                il = self.ast.add("Int")
+                self.ast.nodes[il].value = str(j)
+                self.ast.nodes[ix].right = il
+                self.ast.nodes[tn].right = ix
+                if cbf == 0:
+                    cbf = tn
+                else:
+                    self.ast.nodes[cbl].extra = tn
+                cbl = tn
+                j = j + 1
+
+            marked = self.ast.add("Block")
+            mf = 0
+            ml = 0
+            td = self.ast.add("Assign")
+            tdn = self.ast.add("Name")
+            self.ast.nodes[tdn].value = done_name
+            self.ast.nodes[td].left = tdn
+            btrue = self.ast.add("Bool")
+            self.ast.nodes[btrue].value = "true"
+            self.ast.nodes[td].right = btrue
+            mf = td
+            ml = td
+
+            orig_first = self.ast.nodes[case_bodies[i]].left
+            cur = orig_first
+            while cur != 0:
+                nxt = self.ast.nodes[cur].extra
+                self.ast.nodes[ml].extra = cur
+                ml = cur
+                cur = nxt
+            self.ast.nodes[marked].left = mf
+
+            if case_guards[i] != 0:
+                guard_if = self.ast.add("If")
+                self.ast.nodes[guard_if].left = case_guards[i]
+                self.ast.nodes[guard_if].right = marked
+                if cbf == 0:
+                    cbf = guard_if
+                else:
+                    self.ast.nodes[cbl].extra = guard_if
+                cbl = guard_if
+            else:
+                cur = self.ast.nodes[marked].left
+                while cur != 0:
+                    nxt = self.ast.nodes[cur].extra
+                    if cbf == 0:
+                        cbf = cur
+                    else:
+                        self.ast.nodes[cbl].extra = cur
+                    cbl = cur
+                    cur = nxt
+
+            self.ast.nodes[case_body].left = cbf
+
+            if_stmt = self.ast.add("If")
+            self.ast.nodes[if_stmt].left = cond
+            self.ast.nodes[if_stmt].right = case_body
+            self.ast.nodes[bl].extra = if_stmt
+            bl = if_stmt
+            i = i + 1
+
+        self.ast.nodes[out_blk].left = bf
+        return out_blk
+
+    def parse_namespace(self) -> int:
+        self.advance()
+        name_tok = self.expect("Identifier", "namespace name")
+        ns_name = name_tok.lexeme
+        self.namespace_names.append(ns_name)
+        self.expect("Colon", "':' after namespace name")
+        body = self.parse_block()
+        cur = self.ast.nodes[body].left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Def":
+                n.value = ns_name + "." + n.value
+            elif n.kind == "Const":
+                n.value = ns_name + "." + n.value
+            elif n.kind == "Enum":
+                n.value = ns_name + "." + n.value
+            elif n.kind == "Class":
+                n.value = ns_name + "." + n.value
+            cur = n.extra
+        return body
+
+    def parse_static_field(self) -> int:
+        name = self.expect("Identifier", "static member name")
+        node = self.ast.add("StaticField")
+        self.ast.nodes[node].value = name.lexeme
+        if self.match("Colon"):
+            self.ast.nodes[node].left = self.parse_type_expr()
+        if self.match("Assign"):
+            self.ast.nodes[node].right = self.parse_expression()
+        return node
+
 
 class LoopContext:
     continue_label: str
@@ -1215,6 +1696,9 @@ class Codegen:
     last_elem_class: str
     last_val_class: str
     extern_names: list<str>
+    generator_names: list<str>
+    static_keys: list<str>
+    static_slots: list<str>
     final: str
 
     def __init__(self, ast: Ast) -> None:
@@ -1244,7 +1728,103 @@ class Codegen:
         self.last_elem_class = ""
         self.last_val_class = ""
         self.extern_names = []
+        self.generator_names = []
+        self.static_keys = []
+        self.static_slots = []
         self.final = ""
+
+    def block_has_yield(self, block_idx: int) -> bool:
+        cur = self.ast.nodes[block_idx].left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Yield":
+                return true
+            if n.kind == "If":
+                if self.block_has_yield(n.right):
+                    return true
+                extra = n.extra2
+                while extra != 0:
+                    en = self.ast.nodes[extra]
+                    if en.kind == "If":
+                        if self.block_has_yield(en.right):
+                            return true
+                    elif en.kind == "Else":
+                        if self.block_has_yield(en.right):
+                            return true
+                    extra = en.extra2
+            elif n.kind == "While":
+                if self.block_has_yield(n.right):
+                    return true
+            elif n.kind == "For":
+                if self.block_has_yield(n.right):
+                    return true
+            elif n.kind == "Try":
+                if self.block_has_yield(n.left):
+                    return true
+                exc = n.right
+                while exc != 0:
+                    en = self.ast.nodes[exc]
+                    if self.block_has_yield(en.right):
+                        return true
+                    exc = en.extra
+                if n.extra2 != 0:
+                    if self.block_has_yield(n.extra2):
+                        return true
+            cur = n.extra
+        return false
+
+    def is_generator(self, name: str) -> bool:
+        i = 0
+        while i < len(self.generator_names):
+            if self.generator_names[i] == name:
+                return true
+            i = i + 1
+        return false
+
+    def collect_generators(self, root_idx: int) -> None:
+        root = self.ast.nodes[root_idx]
+        cur = root.left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Def":
+                if self.block_has_yield(n.right):
+                    self.generator_names.append(n.value)
+            cur = n.extra
+
+    def register_static(self, cls_name: str, field_name: str) -> None:
+        key = cls_name + "." + field_name
+        i = 0
+        while i < len(self.static_keys):
+            if self.static_keys[i] == key:
+                return
+            i = i + 1
+        self.static_keys.append(key)
+        self.static_slots.append("$vayu_static_" + cls_name + "_" + field_name)
+
+    def lookup_static(self, cls_name: str, field_name: str) -> str:
+        key = cls_name + "." + field_name
+        i = 0
+        while i < len(self.static_keys):
+            if self.static_keys[i] == key:
+                return self.static_slots[i]
+            i = i + 1
+        return ""
+
+    def collect_statics(self, root_idx: int) -> None:
+        root = self.ast.nodes[root_idx]
+        cur = root.left
+        while cur != 0:
+            n = self.ast.nodes[cur]
+            if n.kind == "Class":
+                cur2 = n.left
+                while cur2 != 0:
+                    m = self.ast.nodes[cur2]
+                    if m.kind == "StaticField":
+                        self.register_static(n.value, m.value)
+                        self.data.append("data " + self.lookup_static(n.value, m.value) + " = { l 0 }")
+                    cur2 = m.extra
+            cur = n.extra
+
 
     def emit(self, s: str) -> None:
         self.out.append("    " + s)
@@ -1772,6 +2352,18 @@ class Codegen:
             self.last_class = ""
             return self.intern_str(n.value)
         if n.kind == "Name":
+            if n.value == "true":
+                self.last_kind = "bool"
+                self.last_class = ""
+                self.last_elem_class = ""
+                self.last_val_class = ""
+                return "1"
+            if n.value == "false":
+                self.last_kind = "bool"
+                self.last_class = ""
+                self.last_elem_class = ""
+                self.last_val_class = ""
+                return "0"
             slot = self.slot_for(n.value)
             if slot == "":
                 print("vayu: name '" + n.value + "' is not defined")
@@ -1783,6 +2375,9 @@ class Codegen:
             self.last_elem_class = self.elem_of_var(n.value)
             self.last_val_class = self.val_of_var(n.value)
             return t
+        if n.kind == "Lambda":
+            print("vayu: lambdas are not supported in native codegen")
+            exit(1)
         if n.kind == "Group":
             return self.gen_expr(n.left)
         if n.kind == "Unary":
@@ -1823,6 +2418,18 @@ class Codegen:
         if n.kind == "Call":
             return self.gen_call(n)
         if n.kind == "Attr":
+            if n.left != 0:
+                base = self.ast.nodes[n.left]
+                if base.kind == "Name":
+                    slot = self.lookup_static(base.value, n.value)
+                    if slot != "":
+                        t = self.new_temp()
+                        self.emit(t + " =l loadl " + slot)
+                        self.last_kind = "int"
+                        self.last_class = ""
+                        self.last_elem_class = ""
+                        self.last_val_class = ""
+                        return t
             return self.gen_attr(n)
         if n.kind == "Index":
             return self.gen_index(n)
@@ -2218,6 +2825,117 @@ class Codegen:
         self.last_val_class = ""
         return m
 
+    def is_exception_name(self, name: str) -> bool:
+        if name == "Exception":
+            return true
+        if name == "ValueError":
+            return true
+        if name == "TypeError":
+            return true
+        if name == "RuntimeError":
+            return true
+        if name == "ZeroDivisionError":
+            return true
+        if name == "IndexError":
+            return true
+        if name == "KeyError":
+            return true
+        if name == "NameError":
+            return true
+        if name == "AttributeError":
+            return true
+        return false
+
+    def gen_py_call(self, n: Node, callee: Node) -> str:
+        m = callee.value
+        if m == "init":
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_init()")
+            self.last_kind = "bool"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "version":
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_version()")
+            self.last_kind = "str"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "run" or m == "exec":
+            arg = self.gen_expr(n.right)
+            cstr = self.new_temp()
+            self.emit(cstr + " =l call $vayu_str_cstr(l " + arg + ")")
+            self.emit("call $vayu_py_run(l " + cstr + ")")
+            self.last_kind = ""
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return "0"
+        if m == "int":
+            arg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_int(l " + arg + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "str":
+            arg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_str(l " + arg + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "bool":
+            arg = self.gen_expr(n.right)
+            w = self.new_temp()
+            self.emit(w + " =w cnel " + arg + ", 0")
+            ext = self.new_temp()
+            self.emit(ext + " =l extsw " + w)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_bool(l " + ext + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "from_int":
+            arg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_from_int(l " + arg + ")")
+            self.last_kind = "int"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "from_str":
+            arg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_from_str(l " + arg + ")")
+            self.last_kind = "str"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        if m == "from_bool":
+            arg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_py_from_bool(l " + arg + ")")
+            self.last_kind = "bool"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
+        print("vayu: py has no method '" + m + "'")
+        exit(1)
+        return "0"
+
     def gen_call(self, n: Node) -> str:
         callee = self.ast.nodes[n.left]
         if callee.kind == "Attr":
@@ -2228,6 +2946,8 @@ class Codegen:
                     if inner_callee.kind == "Name":
                         if inner_callee.value == "super":
                             return self.gen_super_call(n, callee)
+                if inner.kind == "Name" and inner.value == "py":
+                    return self.gen_py_call(n, callee)
             return self.gen_method_call(n, callee)
         if callee.kind != "Name":
             print("vayu: unsupported call target")
@@ -2282,7 +3002,6 @@ class Codegen:
             self.last_kind = "int"
             self.last_class = ""
             return v
-
         if name == "ord":
             arg = n.right
             v = self.gen_expr(arg)
@@ -2291,7 +3010,6 @@ class Codegen:
             self.last_kind = "int"
             self.last_class = ""
             return t
-
         if name == "read_file":
             arg = n.right
             v = self.gen_expr(arg)
@@ -2323,6 +3041,16 @@ class Codegen:
             self.last_kind = ""
             self.last_class = ""
             return "0"
+        if self.is_exception_name(name):
+            type_lbl = self.intern_str(name)
+            msg = self.gen_expr(n.right)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_mkexc(l " + type_lbl + ", l " + msg + ")")
+            self.last_kind = "obj"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
         ci = self.find_class_idx(name)
         if ci != -1:
             args_ssa: list<str> = []
@@ -2346,6 +3074,36 @@ class Codegen:
             return t
         if self.is_extern(name):
             return self.gen_extern_call(n, name)
+        if self.is_generator(name):
+            arg_count = 0
+            cur = n.right
+            while cur != 0:
+                arg_count = arg_count + 1
+                cur = self.ast.nodes[cur].extra
+            struct_size = arg_count * 8
+            if struct_size < 8:
+                struct_size = 8
+            args_struct = self.new_temp()
+            self.emit(args_struct + " =l call $vayu_alloc(l " + str(struct_size) + ")")
+            cur = n.right
+            i = 0
+            while cur != 0:
+                a = self.gen_expr(cur)
+                slot = self.new_temp()
+                self.emit(slot + " =l add " + args_struct + ", " + str(i * 8))
+                self.emit("storel " + a + ", " + slot)
+                cur = self.ast.nodes[cur].extra
+                i = i + 1
+            gen_sym = "$vayu_gen_" + name
+            fp = self.new_temp()
+            self.emit(fp + " =l copy " + gen_sym)
+            t = self.new_temp()
+            self.emit(t + " =l call $vayu_gen_new(l " + fp + ", l " + args_struct + ")")
+            self.last_kind = "obj"
+            self.last_class = ""
+            self.last_elem_class = ""
+            self.last_val_class = ""
+            return t
         args_ssa: list<str> = []
         cur = n.right
         while cur != 0:
@@ -2638,6 +3396,16 @@ class Codegen:
         if n.kind == "Def":
             return
         if n.kind == "Class":
+            cur2 = n.left
+            while cur2 != 0:
+                m = self.ast.nodes[cur2]
+                if m.kind == "StaticField":
+                    slot = self.lookup_static(n.value, m.value)
+                    v = "0"
+                    if m.right != 0:
+                        v = self.gen_expr(m.right)
+                    self.emit("storel " + v + ", " + slot)
+                cur2 = m.extra
             return
         if n.kind == "Struct":
             return
@@ -2664,11 +3432,28 @@ class Codegen:
             return
         if n.kind == "Extern":
             return
+        if n.kind == "Yield":
+            v = "0"
+            if n.left != 0:
+                v = self.gen_expr(n.left)
+            self.emit("call $vayu_gen_yield(l " + v + ")")
+            return
         print("vayu: statement kind '" + n.kind + "' not supported")
         exit(1)
 
     def gen_assign(self, n: Node) -> None:
         lhs = self.ast.nodes[n.left]
+        if lhs.kind == "Attr":
+            if lhs.left != 0:
+                base = self.ast.nodes[lhs.left]
+                if base.kind == "Name":
+                    slot = self.lookup_static(base.value, lhs.value)
+                    if slot != "":
+                        v = self.gen_expr(n.right)
+                        self.emit("storel " + v + ", " + slot)
+                        self.last_kind = ""
+                        self.last_class = ""
+                        return
         if lhs.kind == "Unary":
             if lhs.op == "*":
                 p = self.gen_expr(lhs.left)
@@ -2817,6 +3602,8 @@ class Codegen:
             self.emit("jmp " + end_label)
 
         self.emit_raw(exc_label)
+        self.emit("call $vayu_try_pop()")
+
         handler_labels: list<str> = []
         next_labels: list<str> = []
         exc_node = n.right
@@ -2832,6 +3619,8 @@ class Codegen:
         i = 0
         exc_node = n.right
         while exc_node != 0:
+            if i > 0:
+                self.emit_raw(next_labels[i])
             en = self.ast.nodes[exc_node]
             if en.left != 0:
                 type_str = self.ast.nodes[en.left].value
@@ -2869,7 +3658,6 @@ class Codegen:
                 self.set_var_info(en.value, "obj", "", "", "")
             self.gen_block_from(self.ast.nodes[en.right].left)
             if not self.terminated:
-                self.emit("call $vayu_try_pop()")
                 self.emit("jmp " + end_label)
             exc_node = en.extra
             i = i + 1
@@ -2894,6 +3682,10 @@ class Codegen:
 
     def gen_for(self, n: Node) -> None:
         iter_node = self.ast.nodes[n.left]
+        if iter_node.kind == "Call":
+            callee = self.ast.nodes[iter_node.left]
+            if callee.kind == "Name" and self.is_generator(callee.value):
+                return self.gen_for_generator(n)
         if iter_node.kind != "Call":
             print("vayu: `for` requires `range(...)`")
             exit(1)
@@ -2952,6 +3744,36 @@ class Codegen:
 
         self.emit_raw(end_label)
 
+    def gen_for_generator(self, n: Node) -> None:
+        gen_val = self.gen_expr(n.left)
+        gen_slot = "%for_gen_" + str(self.next_label)
+        self.next_label = self.next_label + 1
+        self.emit(gen_slot + " =l alloc8 8")
+        self.emit("storel " + gen_val + ", " + gen_slot)
+
+        var_slot = self.declare_var(n.value)
+        self.set_var_info(n.value, "int", "", "", "")
+
+        body_label = self.new_label("forg_body_")
+        iter_label = self.new_label("forg_iter_")
+        end_label = self.new_label("forg_end_")
+
+        self.emit_raw(body_label)
+        g = self.new_temp()
+        self.emit(g + " =l loadl " + gen_slot)
+        status = self.new_temp()
+        self.emit(status + " =w call $vayu_gen_try_next(l " + g + ", l " + var_slot + ")")
+        self.emit("jnz " + status + ", " + iter_label + ", " + end_label)
+
+        self.emit_raw(iter_label)
+        ctx = LoopContext(body_label, end_label)
+        self.loop_stack.append(ctx)
+        self.gen_block_from(self.ast.nodes[n.right].left)
+        self.loop_stack.pop()
+        if not self.terminated:
+            self.emit("jmp " + body_label)
+        self.emit_raw(end_label)
+
     def param_names_of(self, params_idx: int) -> list<str>:
         names: list<str> = []
         cur = params_idx
@@ -2979,6 +3801,8 @@ class Codegen:
         param_names = self.param_names_of(params)
         param_types = self.param_types_of(params)
 
+        is_gen = self.is_generator(name)
+
         saved_names = self.var_names
         saved_slots = self.var_slots
         saved_kinds = self.var_kinds
@@ -3003,31 +3827,51 @@ class Codegen:
         self.current_class = ""
         self.terminated = false
 
-        param_decl = ""
-        i = 0
-        while i < len(param_names):
-            if i > 0:
-                param_decl = param_decl + ", "
-            param_decl = param_decl + "l %p_" + param_names[i]
-            i = i + 1
-
-        self.emit_raw("function l $vayu_fn_" + name + "(" + param_decl + ") {")
-        self.emit_raw("@start")
-
-        i = 0
-        while i < len(param_names):
-            pname = param_names[i]
-            slot = "%" + pname + "_slot"
-            self.var_names.append(pname)
-            self.var_slots.append(slot)
-            pt = param_types[i]
-            self.var_kinds.append(type_kind_of(pt))
-            self.var_classes.append(type_class_of(pt))
-            self.var_elem_classes.append(type_list_elem_of(pt))
-            self.var_val_classes.append(type_map_val_of(pt))
-            self.emit(slot + " =l alloc8 8")
-            self.emit("storel %p_" + pname + ", " + slot)
-            i = i + 1
+        if is_gen:
+            self.emit_raw("function l $vayu_gen_" + name + "(l %__args_ptr) {")
+            self.emit_raw("@start")
+            i = 0
+            while i < len(param_names):
+                pname = param_names[i]
+                slot = "%" + pname + "_slot"
+                self.var_names.append(pname)
+                self.var_slots.append(slot)
+                pt = param_types[i]
+                self.var_kinds.append(type_kind_of(pt))
+                self.var_classes.append(type_class_of(pt))
+                self.var_elem_classes.append(type_list_elem_of(pt))
+                self.var_val_classes.append(type_map_val_of(pt))
+                self.emit(slot + " =l alloc8 8")
+                addr = self.new_temp()
+                self.emit(addr + " =l add %__args_ptr, " + str(i * 8))
+                v = self.new_temp()
+                self.emit(v + " =l loadl " + addr)
+                self.emit("storel " + v + ", " + slot)
+                i = i + 1
+        else:
+            param_decl = ""
+            i = 0
+            while i < len(param_names):
+                if i > 0:
+                    param_decl = param_decl + ", "
+                param_decl = param_decl + "l %p_" + param_names[i]
+                i = i + 1
+            self.emit_raw("function l $vayu_fn_" + name + "(" + param_decl + ") {")
+            self.emit_raw("@start")
+            i = 0
+            while i < len(param_names):
+                pname = param_names[i]
+                slot = "%" + pname + "_slot"
+                self.var_names.append(pname)
+                self.var_slots.append(slot)
+                pt = param_types[i]
+                self.var_kinds.append(type_kind_of(pt))
+                self.var_classes.append(type_class_of(pt))
+                self.var_elem_classes.append(type_list_elem_of(pt))
+                self.var_val_classes.append(type_map_val_of(pt))
+                self.emit(slot + " =l alloc8 8")
+                self.emit("storel %p_" + pname + ", " + slot)
+                i = i + 1
 
         self.collect_assigned(body)
         self.gen_block_from(self.ast.nodes[body].left)
@@ -3246,6 +4090,8 @@ class Codegen:
         self.collect_classes(root_idx)
         self.collect_enums(root_idx)
         self.collect_externs(root_idx)
+        self.collect_generators(root_idx)
+        self.collect_statics(root_idx)
         self.resolve_classes()
         self.collect_assigned(root_idx)
 
@@ -3355,6 +4201,7 @@ def keyword_kind(word: str) -> str:
     kw["finally"] = "Finally"
     kw["with"] = "With"
     kw["raise"] = "Raise"
+    kw["yield"] = "Yield"
     kw["and"] = "And"
     kw["or"] = "Or"
     kw["not"] = "Not"
@@ -3705,6 +4552,9 @@ def tokenize(source: str) -> list<Token>:
                 toks.append(Token("NotEq", "!=", line, start_col))
                 pos = pos + 2
                 col = col + 2
+            else:
+                pos = pos + 1
+                col = col + 1
             continue
         if c == "<":
             if nxt == "<":

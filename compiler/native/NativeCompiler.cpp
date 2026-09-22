@@ -3003,10 +3003,15 @@ namespace vayu {
                         r.ssa = t; r.type = VType::Str; return true;
                     }
                     if (recvName == "split") {
-                        Val sep = argV(0);
                         std::string t = newTemp();
-                        line(t + " =l call $vayu_str_split(l " + recv.ssa +
-                            ", l " + sep.ssa + ")");
+                        if (call->args.empty()) {
+                            line(t + " =l call $vayu_str_split_ws(l " + recv.ssa + ")");
+                        }
+                        else {
+                            Val sep = argV(0);
+                            line(t + " =l call $vayu_str_split(l " + recv.ssa +
+                                ", l " + sep.ssa + ")");
+                        }
                         r.ssa = t; r.type = VType::List; r.elemType = VType::Str;
                         return true;
                     }
@@ -5413,6 +5418,7 @@ namespace vayu {
                 }
 
                 raw(lExc);
+                line("call $vayu_try_pop()");
                 {
                     std::string et = newTemp();
                     line(et + " =l call $vayu_get_exc_type()");
@@ -5426,6 +5432,7 @@ namespace vayu {
                     std::string lReraise = newLabel("try_reraise_");
 
                     for (size_t i = 0; i < n->handlers.size(); ++i) {
+                        if (i > 0) raw(nextLabels[i]);
                         auto& h = n->handlers[i];
                         if (h.exceptionType) {
                             std::string typeName;
@@ -5481,7 +5488,6 @@ namespace vayu {
 
                         emitBlock(h.body);
                         if (!terminated_) {
-                            line("call $vayu_try_pop()");
                             line("jmp " + lEnd);
                         }
                     }
@@ -7816,6 +7822,30 @@ int64_t vayu_list_last(VayuList* l) {
                        vayu_mkstr_c("last() on empty list"));
     }
     return l->items[l->len - 1];
+}
+
+VayuList* vayu_str_split_ws(VayuStr* s) {
+    VayuList* out = vayu_list_new();
+    int64_t i = 0;
+    while (i < s->len) {
+        while (i < s->len) {
+            char c = s->data[i];
+            if (c != ' ' && c != '\t' && c != '\n' && c != '\r' &&
+                c != '\f' && c != '\v') break;
+            ++i;
+        }
+        if (i >= s->len) break;
+        int64_t start = i;
+        while (i < s->len) {
+            char c = s->data[i];
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
+                c == '\f' || c == '\v') break;
+            ++i;
+        }
+        vayu_list_push_tagged(out,
+            (int64_t)vayu_mkstr(s->data + start, i - start), 2);
+    }
+    return out;
 }
 
 VayuList* vayu_str_split(VayuStr* s, VayuStr* sep) {

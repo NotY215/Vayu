@@ -19,3 +19,9 @@ target_include_directories(vayu_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(vayuc driver/main.cpp)
 target_link_libraries(vayuc PRIVATE vayu_compiler)
+
+add_executable(vls
+    lsp/main.cpp
+    lsp/LspServer.cpp
+)
+target_link_libraries(vls PRIVATE vayu_compiler)

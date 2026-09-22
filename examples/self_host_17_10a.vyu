@@ -1,0 +1,14 @@
+class Foo:
+    public x: int
+    static total: int = 0
+    def __init__(self) -> None:
+        self.x = 1
+
+def main() -> None:
+    f = Foo()
+    print(f.x)
+    print(Foo.total)
+    Foo.total = 42
+    print(Foo.total)
+
+main()

@@ -1,0 +1,13 @@
+def main() -> None:
+    a = py.int(7)
+    b = py.str("x")
+    c = py.bool(true)
+    d = py.from_int(a)
+    e = py.from_str(b)
+    f = py.from_bool(c)
+    print(d)
+    print(e)
+    print(f)
+    print("done")
+
+main()

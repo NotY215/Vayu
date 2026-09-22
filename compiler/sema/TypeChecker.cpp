@@ -347,6 +347,7 @@ namespace vayu {
                 TypePtr ret = d->returnType
                     ? resolveTypeExpr(d->returnType.get())
                     : Types::Any();
+                if (d->isGenerator) ret = Types::Any();
 
                 auto sig = Types::Function(std::move(params), std::move(ret));
                 sig->typeParams = typeParamScopes_.back();

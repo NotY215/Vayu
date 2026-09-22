@@ -19,6 +19,10 @@ namespace vayu {
         void setCcPath(const std::string& p) { ccPath_ = p; }
         void setQbeTarget(const std::string& t) { qbeTarget_ = t; }
 
+        /// Phase F: dump the embedded full runtime to a path.  Used by the
+        /// fixpoint harness so it does not need the stripped vayu_rt.c.
+        bool writeRuntimeC(const std::string& path) const;
+
     private:
         std::string lastError_;
         std::string qbePath_;
@@ -26,7 +30,6 @@ namespace vayu {
         std::string qbeTarget_;
         std::string outputExe_;
         std::string buildQBE(const Block& program, const std::string& sourceDir);
-        bool        writeRuntimeC(const std::string& path) const;
     };
 
 } // namespace vayu

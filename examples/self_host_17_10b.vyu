@@ -1,0 +1,15 @@
+def classify(x: int) -> str:
+    match x:
+        case 0:
+            return "zero"
+        case 1:
+            return "one"
+        case n:
+            return "other"
+
+def main() -> None:
+    print(classify(0))
+    print(classify(1))
+    print(classify(5))
+
+main()

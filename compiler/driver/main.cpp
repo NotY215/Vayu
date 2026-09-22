@@ -87,6 +87,22 @@ int main(int argc, char** argv) {
 
     if (argc < 2) { usage(); return 1; }
 
+    // Phase F: --emit-runtime <path> — dump the embedded full runtime to a
+    // file.  Handled before the usual file-argument parsing because it takes
+    // no .vyu input.
+    if (std::strcmp(argv[1], "--emit-runtime") == 0) {
+        if (argc < 3) {
+            std::fprintf(stderr, "vayuc: --emit-runtime requires a path\n");
+            return 1;
+        }
+        vayu::NativeCompiler nc;
+        if (!nc.writeRuntimeC(argv[2])) {
+            std::fprintf(stderr, "vayuc: cannot write runtime to '%s'\n", argv[2]);
+            return 1;
+        }
+        return 0;
+    }
+
     std::string file = argv[1];
 
     enum class Mode { Run, Check, DumpTokens, DumpAst, DumpBytecode, DumpIR, Native };
