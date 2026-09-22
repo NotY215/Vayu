@@ -2,7 +2,7 @@
 
 ### Python-inspired syntax · Static type checking · Native-language foundations
 
-This document describes the language surface currently represented by the Vayu compiler, interpreter, VM, native backend, and current tests/examples. Backend-specific limitations are called out where relevant.
+This document describes the language surface currently represented by the Vayu compiler, interpreter, VM, native compiler, runtime, and current tests/examples. It also records the command-line tooling and editor-facing features currently present in the repository. Backend-specific limitations are called out where relevant.
 
 **Official source extension: `.vyu`**
 
@@ -298,7 +298,7 @@ Inheritance and multi-level inheritance are demonstrated by the current examples
 
 # 16. Lambdas & Higher-Order Functions
 
-The current implementation demonstrates function values, lambdas, closures, and:
+The current implementation demonstrates function values, lambdas, closures, higher-order calls, and:
 
 ```text
 map()
@@ -419,7 +419,7 @@ sum 1..10 = 55
 
 The reference documents implemented or demonstrated behavior only. Current areas include variables, types, functions, recursion, conditions, loops, arithmetic, comparisons, logical expressions, collections, structs, classes, inheritance, lambdas/closures, exceptions, modules, math functionality, type checking, AST generation, and VM-oriented execution.
 
-Known limitations remain documented until the corresponding compiler features are implemented and tested.
+Known limitations remain documented until the corresponding compiler features are implemented and tested. Some syntax is accepted through parser-level handling while its backend/runtime support can still be more limited than the frontend syntax suggests.
 
 The official Vayu source extension is **`.vyu`**.
 
@@ -674,6 +674,67 @@ Vayu Source
   -> Vayu IR
   -> VCB
   -> Native Assembly
+  -> Executable
+```
+
+## Developer Tooling
+
+The current repository also contains dedicated tooling around the language:
+
+```text
+vayuc   Vayu compiler
+vls     Vayu Language Server
+vfmt    Vayu formatter
+vlint   Vayu linter
+```
+
+The official VS Code extension integrates `.vyu` files with the language server and exposes editor-side language features including syntax highlighting, diagnostics, hover, completion, go-to-definition, references, rename, signature help, formatting, and linting.
+
+VS Code extension: https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu
+
+Direct VS Code installation URI: `vscode:extension/Fliczo.vayu`
+
+## Compiler CLI
+
+The current compiler command-line modes include:
+
+```text
+vayuc file.vyu
+vayuc file.vyu --vm
+vayuc file.vyu --native
+vayuc file.vyu --native-out output.exe
+vayuc file.vyu --check
+vayuc file.vyu --dump-tokens
+vayuc file.vyu --dump-ast
+vayuc file.vyu --dump-bytecode
+vayuc file.vyu --dump-ir
+vayuc file.vyu --bench [N]
+vayuc --emit-runtime runtime.c
+```
+
+Current compiler flags also include:
+
+```text
+--opt <0-3>
+--no-check
+--no-opt
+--emit-runtime <path>
+```
+
+`--opt` controls the native optimization level used by the native compilation path. `--no-opt` disables the VM bytecode optimizer; these are separate controls.
+
+## Native / Backend Boundary
+
+The current repository contains tree-walking/interpreter, bytecode/VM, and native compilation paths. Native compilation currently uses the existing native backend/toolchain chain, while **VCB** is being developed as the future direct machine-code backend.
+
+The intended long-term architecture is:
+
+```text
+Vayu Source
+  -> Frontend
+  -> Vayu IR
+  -> VCB
+  -> Native Assembly / Machine Code
   -> Executable
 ```
 
