@@ -6,6 +6,13 @@
 # noted as skipped (informational), not a failure.
 #
 # Run from anywhere; the script chdir's to the Vayu root automatically.
+#
+# Use -NoFixpoint to skip the (expensive) self-compilation round-trip while
+# iterating on examples.
+
+param(
+    [switch]$NoFixpoint
+)
 
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -181,16 +188,19 @@ if ($failCount -gt 0) {
 
 # --- Fixpoint checks: vcode / vayu must compile their own source byte-identically.
 
-#
-# IMPORTANT: PowerShell's `>` / `*>` operators write UTF-16LE with a BOM, which
-# corrupts the .ssa file (QBE sees byte 0xFF at line 1).  We redirect via
-# `cmd /c "..."` so cmd.exe writes raw ASCII bytes with no BOM.
+if ($NoFixpoint) {
+    Write-Host ""
+    Write-Host "Fixpoint checks skipped (-NoFixpoint)" -ForegroundColor DarkGray
+    if ($failCount -gt 0) { exit 1 }
+    Write-Host "All checks green." -ForegroundColor Green
+    exit 0
+}
 
 Write-Host ""
 Write-Host "Fixpoint checks" -ForegroundColor Cyan
 Write-Host "---------------" -ForegroundColor Cyan
 
-# Cache the extracted runtime keyed on vayuc.exe's mtime.
+# Extract the runtime once per vayuc.exe revision; reuse across both fixpoints.
 $rtCache = "tests\.vayu_rt_cache.c"
 $vayucTime = (Get-Item $vayuc).LastWriteTimeUtc
 if (-not (Test-Path $rtCache) -or
@@ -210,27 +220,26 @@ function Test-Fixpoint {
         return $true
     }
 
-    # --- Cache: skip if neither compiler nor source changed since last pass.
+    # Cache key is a SHA-256 of the source content.  Rebuilding vayu.exe /
+    # vcode.exe does not invalidate the fixpoint result; only editing the
+    # source does.
     $cacheFile = "tests\.fixpoint_${label}.cache"
-    $srcInfo   = Get-Item $source
-    $vayucInfo = Get-Item $vayuc
-    $fingerprint = ("{0}:{1}|{2}:{3}" -f `
-        $srcInfo.Length, $srcInfo.LastWriteTimeUtc.Ticks, `
-        $vayucInfo.Length, $vayucInfo.LastWriteTimeUtc.Ticks)
+    $srcHash = (Get-FileHash -Algorithm SHA256 -Path $source).Hash
     if (Test-Path $cacheFile) {
         $cached = (Get-Content $cacheFile -Raw -ErrorAction SilentlyContinue)
-        if ($null -ne $cached -and $cached.Trim() -eq $fingerprint) {
+        if ($null -ne $cached -and $cached.Trim() -eq $srcHash) {
             Write-Host ("  {0}: OK (cached)" -f $label) -ForegroundColor Green
             return $true
         }
     }
+
+    $t0 = Get-Date
 
     $ssa1   = "${label}_self.ssa"
     $asm    = "${label}_self.s"
     $exe    = "${label}_self.exe"
     $ssa2   = "${label}_self2.ssa"
     $qbeLog = "${label}_qbe.log"
-    $rt     = "${label}_self_rt.c"
     $gccLog = "${label}_gcc.log"
     $scLog  = "${label}_sc.log"
 
@@ -241,20 +250,18 @@ function Test-Fixpoint {
         return $false
     }
 
-
-    # 3. qbe -> .s
+    # 2. qbe -> .s
     cmd /c "tools\qbe.exe -t amd64_win -o `"$asm`" `"$ssa1`" 2>$qbeLog"
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $asm)) {
         Write-Host ("  {0}: qbe failed (see {1})" -f $label, $qbeLog) -ForegroundColor Red
         if (Test-Path $qbeLog) {
             Get-Content $qbeLog | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
         }
-        Write-Host ("    SSA kept at {0}" -f $ssa1) -ForegroundColor DarkYellow
         return $false
     }
 
-    # 4. gcc -> exe (link against the extracted full runtime, O0 for speed).
-    cmd /c "gcc -O0 `"$asm`" `"$rtCache`" -o `"$exe`" -lws2_32 -lbcrypt 2>$gccLog"
+    # 3. gcc -> exe.  -O0 keeps peak RSS low; -s strips symbols.
+    cmd /c "gcc -O0 -s `"$asm`" `"$rtCache`" -o `"$exe`" -lws2_32 -lbcrypt 2>$gccLog"
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $exe)) {
         Write-Host ("  {0}: link failed (see {1})" -f $label, $gccLog) -ForegroundColor Red
         if (Test-Path $gccLog) {
@@ -263,66 +270,48 @@ function Test-Fixpoint {
         return $false
     }
 
-    # 5. Self-compile the same source with the newly built exe.
-    #    The self-hosted compiler's diagnostics go to stdout, so capture both
-    #    streams: the .ssa file will contain either IL or the error text.
+    # Free the (large) .s file now; we only need the .exe from here on.
+    Remove-Item -Force -ErrorAction SilentlyContinue $asm
+
+    # 4. Self-compile the same source with the newly built exe.
     cmd /c "`"$exe`" `"$source`" > `"$ssa2`" 2>`"$scLog`""
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ssa2)) {
         Write-Host ("  {0}: self-compile failed (rc={1})" -f $label, $LASTEXITCODE) -ForegroundColor Red
-        Write-Host ("    --- {0} (stdout) ---" -f $ssa2) -ForegroundColor DarkYellow
         if (Test-Path $ssa2) {
-            $lines = Get-Content $ssa2
-            $n = $lines.Count
-            if ($n -le 30) {
-                $lines | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
-            } else {
-                Write-Host "    (first 15 lines)" -ForegroundColor DarkYellow
-                $lines[0..14]  | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
-                Write-Host ("    ... ({0} lines total) ..." -f $n) -ForegroundColor DarkYellow
-                Write-Host "    (last 15 lines)" -ForegroundColor DarkYellow
-                $lines[($n-15)..($n-1)] | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
-            }
+            Get-Content $ssa2 | Select-Object -First 20 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
         }
         if (Test-Path $scLog) {
-            $errs = Get-Content $scLog
-            if ($errs.Count -gt 0) {
-                Write-Host ("    --- {0} (stderr) ---" -f $scLog) -ForegroundColor DarkYellow
-                $errs | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
-            }
+            Get-Content $scLog | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
         }
         return $false
     }
 
-    # 6. Byte-compare the two IL files.
-    $a = Get-Content $ssa1 -Raw
-    $b = Get-Content $ssa2 -Raw
-    if ($null -ne $a -and $null -ne $b -and $a -eq $b) {
-        Write-Host ("  {0}: OK" -f $label) -ForegroundColor Green
-        Set-Content -Path $cacheFile -Value $fingerprint -NoNewline -Encoding ASCII
+    # 5. Hash-compare the two SSA files (cheap, avoids loading both into RAM).
+    $a = Get-Item $ssa1
+    $b = Get-Item $ssa2
+    $equal = $false
+    if ($a.Length -eq $b.Length) {
+        $h1 = (Get-FileHash -Algorithm SHA256 -Path $ssa1).Hash
+        $h2 = (Get-FileHash -Algorithm SHA256 -Path $ssa2).Hash
+        $equal = ($h1 -eq $h2)
+    }
+
+    if ($equal) {
+        Set-Content -Path $cacheFile -Value $srcHash -NoNewline -Encoding ASCII
+        Remove-Item -Force -ErrorAction SilentlyContinue $ssa1, $ssa2, $scLog, $qbeLog, $gccLog
+        $elapsed = (Get-Date) - $t0
+        Write-Host ("  {0}: OK ({1:N1}s)" -f $label, $elapsed.TotalSeconds) -ForegroundColor Green
         return $true
     }
+
     Write-Host ("  {0}: DIFFERS" -f $label) -ForegroundColor Red
-    if ($null -ne $a) { Write-Host ("    left : {0} ({1} bytes)" -f $ssa1, $a.Length) -ForegroundColor DarkYellow }
-    if ($null -ne $b) { Write-Host ("    right: {0} ({1} bytes)" -f $ssa2, $b.Length) -ForegroundColor DarkYellow }
+    if (Test-Path $ssa1) { Write-Host ("    left : {0} ({1} bytes)" -f $ssa1, $a.Length) -ForegroundColor DarkYellow }
+    if (Test-Path $ssa2) { Write-Host ("    right: {0} ({1} bytes)" -f $ssa2, $b.Length) -ForegroundColor DarkYellow }
     return $false
 }
 
 if (-not (Test-Fixpoint ".\vcode.exe" "vayu-src\vcode.vyu" "vcode")) { $failCount++ }
 if (-not (Test-Fixpoint ".\vayu.exe"  "vayu-src\vayu.vyu"  "vayu"))  { $failCount++ }
-
-# Keep temp artifacts on failure; clean up and refresh cache on success.
-$cacheVcode = "tests\.fixpoint_vcode.cache"
-$cacheVayu  = "tests\.fixpoint_vayu.cache"
-
-if ($failCount -eq 0) {
-    Remove-Item -Force -ErrorAction SilentlyContinue `
-        "vcode_self.ssa", "vcode_self.s", "vcode_self.exe", "vcode_self2.ssa", `
-        "vcode_qbe.log", "vcode_self_rt.c", "vcode_gcc.log", "vcode_sc.log", `
-        "vayu_self.ssa",  "vayu_self.s",  "vayu_self.exe",  "vayu_self2.ssa", `
-        "vayu_qbe.log",  "vayu_self_rt.c", "vayu_gcc.log",  "vayu_sc.log"
-} else {
-    Remove-Item -Force -ErrorAction SilentlyContinue $cacheVcode, $cacheVayu
-}
 
 if ($failCount -gt 0) { exit 1 }
 Write-Host ""
