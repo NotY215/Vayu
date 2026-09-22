@@ -423,58 +423,258 @@ Known limitations remain documented until the corresponding compiler features ar
 
 The official Vayu source extension is **`.vyu`**.
 
+
 ---
 
-## 🌐 More Vayu Information
+# 25. Complete Syntax Index
 
-For the latest roadmap, project updates, and benchmark information, visit the **[official Vayu website →](https://vayu.gt.tc)**.
+This section organizes the current language surface by category so the syntax reference can be used as a quick lookup.
 
-**Vayu — Python-inspired syntax. Native ambition. One language.**
+## Source and lexical syntax
 
+- `.vyu` source files
+- indentation-based blocks
+- spaces and tabs for indentation
+- `#` comments
+- blank lines
+- newline / indent / dedent structural tokens
+- single-quoted and double-quoted strings
+- character literals
+- decimal, binary, octal, hexadecimal, and exponent-form numeric literals
+- `true` / `false` / `none` plus `True` / `False` / `None`
 
-# 25. Current Advanced Language Features
+## Declarations
 
-The current source additionally includes:
+```text
+def name(...):
+struct Name:
+class Name:
+const NAME = value
+enum Name:
+extern "C":
+```
 
-- `const` declarations
-- `enum` declarations
-- static class members
-- `public`, `protected`, and `private` visibility
-- bitwise operators
-- `match` statements
-- `with` statements
-- `defer` statements
-- generators and `yield`
-- generator state and `next()`
-- generic/type parameters and constraints
-- `unique<T>`, `shared<T>`, and `weak<T>` ownership types
-- `ptr<T>` pointer/reference types
-- address-of, dereference, and pointer arithmetic
-- `malloc()` and `free()`
-- `extern "C"` declarations
-- C FFI and function pointers
-- native struct-by-value FFI support for supported small single-field cases
+## Variables and assignment
 
-## Reflection and utility built-ins
+```text
+name = value
+name: Type = value
+name += value
+name -= value
+name *= value
+name /= value
+name %= value
+name **= value
+name //= value
+name &= value
+name |= value
+name ^= value
+name <<= value
+name >>= value
+```
 
-The current runtime/native implementation includes `hash()`, `id()`, `callable()`, `repr()`, `round()`, `pow()`, `divmod()`, `sign()`, `gcd()`, `lcm()`, `clamp()`, `enumerate()`, `zip()`, `reversed()`, `isinstance()`, `issubclass()`, `hasattr()`, `getattr()`, `dir()`, `setattr()`, and `delattr()`.
+## Control flow
 
-## Runtime modules
+```text
+if condition:
+elif condition:
+else:
+while condition:
+for item in iterable:
+break
+continue
+pass
+```
 
-Current built-in/runtime module registrations include `math`, `fs`, `time`, `json`, `regex`, `thread`, `net`, `crypto`, `random`, `os`, and `py`.
+## Functions
 
-## Python / CPython integration
+```text
+def name(a: Type, b: Type) -> ReturnType:
+    ...
 
-The native backend currently exposes a `py` module with `init()`, `version()`, `run()`, `exec()`, primitive value bridging, Python module import, attribute access, Python calls, and reference-count operations. The interpreter/VM path provides stubs that report when the native backend is required.
+return value
+return
+```
 
-The Python bridge is therefore an implemented native interoperability layer, not yet a complete Python object-model replacement.
+Function values, lambdas, closures, recursion, higher-order calls, and generic/type-parameter metadata are part of the current compiler architecture.
 
-## Backend note
+## Expressions
 
-Vayu currently has interpreter, bytecode/VM, and native execution paths. Native-only functionality includes the C FFI, raw native integration, and CPython bridge. The test suite explicitly separates tests that require the native backend.
+```text
+literal
+identifier
+(a + b)
+object.member
+object[index]
+object[start:end]
+call(arg)
+lambda x: expression
+```
 
-## Current phase
+## Collections
 
-**Phase 16 is complete. Phase 17 is the current development direction.**
+```text
+[1, 2, 3]
+{"name": "Vayu"}
+(1, 2, 3)
+set([1, 2, 3])
+```
 
-Phase 16 expanded native CPython interoperability and compound assignment support. The next roadmap milestone is to bring the compiler toward self-hosting: the Vayu implementation must reach feature parity with the implemented C++ `vayuc` bootstrap compiler before the C++ bootstrap can eventually be retired.
+Supported collection families include list, map, tuple, set, and string operations, with indexing and slicing where implemented.
+
+## Operators
+
+Arithmetic:
+`+  -  *  /  //  %  **`
+
+Comparison:
+`==  !=  <  >  <=  >=`
+
+Logic and membership:
+`and  or  not  in  is`
+
+Bitwise:
+`&  |  ^  ~  <<  >>`
+
+Compound assignment:
+`+=  -=  *=  /=  %=  **=  //=  &=  |=  ^=  <<=  >>=`
+
+Unary/native-oriented:
+`+x  -x  not x  ~x  &x  *x`
+
+## Object-oriented syntax
+
+```text
+class Child(Parent):
+    field: Type
+
+    def __init__(self, value: Type):
+        self.field = value
+
+    def method(self) -> None:
+        ...
+```
+
+Supported class-related concepts include inheritance, overriding, constructors, methods, self, super, static members, and visibility metadata.
+
+## Exceptions
+
+```text
+try:
+    ...
+except ExceptionType as e:
+    ...
+finally:
+    ...
+
+raise ExceptionType("message")
+```
+
+## Modules
+
+```text
+import module
+import module as alias
+from module import name
+from module import name as alias
+```
+
+## Generators
+
+```text
+def values():
+    yield value
+```
+
+Generator support includes suspension, resume, next, completion, and exception propagation in the VM implementation.
+
+## Low-level syntax
+
+```text
+ptr<Type>
+ref<Type>
+unique<Type>
+shared<Type>
+weak<Type>
+
+&value
+*pointer
+malloc(...)
+free(...)
+```
+
+Native FFI also provides an extern C declaration path and native function-pointer/library integration.
+
+## Runtime utility surface
+
+The current runtime/native implementation contains utility families for reflection, numeric helpers, iteration, collections, functional operations, filesystem/OS work, networking, crypto, randomness, regular expressions, threading, time, JSON, and Python interoperability.
+
+## Parser and AST coverage
+
+### Expression nodes
+
+```text
+IntLit FloatLit StringLit CharLit BoolLit NoneLit
+NameRef Unary Binary Grouping Call Attr Index
+ListLit MapLit Lambda GenericType TupleLit SetLit Slice
+```
+
+### Statement nodes
+
+```text
+Expr Assign AnnotAssign If While Def Return
+Struct Class For Try Raise Import FromImport
+Pass Break Continue Const Enum Yield Block Extern
+```
+
+The parser also contains dedicated paths for match, with, unsafe handling, namespace handling, visibility modifiers, and compound assignment.
+
+## Lexer keyword policy
+
+Hard-reserved words currently include:
+
+```text
+def return if elif else while for break continue pass
+class struct enum interface new delete import from as
+try except finally with raise unsafe spawn wait task async await
+and or not in is lambda yield true false none
+True False None int float bool str char bytes
+ptr ref unique shared weak const extern
+```
+
+Words such as match, case, defer, namespace, static, public, protected, and private are handled through parser-level logic rather than being reserved by the lexer in the same way.
+
+## Compiler execution modes
+
+```text
+vayuc file.vyu
+vayuc file.vyu --vm
+vayuc file.vyu --native
+vayuc file.vyu --native-out output.exe
+vayuc file.vyu --check
+vayuc file.vyu --dump-tokens
+vayuc file.vyu --dump-ast
+vayuc file.vyu --dump-bytecode
+vayuc file.vyu --dump-ir
+vayuc file.vyu --bench 10
+vayuc --emit-runtime runtime.c
+```
+
+Debugging flags also include `--no-check` and `--no-opt`.
+
+## Backend boundary
+
+The current project contains tree-walking, bytecode/VM, and native compilation paths. C FFI, raw native integration, and the CPython bridge are native-oriented features.
+
+VCB is the companion backend project being developed toward the future native machine-code layer:
+
+```text
+Vayu Source
+  -> Frontend
+  -> Vayu IR
+  -> VCB
+  -> Native Assembly
+  -> Executable
+```
+
+For architecture and roadmap information, see `Documentation.md` and `docs/vision.md`.
