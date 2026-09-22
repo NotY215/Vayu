@@ -14,6 +14,7 @@
   <a href="https://vayu.gt.tc"><img src="https://img.shields.io/badge/Website-vayu.gt.tc-111827?style=for-the-badge" alt="Vayu Website"></a>
   <a href="docs/syntax.md"><img src="https://img.shields.io/badge/Syntax-.vyu-111827?style=for-the-badge" alt="Vayu Syntax"></a>
   <a href="https://vayu.gt.tc"><img src="https://img.shields.io/badge/Benchmarks-View-111827?style=for-the-badge" alt="Vayu Benchmarks"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu"><img src="https://img.shields.io/badge/VS%20Code-Extension-111827?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Vayu VS Code Extension"></a>
 </p>
 
 <p>
@@ -41,7 +42,7 @@
 
 **Vayu** brings together Python-inspired readability, native-performance goals, low-level control, modern typing, AI/ML ambitions, and application-development capabilities in one language.
 
-**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🧭 Roadmap](docs/vision.md) · [📊 Benchmarks](https://vayu.gt.tc)**
+**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🧭 Roadmap](docs/vision.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
 
 </div>
 
@@ -62,6 +63,34 @@ Vayu includes benchmarking as part of its development and performance evaluation
 **[→ View the Vayu website and current benchmark information](https://vayu.gt.tc/)**
 
 > Benchmark numbers are implementation- and environment-dependent. The website should be treated as the current source for published benchmark results rather than treating README numbers as permanent guarantees.
+
+---
+
+## 🧩 VS Code Extension
+
+Vayu now has official Visual Studio Code tooling for `.vyu` source files.
+
+**[🛒 Install Vayu from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+
+**[⚡ Install directly in VS Code](vscode:extension/Fliczo.vayu)**
+
+The extension provides editor-side integration for Vayu, including:
+
+- `.vyu` language support
+- Syntax highlighting
+- Vayu Language Server integration
+- Diagnostics
+- Hover information
+- Go to definition
+- Completion
+- References
+- Rename support
+- Signature help
+- Formatter integration
+- Linter integration
+- Vayu configuration support
+
+The compiler repository also contains the standalone `vls`, `vfmt`, and `vlint` tooling used by the extension.
 
 ---
 
@@ -367,6 +396,7 @@ The long-term vision includes:
 - Standard library
 - Package ecosystem
 - IDE/LSP support
+- VS Code extension, formatter and linter
 - Debugging tools
 - AI/ML stack
 - GUI framework
@@ -438,7 +468,8 @@ Important limitations include:
 - Limited third-party packages
 - Young compiler
 - Developing tooling
-- Limited IDE integration
+- IDE support is currently centered on Visual Studio Code
+- Advanced IDE integrations and debugger tooling are still evolving
 - Limited documentation compared with established languages
 - Smaller community
 - Many planned features are not yet mature
@@ -497,9 +528,11 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 # 📊 Current Status
 
-Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, native backend, FFI layer, and Python/CPython interoperability.
+Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, tooling, FFI layer, Python/CPython interoperability, and native-backend work.
 
-**Phase 23 is the current long-term toolchain direction. Phase 17 remains the active self-hosting/compiler-bootstrap development track, while VCB is being developed as the native backend for the Phase 23 single-binary toolchain.**
+**Phase 17 has been completed, and Phase 18 is the current tooling phase.** The codebase now includes the Vayu Language Server, formatter, linter, and a published VS Code extension. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
+
+**Phase 23 remains the long-term native toolchain direction, with VCB being developed as the companion backend project for direct native machine-code generation.**
 
 Current implemented areas include:
 
@@ -519,6 +552,10 @@ Current implemented areas include:
 - native CPython loading and expanded Python value/call interoperability
 
 ### Current Development Direction
+
+**Phase 18 — Vayu developer tooling**
+
+The current development track focuses on making Vayu practical to use inside a modern editor and development workflow. The repository now contains the Vayu Language Server, formatter, linter, and VS Code extension, alongside the existing compiler/runtime infrastructure.
 
 **Phase 17 — Vayu self-hosting / compiler bootstrap**
 
@@ -545,7 +582,7 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
 | **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
-| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. |
+| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. **Current tooling phase; core LSP, formatter, linter, and VS Code extension work is implemented.** |
 | **19** | Window / event / widget layer. |
 | **20** | 2D first, then 3D. |
 | **21** | Tensors · autodiff · ONNX · CUDA. |
