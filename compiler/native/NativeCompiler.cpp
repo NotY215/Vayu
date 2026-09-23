@@ -3904,6 +3904,30 @@ namespace vayu {
                 if (m == "text") { Val s = a0(); Val x = a1(); Val y = a2(); Val c = a3(); line("call $vayu_gui_text(l " + s.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "rect_hit") { Val x = a0(); Val y = a1(); Val w = a2(); Val h = a3(); Val px = a4(); Val py = a5(); std::string t = newTemp(); line(t + " =l call $vayu_gui_rect_hit(l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + h.ssa + ", l " + px.ssa + ", l " + py.ssa + ")"); r.ssa = t; r.type = VType::Bool; return r; }
 
+                if (m == "canvas_new") { Val w = a0(); Val h = a1(); std::string t = newTemp(); line(t + " =l call $vayu_gui_canvas_new(l " + w.ssa + ", l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "canvas_from_window") { std::string t = newTemp(); line(t + " =l call $vayu_gui_canvas_from_window()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "canvas_free") { Val h = a0(); line("call $vayu_gui_canvas_free(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "canvas_clear") { Val h = a0(); Val c = a1(); line("call $vayu_gui_canvas_clear(l " + h.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "canvas_fill_rect") { Val h = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4(); Val c = a5(); line("call $vayu_gui_canvas_fill_rect(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "canvas_outline_rect") { Val h = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4(); Val c = a5(); Val t = emitExpr(n->args[6].value.get()); line("call $vayu_gui_canvas_outline_rect(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ", l " + c.ssa + ", l " + t.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "blit_canvas") { Val s = a0(); Val x = a1(); Val y = a2(); line("call $vayu_gui_blit_canvas(l " + s.ssa + ", l " + x.ssa + ", l " + y.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "circle") { Val h = a0(); Val cx = a1(); Val cy = a2(); Val rr = a3(); Val c = a4(); line("call $vayu_gui_circle(l " + h.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ", l " + rr.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "circle_outline") { Val h = a0(); Val cx = a1(); Val cy = a2(); Val rr = a3(); Val c = a4(); line("call $vayu_gui_circle_outline(l " + h.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ", l " + rr.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "ellipse") { Val h = a0(); Val cx = a1(); Val cy = a2(); Val rx = a3(); Val ry = a4(); Val c = a5(); line("call $vayu_gui_ellipse(l " + h.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ", l " + rx.ssa + ", l " + ry.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "ellipse_outline") { Val h = a0(); Val cx = a1(); Val cy = a2(); Val rx = a3(); Val ry = a4(); Val c = a5(); line("call $vayu_gui_ellipse_outline(l " + h.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ", l " + rx.ssa + ", l " + ry.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "rounded_rect") { Val h = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4(); Val rr = a5(); Val c = emitExpr(n->args[6].value.get()); line("call $vayu_gui_rounded_rect(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ", l " + rr.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "rounded_rect_outline") { Val h = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4(); Val rr = a5(); Val c = emitExpr(n->args[6].value.get()); line("call $vayu_gui_rounded_rect_outline(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ", l " + rr.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "arc") { Val h = a0(); Val cx = a1(); Val cy = a2(); Val rr = a3(); Val sd = a4(); Val sw = a5(); Val c = emitExpr(n->args[6].value.get()); line("call $vayu_gui_arc(l " + h.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ", l " + rr.ssa + ", l " + sd.ssa + ", l " + sw.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "polygon") { Val h = a0(); Val pts = a1(); Val c = a2(); line("call $vayu_gui_polygon(l " + h.ssa + ", l " + pts.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "polygon_outline") { Val h = a0(); Val pts = a1(); Val c = a2(); line("call $vayu_gui_polygon_outline(l " + h.ssa + ", l " + pts.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "line_width") { Val h = a0(); Val p = a1(); line("call $vayu_gui_line_width(l " + h.ssa + ", l " + p.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "line_cap") { Val h = a0(); Val p = a1(); line("call $vayu_gui_line_cap(l " + h.ssa + ", l " + p.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "line_join") { Val h = a0(); Val p = a1(); line("call $vayu_gui_line_join(l " + h.ssa + ", l " + p.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "font_new") { Val nm = a0(); Val sz = a1(); Val wt = a2(); Val it = a3(); std::string t = newTemp(); line(t + " =l call $vayu_gui_font_new(l " + nm.ssa + ", l " + sz.ssa + ", l " + wt.ssa + ", l " + it.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "font_free") { Val h = a0(); line("call $vayu_gui_font_free(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "font_default") { std::string t = newTemp(); line(t + " =l call $vayu_gui_font_default()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "text_ex") { Val c = a0(); Val f = a1(); Val s = a2(); Val x = a3(); Val y = a4(); Val a = a5(); line("call $vayu_gui_text_ex(l " + c.ssa + ", l " + f.ssa + ", l " + s.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + a.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
                 if (m == "create_input") { Val p = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val h = a4(); std::string t = newTemp(); line(t + " =l call $vayu_gui_create_input(l " + p.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; r.cls = "Input"; return r; }
                 if (m == "input_get") { Val e = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_input_get(l " + e.ssa + ")"); r.ssa = t; r.type = VType::Str; return r; }
                 if (m == "input_set") { Val e = a0(); Val s = a1(); line("call $vayu_gui_input_set(l " + e.ssa + ", l " + s.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
@@ -3924,6 +3948,16 @@ namespace vayu {
                 if (m == "listbox_index") { Val e = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_listbox_index(l " + e.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
                 if (m == "listbox_get") { Val e = a0(); Val i = a1(); std::string t = newTemp(); line(t + " =l call $vayu_gui_listbox_get(l " + e.ssa + ", l " + i.ssa + ")"); r.ssa = t; r.type = VType::Str; return r; }
                 if (m == "listbox_clear") { Val e = a0(); line("call $vayu_gui_listbox_clear(l " + e.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "bitmap_load") { Val p = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_bitmap_load(l " + p.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "bitmap_free") { Val h = a0(); line("call $vayu_gui_bitmap_free(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "bitmap_width") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_bitmap_width(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "bitmap_height") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_bitmap_height(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "draw_bitmap") { Val c = a0(); Val b = a1(); Val x = a2(); Val y = a3(); line("call $vayu_gui_draw_bitmap(l " + c.ssa + ", l " + b.ssa + ", l " + x.ssa + ", l " + y.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_bitmap_scaled") { Val c = a0(); Val b = a1(); Val x = a2(); Val y = a3(); Val w = a4(); Val k = a5(); line("call $vayu_gui_draw_bitmap_scaled(l " + c.ssa + ", l " + b.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_bitmap_part") { Val c = a0(); Val b = a1(); Val sx = a2(); Val sy = a3(); Val sw = a4(); Val sh = a5(); Val dx = emitExpr(n->args[6].value.get()); Val dy = emitExpr(n->args[7].value.get()); line("call $vayu_gui_draw_bitmap_part(l " + c.ssa + ", l " + b.ssa + ", l " + sx.ssa + ", l " + sy.ssa + ", l " + sw.ssa + ", l " + sh.ssa + ", l " + dx.ssa + ", l " + dy.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_bitmap_alpha") { Val c = a0(); Val b = a1(); Val x = a2(); Val y = a3(); Val al = a4(); line("call $vayu_gui_draw_bitmap_alpha(l " + c.ssa + ", l " + b.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + al.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "canvas_save_png") { Val c = a0(); Val p = a1(); std::string t = newTemp(); line(t + " =l call $vayu_gui_canvas_save_png(l " + c.ssa + ", l " + p.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+
                 if (m == "listbox_set_index") { Val e = a0(); Val i = a1(); line("call $vayu_gui_listbox_set_index(l " + e.ssa + ", l " + i.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
                 throw std::runtime_error("native: gui has no method '" + m + "'");
@@ -5961,6 +5995,7 @@ namespace vayu {
 #  include <windows.h>
 #  include <commctrl.h>
 #  include <bcrypt.h>
+#  include <gdiplus.h>
 #else
 #  include <pthread.h>
 #  include <unistd.h>
@@ -8488,6 +8523,11 @@ static VayuGuiState g_gui;
 static vayu_gui_cb_t g_gui_cb = NULL;
 static WNDPROC g_edit_old_proc = NULL;
 
+/* Phase 20.1 — GDI+ token and readiness flag.  Set once in vayu_gui_init,
+   cleared in WM_DESTROY.  All 20.x functions short-circuit if not ready. */
+static ULONG_PTR g_gdiplus_token = 0;
+static int       g_gdiplus_ready = 0;
+
 static LRESULT CALLBACK vayu_gui_edit_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_KEYDOWN && wp == VK_RETURN) {
         HWND parent = GetParent(h);
@@ -8509,6 +8549,10 @@ static LRESULT CALLBACK vayu_gui_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             SelectObject(g_gui.mem_dc, g_gui.old_bmp);
             DeleteObject(g_gui.bmp);
             g_gui.bmp = NULL;
+        }
+        if (g_gdiplus_ready) {
+            GdiplusShutdown(g_gdiplus_token);
+            g_gdiplus_ready = 0;
         }
         PostQuitMessage(0);
         return 0;
@@ -8616,6 +8660,20 @@ int64_t vayu_gui_init(void) {
     icc.dwICC  = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
     InitCommonControlsEx(&icc);
 
+    /* Phase 20.1 — one-time GDI+ startup.  Must precede any Gdip* call. */
+    if (!g_gdiplus_ready) {
+        GdiplusStartupInput gsi;
+        gsi.GdiplusVersion           = 1;
+        gsi.DebugEventCallback       = NULL;
+        gsi.SuppressBackgroundThread = FALSE;
+        gsi.SuppressExternalCodecs   = FALSE;
+        if (GdiplusStartup(&g_gdiplus_token, &gsi, NULL) == 0) {
+            g_gdiplus_ready = 1;
+        } else {
+            g_gdiplus_ready = 0;
+        }
+    }
+
     WNDCLASSA wc; memset(&wc, 0, sizeof(wc));
     wc.lpfnWndProc   = vayu_gui_wndproc;
     wc.hInstance     = GetModuleHandleA(NULL);
@@ -8700,6 +8758,468 @@ void vayu_gui_text(int64_t sp, int64_t x, int64_t y, int64_t color) {
 }
 int64_t vayu_gui_rect_hit(int64_t x, int64_t y, int64_t w, int64_t h, int64_t px, int64_t py) {
     return (px >= x && px < x+w && py >= y && py < y+h) ? 1 : 0;
+}
+
+/* ===========================================================================
+ * Phase 20.1 - GDI+ canvas, antialiased shapes, sized text.
+ * ========================================================================= */
+
+typedef struct VayuCanvas {
+    GpGraphics* g;        /* current GDI+ drawing context            */
+    GpBitmap*   bmp;      /* non-NULL iff offscreen                  */
+    int         w, h;
+    int         is_window;/* 1 if backed by the live window buffer   */
+    REAL        line_width;
+    GpLineCap   line_cap;
+    GpLineJoin  line_join;
+} VayuCanvas;
+
+typedef struct VayuFont {
+    GpFontFamily* fam;
+    GpFont*       font;
+} VayuFont;
+
+static VayuCanvas* vayu_canvas_alloc(void) {
+    VayuCanvas* c = (VayuCanvas*)malloc(sizeof(VayuCanvas));
+    c->g = NULL; c->bmp = NULL;
+    c->w = 0; c->h = 0; c->is_window = 0;
+    c->line_width = 1.0f;
+    c->line_cap   = LineCapFlat;
+    c->line_join  = LineJoinMiter;
+    return c;
+}
+
+static void vayu_canvas_destroy(VayuCanvas* c) {
+    if (!c) return;
+    if (c->g)   { GdipDeleteGraphics(c->g); c->g = NULL; }
+    if (c->bmp) { GdipDisposeImage((GpImage*)c->bmp); c->bmp = NULL; }
+    free(c);
+}
+
+static GpSolidFill* vayu_solid(ARGB color) {
+    GpSolidFill* b = NULL;
+    GdipCreateSolidFill(color, &b);
+    return b;
+}
+
+static GpPen* vayu_canvas_make_pen(VayuCanvas* c, ARGB color) {
+    GpPen* p = NULL;
+    GdipCreatePen1(color, c->line_width, UnitPixel, &p);
+    GdipSetPenLineCap197819(p, c->line_cap, c->line_cap, GpDashCapFlat);
+    GdipSetPenLineJoin(p, c->line_join);
+    return p;
+}
+
+int64_t vayu_gui_canvas_new(int64_t w, int64_t h) {
+    if (!g_gdiplus_ready) return 0;
+    VayuCanvas* c = vayu_canvas_alloc();
+    c->w = (int)w; c->h = (int)h;
+    GdipCreateBitmapFromScan0((INT)w, (INT)h, 0,
+                              PixelFormat32bppARGB, NULL, &c->bmp);
+    if (!c->bmp) { free(c); return 0; }
+    GdipGetImageGraphicsContext((GpImage*)c->bmp, &c->g);
+    GdipSetSmoothingMode(c->g, SmoothingModeAntiAlias);
+    GdipSetTextRenderingHint(c->g, TextRenderingHintAntiAlias);
+    GdipSetPixelOffsetMode(c->g, PixelOffsetModeHalf);
+    return (int64_t)c;
+}
+
+int64_t vayu_gui_canvas_from_window(void) {
+    if (!g_gdiplus_ready) return 0;
+    if (!g_gui.mem_dc) return 0;
+    VayuCanvas* c = vayu_canvas_alloc();
+    c->w = g_gui.bmp_w; c->h = g_gui.bmp_h;
+    c->is_window = 1;
+    GdipCreateFromHDC(g_gui.mem_dc, &c->g);
+    if (!c->g) { free(c); return 0; }
+    GdipSetSmoothingMode(c->g, SmoothingModeAntiAlias);
+    GdipSetTextRenderingHint(c->g, TextRenderingHintAntiAlias);
+    GdipSetPixelOffsetMode(c->g, PixelOffsetModeHalf);
+    return (int64_t)c;
+}
+
+void vayu_gui_canvas_free(int64_t h) {
+    if (!h) return;
+    vayu_canvas_destroy((VayuCanvas*)h);
+}
+
+void vayu_gui_canvas_clear(int64_t h, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipGraphicsClear(c->g, (ARGB)argb);
+}
+
+void vayu_gui_canvas_fill_rect(int64_t h, int64_t x, int64_t y,
+                               int64_t w, int64_t k, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    GdipFillRectangleI(c->g, (GpBrush*)b, (INT)x, (INT)y, (INT)w, (INT)k);
+    GdipDeleteBrush((GpBrush*)b);
+}
+
+void vayu_gui_canvas_outline_rect(int64_t h, int64_t x, int64_t y,
+                                  int64_t w, int64_t k,
+                                  int64_t argb, int64_t thickness) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpPen* p = NULL;
+    GdipCreatePen1((ARGB)argb, (REAL)thickness, UnitPixel, &p);
+    GdipDrawRectangleI(c->g, p, (INT)x, (INT)y, (INT)w, (INT)k);
+    GdipDeletePen(p);
+}
+
+void vayu_gui_blit_canvas(int64_t src, int64_t x, int64_t y) {
+    VayuCanvas* c = (VayuCanvas*)src;
+    if (!c || !c->bmp) return;
+    if (!g_gui.mem_dc) return;
+    GpGraphics* wg = NULL;
+    GdipCreateFromHDC(g_gui.mem_dc, &wg);
+    if (!wg) return;
+    GdipDrawImageI(wg, (GpImage*)c->bmp, (INT)x, (INT)y);
+    GdipDeleteGraphics(wg);
+}
+
+void vayu_gui_circle(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    GdipFillEllipse(c->g, (GpBrush*)b,
+                    (REAL)(cx - r), (REAL)(cy - r),
+                    (REAL)(2 * r),  (REAL)(2 * r));
+    GdipDeleteBrush((GpBrush*)b);
+}
+
+void vayu_gui_circle_outline(int64_t h, int64_t cx, int64_t cy,
+                             int64_t r, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    GdipDrawEllipse(c->g, p,
+                    (REAL)(cx - r), (REAL)(cy - r),
+                    (REAL)(2 * r),  (REAL)(2 * r));
+    GdipDeletePen(p);
+}
+
+void vayu_gui_ellipse(int64_t h, int64_t cx, int64_t cy,
+                      int64_t rx, int64_t ry, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    GdipFillEllipse(c->g, (GpBrush*)b,
+                    (REAL)(cx - rx), (REAL)(cy - ry),
+                    (REAL)(2 * rx),  (REAL)(2 * ry));
+    GdipDeleteBrush((GpBrush*)b);
+}
+
+void vayu_gui_ellipse_outline(int64_t h, int64_t cx, int64_t cy,
+                              int64_t rx, int64_t ry, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    GdipDrawEllipse(c->g, p,
+                    (REAL)(cx - rx), (REAL)(cy - ry),
+                    (REAL)(2 * rx),  (REAL)(2 * ry));
+    GdipDeletePen(p);
+}
+
+/* GDI+ has no native rounded rect; compose from 4 arcs + 2 rects. */
+static void vayu_draw_rounded_path(GpGraphics* g, GpPen* pen, GpBrush* br,
+                                   REAL x, REAL y, REAL w, REAL k, REAL r) {
+    GpPath* path = NULL;
+    GdipCreatePath(FillModeWinding, &path);
+    if (r < 0)   r = 0;
+    if (r > w/2) r = w/2;
+    if (r > k/2) r = k/2;
+    GdipAddPathArc(path, x,         y,         r*2, r*2, 180.0f, 90.0f);
+    GdipAddPathArc(path, x+w-r*2,   y,         r*2, r*2, 270.0f, 90.0f);
+    GdipAddPathArc(path, x+w-r*2,   y+k-r*2,   r*2, r*2,   0.0f, 90.0f);
+    GdipAddPathArc(path, x,         y+k-r*2,   r*2, r*2,  90.0f, 90.0f);
+    GdipClosePathFigure(path);
+    if (br)  GdipFillPath(g, br, path);
+    if (pen) GdipDrawPath(g, pen, path);
+    GdipDeletePath(path);
+}
+
+void vayu_gui_rounded_rect(int64_t h, int64_t x, int64_t y,
+                           int64_t w, int64_t k, int64_t radius,
+                           int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    vayu_draw_rounded_path(c->g, NULL, (GpBrush*)b,
+                           (REAL)x, (REAL)y, (REAL)w, (REAL)k, (REAL)radius);
+    GdipDeleteBrush((GpBrush*)b);
+}
+
+void vayu_gui_rounded_rect_outline(int64_t h, int64_t x, int64_t y,
+                                   int64_t w, int64_t k, int64_t radius,
+                                   int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    vayu_draw_rounded_path(c->g, p, NULL,
+                           (REAL)x, (REAL)y, (REAL)w, (REAL)k, (REAL)radius);
+    GdipDeletePen(p);
+}
+
+void vayu_gui_arc(int64_t h, int64_t cx, int64_t cy, int64_t r,
+                  int64_t start_deg, int64_t sweep_deg, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    GdipDrawArc(c->g, p,
+                (REAL)(cx - r), (REAL)(cy - r),
+                (REAL)(2 * r),  (REAL)(2 * r),
+                (REAL)start_deg, (REAL)sweep_deg);
+    GdipDeletePen(p);
+}
+
+/* polygon takes a Vayu list of [x0, y0, x1, y1, ...] pairs. */
+void vayu_gui_polygon(int64_t h, int64_t pts, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    VayuList* lst = (VayuList*)pts;
+    if (!lst || lst->len < 6) return;
+    int npts = (int)(lst->len / 2);
+    GpPointF* pf = (GpPointF*)malloc(sizeof(GpPointF) * (size_t)npts);
+    for (int i = 0; i < npts; ++i) {
+        pf[i].X = (REAL)lst->items[i * 2];
+        pf[i].Y = (REAL)lst->items[i * 2 + 1];
+    }
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    GdipFillPolygon(c->g, (GpBrush*)b, pf, npts, FillModeWinding);
+    GdipDeleteBrush((GpBrush*)b);
+    free(pf);
+}
+
+void vayu_gui_polygon_outline(int64_t h, int64_t pts, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    VayuList* lst = (VayuList*)pts;
+    if (!lst || lst->len < 6) return;
+    int npts = (int)(lst->len / 2);
+    GpPointF* pf = (GpPointF*)malloc(sizeof(GpPointF) * (size_t)npts);
+    for (int i = 0; i < npts; ++i) {
+        pf[i].X = (REAL)lst->items[i * 2];
+        pf[i].Y = (REAL)lst->items[i * 2 + 1];
+    }
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    GdipDrawPolygon(c->g, p, pf, npts);
+    GdipDeletePen(p);
+    free(pf);
+}
+
+void vayu_gui_line_width(int64_t h, int64_t px) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c) return;
+    if (px < 1) px = 1;
+    c->line_width = (REAL)px;
+}
+
+void vayu_gui_line_cap(int64_t h, int64_t mode) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c) return;
+    if (mode == 1)      c->line_cap = LineCapSquare;
+    else if (mode == 2) c->line_cap = LineCapRound;
+    else                c->line_cap = LineCapFlat;
+}
+
+void vayu_gui_line_join(int64_t h, int64_t mode) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c) return;
+    if (mode == 1)      c->line_join = LineJoinBevel;
+    else if (mode == 2) c->line_join = LineJoinRound;
+    else                c->line_join = LineJoinMiter;
+}
+
+int64_t vayu_gui_font_new(int64_t name_sp, int64_t size, int64_t weight, int64_t italic) {
+    if (!g_gdiplus_ready) return 0;
+    VayuStr* s = (VayuStr*)name_sp;
+    WCHAR wname[128];
+    int wl = MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, wname, 127);
+    if (wl < 0) wl = 0;
+    wname[wl] = 0;
+    VayuFont* f = (VayuFont*)malloc(sizeof(VayuFont));
+    f->fam = NULL;
+    f->font = NULL;
+    GdipCreateFontFamilyFromName(wname, NULL, &f->fam);
+    if (!f->fam) {
+        GdipCreateFontFamilyFromName(L"Arial", NULL, &f->fam);
+    }
+    INT style = FontStyleRegular;
+    if (weight >= 700) style = FontStyleBold;
+    if (italic) {
+        if (style == FontStyleBold) style = FontStyleBoldItalic;
+        else                        style = FontStyleItalic;
+    }
+    if (size < 4) size = 4;
+    GdipCreateFont(f->fam, (REAL)size, style, UnitPixel, &f->font);
+    return (int64_t)f;
+}
+
+void vayu_gui_font_free(int64_t h) {
+    VayuFont* f = (VayuFont*)h;
+    if (!f) return;
+    if (f->font) GdipDeleteFont(f->font);
+    if (f->fam)  GdipDeleteFontFamily(f->fam);
+    free(f);
+}
+
+int64_t vayu_gui_font_default(void) {
+    VayuStr* n = vayu_mkstr_c("Segoe UI");
+    int64_t h = vayu_gui_font_new((int64_t)n, 14, 400, 0);
+    return h;
+}
+
+void vayu_gui_text_ex(int64_t canvas_h, int64_t font_h, int64_t str_sp,
+                      int64_t x, int64_t y, int64_t argb) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    VayuFont*   f = (VayuFont*)font_h;
+    if (!c || !c->g || !f || !f->font) return;
+    VayuStr* s = (VayuStr*)str_sp;
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, NULL, 0);
+    if (wlen < 0) wlen = 0;
+    WCHAR* w = (WCHAR*)malloc((size_t)(wlen + 1) * sizeof(WCHAR));
+    MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, w, wlen);
+    w[wlen] = 0;
+    GpSolidFill* b = vayu_solid((ARGB)argb);
+    RectF rf;
+    rf.X = (REAL)x; rf.Y = (REAL)y;
+    rf.Width = 100000.0f; rf.Height = 100000.0f;
+    GdipDrawString(c->g, w, wlen, f->font, &rf, NULL, (GpBrush*)b);
+    GdipDeleteBrush((GpBrush*)b);
+    free(w);
+}
+
+/* ===========================================================================
+ * Phase 20.2 - Bitmap I/O via GDI+'s built-in codec dispatch.
+ * GDIPlus decodes BMP/PNG/JPG/GIF/TIFF without extra deps.
+ * ========================================================================= */
+
+typedef struct VayuBitmap {
+    GpImage* img;
+} VayuBitmap;
+
+static WCHAR* vayu_utf8_to_w(const char* s, int len) {
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, s, len, NULL, 0);
+    if (wlen < 0) wlen = 0;
+    WCHAR* w = (WCHAR*)malloc((size_t)(wlen + 1) * sizeof(WCHAR));
+    MultiByteToWideChar(CP_UTF8, 0, s, len, w, wlen);
+    w[wlen] = 0;
+    return w;
+}
+
+int64_t vayu_gui_bitmap_load(int64_t path_sp) {
+    if (!g_gdiplus_ready) return 0;
+    VayuStr* s = (VayuStr*)path_sp;
+    WCHAR* w = vayu_utf8_to_w(s->data, (int)s->len);
+    GpImage* img = NULL;
+    GdipLoadImageFromFile(w, &img);
+    free(w);
+    if (!img) return 0;
+    VayuBitmap* b = (VayuBitmap*)malloc(sizeof(VayuBitmap));
+    b->img = img;
+    return (int64_t)b;
+}
+
+void vayu_gui_bitmap_free(int64_t h) {
+    VayuBitmap* b = (VayuBitmap*)h;
+    if (!b) return;
+    if (b->img) GdipDisposeImage(b->img);
+    free(b);
+}
+
+int64_t vayu_gui_bitmap_width(int64_t h) {
+    VayuBitmap* b = (VayuBitmap*)h;
+    if (!b || !b->img) return 0;
+    UINT w = 0;
+    GdipGetImageWidth(b->img, &w);
+    return (int64_t)w;
+}
+
+int64_t vayu_gui_bitmap_height(int64_t h) {
+    VayuBitmap* b = (VayuBitmap*)h;
+    if (!b || !b->img) return 0;
+    UINT k = 0;
+    GdipGetImageHeight(b->img, &k);
+    return (int64_t)k;
+}
+
+void vayu_gui_draw_bitmap(int64_t canvas_h, int64_t bmp_h,
+                          int64_t x, int64_t y) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    VayuBitmap* b = (VayuBitmap*)bmp_h;
+    if (!c || !c->g || !b || !b->img) return;
+    GdipDrawImageI(c->g, b->img, (INT)x, (INT)y);
+}
+
+void vayu_gui_draw_bitmap_scaled(int64_t canvas_h, int64_t bmp_h,
+                                 int64_t x, int64_t y,
+                                 int64_t w, int64_t k) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    VayuBitmap* b = (VayuBitmap*)bmp_h;
+    if (!c || !c->g || !b || !b->img) return;
+    GdipDrawImageRectI(c->g, b->img, (INT)x, (INT)y, (INT)w, (INT)k);
+}
+
+void vayu_gui_draw_bitmap_part(int64_t canvas_h, int64_t bmp_h,
+                               int64_t sx, int64_t sy,
+                               int64_t sw, int64_t sh,
+                               int64_t dx, int64_t dy) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    VayuBitmap* b = (VayuBitmap*)bmp_h;
+    if (!c || !c->g || !b || !b->img) return;
+    GdipDrawImageRectRectI(c->g, b->img,
+                           (INT)dx, (INT)dy, (INT)sw, (INT)sh,
+                           (INT)sx, (INT)sy, (INT)sw, (INT)sh,
+                           UnitPixel, NULL, NULL, NULL);
+}
+
+void vayu_gui_draw_bitmap_alpha(int64_t canvas_h, int64_t bmp_h,
+                                int64_t x, int64_t y, int64_t alpha) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    VayuBitmap* b = (VayuBitmap*)bmp_h;
+    if (!c || !c->g || !b || !b->img) return;
+    UINT iw = 0, ih = 0;
+    GdipGetImageWidth(b->img, &iw);
+    GdipGetImageHeight(b->img, &ih);
+    REAL a = (REAL)alpha / 255.0f;
+    if (a < 0) a = 0;
+    if (a > 1) a = 1;
+    ColorMatrix cm = {{
+        {1, 0, 0, 0, 0},
+        {0, 1, 0, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 0, a, 0},
+        {0, 0, 0, 0, 1}
+    }};
+    GpImageAttributes* attrs = NULL;
+    GdipCreateImageAttributes(&attrs);
+    GdipSetImageAttributesColorMatrix(attrs, ColorAdjustTypeDefault,
+                                      TRUE, &cm, NULL,
+                                      ColorMatrixFlagsDefault);
+    GdipDrawImageRectRectI(c->g, b->img,
+                           (INT)x, (INT)y, (INT)iw, (INT)ih,
+                           0, 0, (INT)iw, (INT)ih,
+                           UnitPixel, attrs, NULL, NULL);
+    GdipDisposeImageAttributes(attrs);
+}
+
+static const CLSID VAYU_PNG_CLSID = {
+    0x557cf406, 0x1a04, 0x11d3,
+    { 0x9a, 0x73, 0x00, 0x00, 0xf8, 0x1e, 0xf3, 0x2e }
+};
+
+int64_t vayu_gui_canvas_save_png(int64_t canvas_h, int64_t path_sp) {
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    if (!c || !c->bmp) return 0;
+    VayuStr* s = (VayuStr*)path_sp;
+    WCHAR* w = vayu_utf8_to_w(s->data, (int)s->len);
+    Status st = GdipSaveImageToFile((GpImage*)c->bmp, w,
+                                    &VAYU_PNG_CLSID, NULL);
+    free(w);
+    return st == 0 ? 1 : 0;
 }
 
 // ---- child controls ----
@@ -8841,6 +9361,40 @@ int64_t vayu_gui_listbox_index(int64_t e) { (void)e; return -1; }
 int64_t vayu_gui_listbox_get(int64_t e, int64_t i) { (void)e;(void)i; return 0; }
 void vayu_gui_listbox_clear(int64_t e) { (void)e; }
 void vayu_gui_listbox_set_index(int64_t e, int64_t i) { (void)e;(void)i; }
+
+/* ---- Phase 20.1 / 20.2 stubs (non-Windows) ---- */
+int64_t vayu_gui_canvas_new(int64_t w, int64_t h) { (void)w;(void)h; return 0; }
+int64_t vayu_gui_canvas_from_window(void) { return 0; }
+void vayu_gui_canvas_free(int64_t h) { (void)h; }
+void vayu_gui_canvas_clear(int64_t h, int64_t argb) { (void)h;(void)argb; }
+void vayu_gui_canvas_fill_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t argb) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)argb; }
+void vayu_gui_canvas_outline_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t argb, int64_t th) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)argb;(void)th; }
+void vayu_gui_blit_canvas(int64_t src, int64_t x, int64_t y) { (void)src;(void)x;(void)y; }
+void vayu_gui_circle(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t argb) { (void)h;(void)cx;(void)cy;(void)r;(void)argb; }
+void vayu_gui_circle_outline(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t argb) { (void)h;(void)cx;(void)cy;(void)r;(void)argb; }
+void vayu_gui_ellipse(int64_t h, int64_t cx, int64_t cy, int64_t rx, int64_t ry, int64_t argb) { (void)h;(void)cx;(void)cy;(void)rx;(void)ry;(void)argb; }
+void vayu_gui_ellipse_outline(int64_t h, int64_t cx, int64_t cy, int64_t rx, int64_t ry, int64_t argb) { (void)h;(void)cx;(void)cy;(void)rx;(void)ry;(void)argb; }
+void vayu_gui_rounded_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t r, int64_t argb) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)r;(void)argb; }
+void vayu_gui_rounded_rect_outline(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t r, int64_t argb) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)r;(void)argb; }
+void vayu_gui_arc(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t sd, int64_t sw, int64_t argb) { (void)h;(void)cx;(void)cy;(void)r;(void)sd;(void)sw;(void)argb; }
+void vayu_gui_polygon(int64_t h, int64_t pts, int64_t argb) { (void)h;(void)pts;(void)argb; }
+void vayu_gui_polygon_outline(int64_t h, int64_t pts, int64_t argb) { (void)h;(void)pts;(void)argb; }
+void vayu_gui_line_width(int64_t h, int64_t px) { (void)h;(void)px; }
+void vayu_gui_line_cap(int64_t h, int64_t m) { (void)h;(void)m; }
+void vayu_gui_line_join(int64_t h, int64_t m) { (void)h;(void)m; }
+int64_t vayu_gui_font_new(int64_t n, int64_t s, int64_t w, int64_t i) { (void)n;(void)s;(void)w;(void)i; return 0; }
+void vayu_gui_font_free(int64_t h) { (void)h; }
+int64_t vayu_gui_font_default(void) { return 0; }
+void vayu_gui_text_ex(int64_t c, int64_t f, int64_t s, int64_t x, int64_t y, int64_t a) { (void)c;(void)f;(void)s;(void)x;(void)y;(void)a; }
+int64_t vayu_gui_bitmap_load(int64_t p) { (void)p; return 0; }
+void vayu_gui_bitmap_free(int64_t h) { (void)h; }
+int64_t vayu_gui_bitmap_width(int64_t h) { (void)h; return 0; }
+int64_t vayu_gui_bitmap_height(int64_t h) { (void)h; return 0; }
+void vayu_gui_draw_bitmap(int64_t c, int64_t b, int64_t x, int64_t y) { (void)c;(void)b;(void)x;(void)y; }
+void vayu_gui_draw_bitmap_scaled(int64_t c, int64_t b, int64_t x, int64_t y, int64_t w, int64_t k) { (void)c;(void)b;(void)x;(void)y;(void)w;(void)k; }
+void vayu_gui_draw_bitmap_part(int64_t c, int64_t b, int64_t sx, int64_t sy, int64_t sw, int64_t sh, int64_t dx, int64_t dy) { (void)c;(void)b;(void)sx;(void)sy;(void)sw;(void)sh;(void)dx;(void)dy; }
+void vayu_gui_draw_bitmap_alpha(int64_t c, int64_t b, int64_t x, int64_t y, int64_t a) { (void)c;(void)b;(void)x;(void)y;(void)a; }
+int64_t vayu_gui_canvas_save_png(int64_t c, int64_t p) { (void)c;(void)p; return 0; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----
@@ -10709,7 +11263,7 @@ int main(int argc, char** argv) {
         {
             std::string linkLibs;
 #ifdef _WIN32
-            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32";
+            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32 -lgdiplus -lole32 -luuid";
 #endif
             // Phase 15.1: extra link libraries for extern "C" functions.
             // Space-separated list; usually `-lfoo -lbar` or `.lib` paths.
