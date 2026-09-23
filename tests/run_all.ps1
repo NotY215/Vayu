@@ -43,7 +43,8 @@ $native_only = @(
     "self_host_17_7.vyu", "self_host_17_8.vyu",
     "gui_window.vyu",
     "gui_events.vyu",
-    "gui_widgets.vyu"
+    "gui_widgets.vyu",
+    "gui_canvas.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )

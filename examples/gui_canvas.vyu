@@ -1,0 +1,71 @@
+# examples/gui_canvas.vyu -- Phase 20.1 demo.
+# Window opens, draws antialiased primitives, quits after 1.5s.
+
+import gui
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const W: int = 640
+const H: int = 480
+
+font_big: int = 0
+font_med: int = 0
+font_sm:  int = 0
+quit_on_timer: bool = true
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        gui.font_free(font_big)
+        gui.font_free(font_med)
+        gui.font_free(font_sm)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        if quit_on_timer:
+            gui.quit()
+        return
+    if ev != EV_PAINT:
+        return
+    c: int = gui.canvas_from_window()
+    gui.canvas_clear(c, 0xFF1A1A2E)
+
+    gui.circle(c, 120, 120, 80, 0xFF00B8D4)
+    gui.line_width(c, 3)
+    gui.circle_outline(c, 120, 120, 80, 0xFFFFFFFF)
+
+    gui.ellipse(c, 360, 120, 120, 60, 0xFFFF6B6B)
+
+    gui.line_width(c, 2)
+    gui.rounded_rect(c, 40, 240, 200, 100, 20, 0xFF4CAF50)
+    gui.rounded_rect_outline(c, 40, 240, 200, 100, 20, 0xFFB9F6CA)
+
+    gui.line_width(c, 5)
+    gui.line_cap(c, 2)
+    gui.arc(c, 400, 300, 70, 30.0, 270.0, 0xFFFFC107)
+
+    pts: list<int> = [540, 260, 600, 320, 560, 400, 500, 400, 460, 320]
+    gui.polygon(c, pts, 0xFF7E57C2)
+    gui.line_width(c, 2)
+    gui.polygon_outline(c, pts, 0xFFD1C4E9)
+
+    gui.text_ex(c, font_big, "Vayu 2D", 40, 370, 0xFFFFFFFF)
+    gui.text_ex(c, font_med, "antialiased primitives", 40, 415, 0xFFB0BEC5)
+    gui.text_ex(c, font_sm, "Phase 20.1 -- GDI+ canvas", 40, 445, 0xFF80CBC4)
+
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    win: int = gui.create_window("Vayu 2D canvas", W, H)
+    font_big = gui.font_new("Segoe UI", 32, 700, 0)
+    font_med = gui.font_new("Segoe UI", 20, 400, 0)
+    font_sm  = gui.font_new("Consolas", 14, 400, 0)
+    gui.set_callback(on_event)
+    gui.show_window(win)
+    gui.set_timer(1500)
+    gui.run(win)
+    print("canvas demo done")
+
+main()

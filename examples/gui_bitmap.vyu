@@ -1,0 +1,74 @@
+# examples/gui_bitmap.vyu -- Phase 20.2 demo.
+# Generates a checker PNG, reloads it, draws it three ways.
+
+import gui
+import fs
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const W: int = 520
+const H: int = 400
+const TMP: str = "vayu_bitmap_demo.png"
+
+bmp: int = 0
+
+def build_checker() -> None:
+    c: int = gui.canvas_new(256, 256)
+    gui.canvas_clear(c, 0xFFFFFFFF)
+    y: int = 0
+    while y < 256:
+        x: int = 0
+        while x < 256:
+            if ((x / 32) + (y / 32)) % 2 == 0:
+                gui.canvas_fill_rect(c, x, y, 32, 32, 0xFF3366CC)
+            x = x + 32
+        y = y + 32
+    gui.line_width(c, 4)
+    gui.circle_outline(c, 128, 128, 100, 0xFF202020)
+    ok: int = gui.canvas_save_png(c, TMP)
+    if ok == 0:
+        print("failed to save PNG")
+    gui.canvas_free(c)
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        if bmp != 0:
+            gui.bitmap_free(bmp)
+        fs.remove(TMP)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        gui.quit()
+        return
+    if ev != EV_PAINT:
+        return
+    c: int = gui.canvas_from_window()
+    gui.canvas_clear(c, 0xFF202028)
+    if bmp != 0:
+        gui.draw_bitmap(c, bmp, 10, 10)
+        gui.draw_bitmap_scaled(c, bmp, 280, 10, 220, 180)
+        gui.draw_bitmap_alpha(c, bmp, 10, 280, 96)
+        gui.draw_bitmap_part(c, bmp, 0, 0, 128, 128, 280, 210)
+    gui.canvas_free(c)
+
+def main() -> None:
+    build_checker()
+    bmp = gui.bitmap_load(TMP)
+    if bmp == 0:
+        print("failed to load PNG")
+        exit(1)
+    print("bitmap: " + str(gui.bitmap_width(bmp)) + "x" + str(gui.bitmap_height(bmp)))
+    gui.init()
+    win: int = gui.create_window("Vayu bitmaps", W, H)
+    gui.set_callback(on_event)
+    gui.show_window(win)
+    gui.set_timer(1500)
+    gui.run(win)
+    if bmp != 0:
+        gui.bitmap_free(bmp)
+    fs.remove(TMP)
+    print("bitmap demo done")
+
+main()
