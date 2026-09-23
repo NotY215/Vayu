@@ -1,0 +1,186 @@
+# gui_widgets.vyu — Phase 19.3 widget library + demo.
+#
+# Flat design: one Widget class with a `kind` discriminator.  Vayu has
+# static method dispatch, so a class hierarchy with overrides would silently
+# call the base method.  A single struct plus `if kind == ...` works.
+import gui
+
+class Widget:
+    kind: int
+    x: int
+    y: int
+    w: int
+    h: int
+    visible: bool
+    text: str
+    color: int
+    bg: int
+    fg: int
+    hover_bg: int
+    press_bg: int
+    border: int
+    pressed: bool
+    on_click: int
+    handle: int
+
+    def __init__(self) -> None:
+        self.kind = 0
+        self.x = 0
+        self.y = 0
+        self.w = 0
+        self.h = 0
+        self.visible = true
+        self.text = ""
+        self.color = 0xE0E0E0
+        self.bg = 0x3A3A3A
+        self.fg = 0xFFFFFF
+        self.hover_bg = 0x505050
+        self.press_bg = 0x2A6EBB
+        self.border = 0x808080
+        self.pressed = false
+        self.on_click = 0
+        self.handle = 0
+
+    def contains(self, mx: int, my: int) -> bool:
+        if gui.rect_hit(self.x, self.y, self.w, self.h, mx, my) == 1:
+            return true
+        return false
+
+    def draw(self) -> None:
+        if not self.visible:
+            return
+        if self.kind == 1:
+            pad_y: int = (self.h - 14) // 2
+            gui.text(self.text, self.x + 2, self.y + pad_y, self.color)
+        elif self.kind == 2:
+            c: int = self.bg
+            if self.pressed:
+                c = self.press_bg
+            elif self.contains(gui.mouse_x(), gui.mouse_y()):
+                c = self.hover_bg
+            gui.fill_rect(self.x, self.y, self.w, self.h, c)
+            gui.outline_rect(self.x, self.y, self.w, self.h, self.border)
+            text_w: int = len(self.text) * 7
+            tx: int = self.x + (self.w - text_w) // 2
+            ty: int = self.y + (self.h - 12) // 2
+            gui.text(self.text, tx, ty, self.fg)
+        elif self.kind == 3:
+            gui.text(self.text, self.x, self.y - 16, 0xB0B0B0)
+
+    def on_mouse_down(self, mx: int, my: int) -> None:
+        if self.kind == 2:
+            if self.contains(mx, my):
+                self.pressed = true
+
+    def on_mouse_up(self, mx: int, my: int) -> None:
+        if self.kind == 2:
+            was: bool = self.pressed
+            self.pressed = false
+            if was:
+                if self.contains(mx, my):
+                    self.on_click = 1
+
+
+def make_label(x: int, y: int, w: int, h: int, t: str) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 1
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.text = t
+    return wd
+
+def make_button(x: int, y: int, w: int, h: int, t: str) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 2
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.text = t
+    return wd
+
+def make_input(parent: int, x: int, y: int, w: int, h: int, t: str) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 3
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.text = t
+    wd.handle = gui.create_input(parent, x, y, w, h)
+    return wd
+
+
+w_handle: int = 0
+btn_ok: Widget = Widget()
+btn_clear: Widget = Widget()
+input_name: Widget = Widget()
+lbl_status: Widget = Widget()
+widgets: list<Widget> = []
+
+def on_event(ev: int) -> None:
+    if ev == gui.EV_PAINT:
+        gui.clear(0x1E1E1E)
+        gui.text("Vayu widgets - phase 19.3", 20, 12, 0xFFFFFF)
+        gui.line(20, 40, 580, 40, 0x404040)
+        for wid in widgets:
+            wid.draw()
+    elif ev == gui.EV_MOUSE_DOWN:
+        mx: int = gui.mouse_x()
+        my: int = gui.mouse_y()
+        for wid in widgets:
+            wid.on_mouse_down(mx, my)
+    elif ev == gui.EV_MOUSE_UP:
+        mx: int = gui.mouse_x()
+        my: int = gui.mouse_y()
+        for wid in widgets:
+            wid.on_mouse_up(mx, my)
+        if btn_ok.on_click == 1:
+            btn_ok.on_click = 0
+            name: str = gui.input_get(input_name.handle)
+            if len(name) == 0:
+                lbl_status.text = "status: enter a name first"
+            else:
+                lbl_status.text = "status: hello, " + name + "!"
+        if btn_clear.on_click == 1:
+            btn_clear.on_click = 0
+            gui.input_set(input_name.handle, "")
+            gui.input_focus(input_name.handle)
+            lbl_status.text = "status: cleared"
+    elif ev == gui.EV_KEY_DOWN:
+        if gui.last_key() == 13:
+            btn_ok.on_click = 1
+    elif ev == gui.EV_CLOSE:
+        gui.quit()
+
+def main() -> None:
+    gui.init()
+    w_handle = gui.create_window("Vayu widgets", 600, 320)
+    gui.show_window(w_handle)
+
+    input_name = make_input(w_handle, 20, 100, 300, 28, "")
+    widgets.append(input_name)
+
+    lbl_name: Widget = make_label(20, 78, 200, 20, "Name:")
+    widgets.append(lbl_name)
+
+    btn_ok = make_button(340, 100, 100, 28, "Greet")
+    widgets.append(btn_ok)
+
+    btn_clear = make_button(450, 100, 100, 28, "Clear")
+    widgets.append(btn_clear)
+
+    lbl_status = make_label(20, 160, 540, 24, "status: ready")
+    widgets.append(lbl_status)
+
+    lbl_hint: Widget = make_label(20, 240, 540, 20, "Type a name, press Greet (or Enter). Clear resets.")
+    lbl_hint.color = 0x808080
+    widgets.append(lbl_hint)
+
+    gui.set_callback(&on_event)
+    gui.run(w_handle)
+    gui.close(w_handle)
+
+main()

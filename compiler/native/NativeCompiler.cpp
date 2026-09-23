@@ -324,7 +324,8 @@ namespace vayu {
                             n->moduleName != "json" && n->moduleName != "regex" &&
                             n->moduleName != "thread" && n->moduleName != "net" &&
                             n->moduleName != "crypto" && n->moduleName != "random" &&
-                            n->moduleName != "os" && n->moduleName != "py" && !modules_.count(n->moduleName))
+                            n->moduleName != "os" && n->moduleName != "py" &&
+                            n->moduleName != "gui" && !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
                     else if (s->kind == StmtKind::FromImport) {
@@ -333,7 +334,8 @@ namespace vayu {
                             n->moduleName != "json" && n->moduleName != "regex" &&
                             n->moduleName != "thread" && n->moduleName != "net" &&
                             n->moduleName != "crypto" && n->moduleName != "random" &&
-                            n->moduleName != "os" && !modules_.count(n->moduleName))
+                            n->moduleName != "os" && n->moduleName != "gui" &&
+                            !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                         for (auto& item : n->items) {
                             const std::string& local = item.alias.empty() ? item.name : item.alias;
@@ -1915,6 +1917,21 @@ namespace vayu {
 
                     if (n->target->kind == ExprKind::NameRef) {
                         const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
+
+                        // Phase 19.2 — gui event constants.
+                        if (tn->name == "gui") {
+                            const std::string& mm = n->name;
+                            if (mm == "EV_NONE") { r.ssa = "0"; r.type = VType::Int; return r; }
+                            if (mm == "EV_PAINT") { r.ssa = "1"; r.type = VType::Int; return r; }
+                            if (mm == "EV_MOUSE_DOWN") { r.ssa = "2"; r.type = VType::Int; return r; }
+                            if (mm == "EV_MOUSE_UP") { r.ssa = "3"; r.type = VType::Int; return r; }
+                            if (mm == "EV_MOUSE_MOVE") { r.ssa = "4"; r.type = VType::Int; return r; }
+                            if (mm == "EV_KEY_DOWN") { r.ssa = "5"; r.type = VType::Int; return r; }
+                            if (mm == "EV_KEY_UP") { r.ssa = "6"; r.type = VType::Int; return r; }
+                            if (mm == "EV_CLOSE") { r.ssa = "7"; r.type = VType::Int; return r; }
+                            if (mm == "EV_TIMER") { r.ssa = "8"; r.type = VType::Int; return r; }
+                        }
+
                         auto eit = enums_.find(tn->name);
                         if (eit != enums_.end()) {
                             auto iit = eit->second.find(n->name);
@@ -3846,6 +3863,105 @@ namespace vayu {
                 throw std::runtime_error("native: os has no method '" + m + "'");
             }
 
+            Val emitGuiCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                auto a0 = [&]() { return emitExpr(n->args[0].value.get()); };
+                auto a1 = [&]() { return emitExpr(n->args[1].value.get()); };
+                auto a2 = [&]() { return emitExpr(n->args[2].value.get()); };
+                auto a3 = [&]() { return emitExpr(n->args[3].value.get()); };
+                auto a4 = [&]() { return emitExpr(n->args[4].value.get()); };
+
+                if (m == "init") {
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gui_init()");
+                    r.ssa = t; r.type = VType::Bool; return r;
+                }
+                if (m == "create_window") {
+                    Val title = a0(); Val w = a1(); Val h = a2();
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gui_create_window(l " + title.ssa +
+                        ", l " + w.ssa + ", l " + h.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; r.cls = "Window"; return r;
+                }
+                if (m == "show_window") { line("call $vayu_gui_show_window(l " + a0().ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "set_title") { Val h = a0(); Val t1 = a1(); line("call $vayu_gui_set_title(l " + h.ssa + ", l " + t1.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "set_size") { Val h = a0(); Val w = a1(); Val k = a2(); line("call $vayu_gui_set_size(l " + h.ssa + ", l " + w.ssa + ", l " + k.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "set_callback") { Val fp = a0(); line("call $vayu_gui_set_callback(l " + fp.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "set_timer") { Val ms = a0(); line("call $vayu_gui_set_timer(l " + ms.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "clear_timer") { line("call $vayu_gui_clear_timer()"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mouse_x") { std::string t = newTemp(); line(t + " =l call $vayu_gui_mouse_x()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "mouse_y") { std::string t = newTemp(); line(t + " =l call $vayu_gui_mouse_y()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "last_key") { std::string t = newTemp(); line(t + " =l call $vayu_gui_last_key()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "run") { line("call $vayu_gui_run(l " + a0().ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "close") { line("call $vayu_gui_close(l " + a0().ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "quit") { line("call $vayu_gui_quit()"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                // Drawing — active only inside EV_PAINT.
+                if (m == "clear") {
+                    Val c = a0();
+                    line("call $vayu_gui_clear(l " + c.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "fill_rect") {
+                    Val x = a0(); Val y = a1(); Val w = a2(); Val h = a3(); Val c = a4();
+                    line("call $vayu_gui_fill_rect(l " + x.ssa + ", l " + y.ssa +
+                        ", l " + w.ssa + ", l " + h.ssa + ", l " + c.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "outline_rect") {
+                    Val x = a0(); Val y = a1(); Val w = a2(); Val h = a3(); Val c = a4();
+                    line("call $vayu_gui_outline_rect(l " + x.ssa + ", l " + y.ssa +
+                        ", l " + w.ssa + ", l " + h.ssa + ", l " + c.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "line") {
+                    Val x1 = a0(); Val y1 = a1(); Val x2 = a2(); Val y2 = a3(); Val c = a4();
+                    line("call $vayu_gui_line(l " + x1.ssa + ", l " + y1.ssa +
+                        ", l " + x2.ssa + ", l " + y2.ssa + ", l " + c.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "text") {
+                    Val s = a0(); Val x = a1(); Val y = a2(); Val c = a3();
+                    line("call $vayu_gui_text(l " + s.ssa + ", l " + x.ssa +
+                        ", l " + y.ssa + ", l " + c.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "rect_hit") {
+                    Val x = a0(); Val y = a1(); Val w = a2(); Val h = a3();
+                    Val px = a4(); Val py = emitExpr(n->args[5].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gui_rect_hit(l " + x.ssa + ", l " + y.ssa +
+                        ", l " + w.ssa + ", l " + h.ssa + ", l " + px.ssa +
+                        ", l " + py.ssa + ")");
+                    r.ssa = t; r.type = VType::Bool; return r;
+                }
+                if (m == "create_input") {
+                    Val p = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4();
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gui_create_input(l " + p.ssa + ", l " +
+                        x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; r.cls = "Input"; return r;
+                }
+                if (m == "input_get") {
+                    Val e = a0();
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_gui_input_get(l " + e.ssa + ")");
+                    r.ssa = t; r.type = VType::Str; return r;
+                }
+                if (m == "input_set") {
+                    Val e = a0(); Val s = a1();
+                    line("call $vayu_gui_input_set(l " + e.ssa + ", l " + s.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "input_focus") {
+                    Val e = a0();
+                    line("call $vayu_gui_input_focus(l " + e.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                throw std::runtime_error("native: gui has no method '" + m + "'");
+            }
+
             Val emitCall(const CallExpr* n) {
                 Val r;
 
@@ -3935,6 +4051,7 @@ namespace vayu {
                     if (attr->target->kind == ExprKind::NameRef) {
                         const auto* tn0 = static_cast<const NameRefExpr*>(
                             attr->target.get());
+                        if (tn0->name == "gui")   return emitGuiCall(n, attr);
                         if (tn0->name == "fs")    return emitFsCall(n, attr);
                         if (tn0->name == "time")  return emitTimeCall(n, attr);
                         if (tn0->name == "json")  return emitJsonCall(n, attr);
@@ -5322,6 +5439,9 @@ namespace vayu {
 
                 VarInfo lv;
                 lv.type = iter.elemType;
+                lv.clsName = iter.elemCls;
+                lv.elemType = iter.elemType;
+                lv.elemClsName = iter.elemCls;
                 lv.tupleElemTypes = iter.tupleElemTypes;
                 lv.tupleElemClsNames = iter.tupleElemClsNames;
                 varInfo_[n->targetName] = lv;
@@ -8358,6 +8478,323 @@ int64_t vayu_run_command(VayuStr* cmd) {
 }
 void vayu_exit(int64_t code) { exit((int)code); }
 
+// ---- gui (Phase 19.2 + 19.3) ----
+#ifdef _WIN32
+
+typedef void (*vayu_gui_cb_t)(int64_t);
+
+typedef struct {
+    HWND    hwnd;
+    HDC     window_dc;
+    HDC     mem_dc;
+    HBITMAP bmp;
+    HBITMAP old_bmp;
+    int     bmp_w;
+    int     bmp_h;
+    HDC     hdc;             // current draw target (mem_dc during paint)
+    int     in_paint;
+    int     mx, my;
+    int     last_key;
+    int     quit;
+} VayuGuiState;
+
+static VayuGuiState g_gui;
+static vayu_gui_cb_t g_gui_cb = NULL;
+
+#define VAYU_EV_NONE        0
+#define VAYU_EV_PAINT       1
+#define VAYU_EV_MOUSE_DOWN  2
+#define VAYU_EV_MOUSE_UP    3
+#define VAYU_EV_MOUSE_MOVE  4
+#define VAYU_EV_KEY_DOWN    5
+#define VAYU_EV_KEY_UP      6
+#define VAYU_EV_CLOSE       7
+#define VAYU_EV_TIMER       8
+
+static LRESULT CALLBACK vayu_gui_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_CLOSE:
+        if (g_gui_cb) g_gui_cb(VAYU_EV_CLOSE);
+        DestroyWindow(h);
+        return 0;
+    case WM_DESTROY:
+        if (g_gui.bmp) {
+            SelectObject(g_gui.mem_dc, g_gui.old_bmp);
+            DeleteObject(g_gui.bmp);
+            g_gui.bmp = NULL;
+        }
+        PostQuitMessage(0);
+        return 0;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC win = BeginPaint(h, &ps);
+
+        RECT cr;
+        GetClientRect(h, &cr);
+        int cw = cr.right > 0 ? cr.right : 1;
+        int ch = cr.bottom > 0 ? cr.bottom : 1;
+
+        if (!g_gui.mem_dc) {
+            HDC screen = GetDC(NULL);
+            g_gui.mem_dc = CreateCompatibleDC(screen);
+            ReleaseDC(NULL, screen);
+        }
+        if (!g_gui.bmp || g_gui.bmp_w != cw || g_gui.bmp_h != ch) {
+            if (g_gui.bmp) {
+                SelectObject(g_gui.mem_dc, g_gui.old_bmp);
+                DeleteObject(g_gui.bmp);
+            }
+            g_gui.bmp = CreateCompatibleBitmap(win, cw, ch);
+            g_gui.old_bmp = (HBITMAP)SelectObject(g_gui.mem_dc, g_gui.bmp);
+            g_gui.bmp_w = cw;
+            g_gui.bmp_h = ch;
+        }
+
+        g_gui.hdc = g_gui.mem_dc;
+        g_gui.in_paint = 1;
+        if (g_gui_cb) g_gui_cb(VAYU_EV_PAINT);
+        g_gui.in_paint = 0;
+
+        BitBlt(win, 0, 0, cw, ch, g_gui.mem_dc, 0, 0, SRCCOPY);
+        EndPaint(h, &ps);
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+        g_gui.mx = (int)(short)LOWORD(lp);
+        g_gui.my = (int)(short)HIWORD(lp);
+        if (g_gui_cb) g_gui_cb(VAYU_EV_MOUSE_DOWN);
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    case WM_LBUTTONUP:
+        g_gui.mx = (int)(short)LOWORD(lp);
+        g_gui.my = (int)(short)HIWORD(lp);
+        if (g_gui_cb) g_gui_cb(VAYU_EV_MOUSE_UP);
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    case WM_MOUSEMOVE:
+        g_gui.mx = (int)(short)LOWORD(lp);
+        g_gui.my = (int)(short)HIWORD(lp);
+        if (g_gui_cb) g_gui_cb(VAYU_EV_MOUSE_MOVE);
+        return 0;
+    case WM_KEYDOWN:
+        g_gui.last_key = (int)wp;
+        if (g_gui_cb) g_gui_cb(VAYU_EV_KEY_DOWN);
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    case WM_KEYUP:
+        g_gui.last_key = (int)wp;
+        if (g_gui_cb) g_gui_cb(VAYU_EV_KEY_UP);
+        return 0;
+    case WM_TIMER:
+        if (g_gui_cb) g_gui_cb(VAYU_EV_TIMER);
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
+    }
+    return DefWindowProcA(h, msg, wp, lp);
+}
+
+int64_t vayu_gui_init(void) {
+    static int done = 0;
+    if (done) return 1;
+    WNDCLASSA wc;
+    memset(&wc, 0, sizeof(wc));
+    wc.lpfnWndProc   = vayu_gui_wndproc;
+    wc.hInstance     = GetModuleHandleA(NULL);
+    wc.lpszClassName = "VayuWindow";
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    if (!RegisterClassA(&wc)) {
+        if (GetLastError() == ERROR_CLASS_ALREADY_EXISTS) { done = 1; return 1; }
+        return 0;
+    }
+    done = 1;
+    return 1;
+}
+
+int64_t vayu_gui_create_window(VayuStr* title, int64_t w, int64_t h) {
+    if (!vayu_gui_init()) return 0;
+    HWND hwnd = CreateWindowExA(
+        0, "VayuWindow", title->data,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        (int)w, (int)h,
+        NULL, NULL, GetModuleHandleA(NULL), NULL);
+    memset(&g_gui, 0, sizeof(g_gui));
+    g_gui.hwnd = hwnd;
+    g_gui.last_key = -1;
+    return (int64_t)hwnd;
+}
+
+void vayu_gui_show_window(int64_t h) {
+    HWND hwnd = (HWND)h;
+    if (!hwnd) return;
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+}
+
+void vayu_gui_set_title(int64_t h, VayuStr* title) {
+    HWND hwnd = (HWND)h;
+    if (!hwnd) return;
+    SetWindowTextA(hwnd, title->data);
+}
+
+void vayu_gui_set_size(int64_t h, int64_t w, int64_t k) {
+    HWND hwnd = (HWND)h;
+    if (!hwnd) return;
+    SetWindowPos(hwnd, NULL, 0, 0, (int)w, (int)k, SWP_NOMOVE | SWP_NOZORDER);
+}
+
+void vayu_gui_set_callback(int64_t fp)   { g_gui_cb = (vayu_gui_cb_t)fp; }
+int64_t vayu_gui_mouse_x(void)           { return g_gui.mx; }
+int64_t vayu_gui_mouse_y(void)           { return g_gui.my; }
+int64_t vayu_gui_last_key(void)          { return g_gui.last_key; }
+
+void vayu_gui_set_timer(int64_t ms) {
+    if (g_gui.hwnd && ms > 0) SetTimer(g_gui.hwnd, 1, (UINT)ms, NULL);
+}
+void vayu_gui_clear_timer(void) {
+    if (g_gui.hwnd) KillTimer(g_gui.hwnd, 1);
+}
+
+int64_t vayu_gui_run(int64_t h) {
+    (void)h;
+    MSG msg;
+    while (GetMessageA(&msg, NULL, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+    return 0;
+}
+
+void vayu_gui_close(int64_t h) {
+    HWND hwnd = (HWND)h;
+    if (hwnd) DestroyWindow(hwnd);
+}
+void vayu_gui_quit(void) { PostQuitMessage(0); }
+
+static COLORREF vayu_gui_rgb(int64_t c) {
+    int r = (int)((c >> 16) & 0xFF);
+    int g = (int)((c >> 8)  & 0xFF);
+    int b = (int)( c        & 0xFF);
+    return RGB(r, g, b);
+}
+
+void vayu_gui_clear(int64_t color) {
+    if (!g_gui.in_paint) return;
+    RECT r;
+    r.left = 0; r.top = 0;
+    r.right = g_gui.bmp_w; r.bottom = g_gui.bmp_h;
+    HBRUSH br = CreateSolidBrush(vayu_gui_rgb(color));
+    FillRect(g_gui.hdc, &r, br);
+    DeleteObject(br);
+}
+
+void vayu_gui_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h, int64_t color) {
+    if (!g_gui.in_paint) return;
+    RECT r;
+    r.left = (LONG)x; r.top = (LONG)y;
+    r.right = (LONG)(x + w); r.bottom = (LONG)(y + h);
+    HBRUSH br = CreateSolidBrush(vayu_gui_rgb(color));
+    FillRect(g_gui.hdc, &r, br);
+    DeleteObject(br);
+}
+
+void vayu_gui_outline_rect(int64_t x, int64_t y, int64_t w, int64_t h, int64_t color) {
+    if (!g_gui.in_paint) return;
+    HPEN pen = CreatePen(PS_SOLID, 1, vayu_gui_rgb(color));
+    HGDIOBJ oldPen   = SelectObject(g_gui.hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(g_gui.hdc, GetStockObject(NULL_BRUSH));
+    Rectangle(g_gui.hdc, (int)x, (int)y, (int)(x + w), (int)(y + h));
+    SelectObject(g_gui.hdc, oldBrush);
+    SelectObject(g_gui.hdc, oldPen);
+    DeleteObject(pen);
+}
+
+void vayu_gui_line(int64_t x1, int64_t y1, int64_t x2, int64_t y2, int64_t color) {
+    if (!g_gui.in_paint) return;
+    HPEN pen = CreatePen(PS_SOLID, 1, vayu_gui_rgb(color));
+    HGDIOBJ oldPen = SelectObject(g_gui.hdc, pen);
+    MoveToEx(g_gui.hdc, (int)x1, (int)y1, NULL);
+    LineTo(g_gui.hdc, (int)x2, (int)y2);
+    SelectObject(g_gui.hdc, oldPen);
+    DeleteObject(pen);
+}
+
+void vayu_gui_text(int64_t sp, int64_t x, int64_t y, int64_t color) {
+    if (!g_gui.in_paint) return;
+    VayuStr* s = (VayuStr*)sp;
+    SetTextColor(g_gui.hdc, vayu_gui_rgb(color));
+    SetBkMode(g_gui.hdc, TRANSPARENT);
+    TextOutA(g_gui.hdc, (int)x, (int)y, s->data, (int)s->len);
+}
+
+int64_t vayu_gui_rect_hit(int64_t x, int64_t y, int64_t w, int64_t h,
+                          int64_t px, int64_t py) {
+    return (px >= x && px < x + w && py >= y && py < y + h) ? 1 : 0;
+}
+
+int64_t vayu_gui_create_input(int64_t parent, int64_t x, int64_t y, int64_t w, int64_t h) {
+    HWND hwnd = (HWND)parent;
+    HWND e = CreateWindowExA(
+        WS_EX_CLIENTEDGE, "EDIT", "",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | WS_TABSTOP,
+        (int)x, (int)y, (int)w, (int)h,
+        hwnd, NULL, GetModuleHandleA(NULL), NULL);
+    return (int64_t)e;
+}
+
+int64_t vayu_gui_input_get(int64_t e) {
+    HWND h = (HWND)e;
+    if (!h) return (int64_t)vayu_mkstr("", 0);
+    int n = GetWindowTextLengthA(h);
+    if (n <= 0) return (int64_t)vayu_mkstr("", 0);
+    char* buf = (char*)malloc((size_t)n + 1);
+    GetWindowTextA(h, buf, n + 1);
+    VayuStr* s = vayu_mkstr(buf, n);
+    free(buf);
+    return (int64_t)s;
+}
+
+void vayu_gui_input_set(int64_t e, VayuStr* s) {
+    HWND h = (HWND)e;
+    if (!h) return;
+    SetWindowTextA(h, s->data);
+}
+
+void vayu_gui_input_focus(int64_t e) {
+    HWND h = (HWND)e;
+    if (!h) return;
+    SetFocus(h);
+}
+
+#else  // !_WIN32 stubs
+
+int64_t vayu_gui_init(void) { return 0; }
+int64_t vayu_gui_create_window(VayuStr* t, int64_t w, int64_t h) { (void)t;(void)w;(void)h; return 0; }
+void vayu_gui_show_window(int64_t h) { (void)h; }
+void vayu_gui_set_title(int64_t h, VayuStr* t) { (void)h;(void)t; }
+void vayu_gui_set_size(int64_t h, int64_t w, int64_t k) { (void)h;(void)w;(void)k; }
+void vayu_gui_set_callback(int64_t fp) { (void)fp; }
+void vayu_gui_set_timer(int64_t ms) { (void)ms; }
+void vayu_gui_clear_timer(void) {}
+int64_t vayu_gui_mouse_x(void) { return 0; }
+int64_t vayu_gui_mouse_y(void) { return 0; }
+int64_t vayu_gui_last_key(void) { return -1; }
+int64_t vayu_gui_run(int64_t h) { (void)h; return 0; }
+void vayu_gui_close(int64_t h) { (void)h; }
+void vayu_gui_quit(void) {}
+void vayu_gui_clear(int64_t c) { (void)c; }
+void vayu_gui_fill_rect(int64_t x, int64_t y, int64_t w, int64_t h, int64_t c) { (void)x;(void)y;(void)w;(void)h;(void)c; }
+void vayu_gui_outline_rect(int64_t x, int64_t y, int64_t w, int64_t h, int64_t c) { (void)x;(void)y;(void)w;(void)h;(void)c; }
+void vayu_gui_line(int64_t x1, int64_t y1, int64_t x2, int64_t y2, int64_t c) { (void)x1;(void)y1;(void)x2;(void)y2;(void)c; }
+void vayu_gui_text(int64_t sp, int64_t x, int64_t y, int64_t c) { (void)sp;(void)x;(void)y;(void)c; }
+int64_t vayu_gui_rect_hit(int64_t x, int64_t y, int64_t w, int64_t h, int64_t px, int64_t py) { (void)x;(void)y;(void)w;(void)h;(void)px;(void)py; return 0; }
+int64_t vayu_gui_create_input(int64_t p, int64_t x, int64_t y, int64_t w, int64_t h) { (void)p;(void)x;(void)y;(void)w;(void)h; return 0; }
+int64_t vayu_gui_input_get(int64_t e) { (void)e; return 0; }
+void vayu_gui_input_set(int64_t e, VayuStr* s) { (void)e;(void)s; }
+void vayu_gui_input_focus(int64_t e) { (void)e; }
+#endif
+
 // ---- try/except (thread-local for generator workers) ----
 
 #define VAYU_MAX_TRY 64
@@ -10224,7 +10661,7 @@ int main(int argc, char** argv) {
         {
             std::string linkLibs;
 #ifdef _WIN32
-            linkLibs = " -lws2_32 -lbcrypt";
+            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32";
 #endif
             // Phase 15.1: extra link libraries for extern "C" functions.
             // Space-separated list; usually `-lfoo -lbar` or `.lib` paths.

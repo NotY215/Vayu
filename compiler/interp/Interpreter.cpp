@@ -754,6 +754,10 @@ namespace vayu {
     }
 
     void Interpreter::execImport(const ImportStmt* n) {
+        // Phase 19.1: `gui` is native-only.
+        if (n->moduleName == "gui") {
+            throw RuntimeError("gui module requires the native backend", n->loc);
+        }
         // Phase 16.0: `py` is a stub module on tree/VM.
         if (n->moduleName == "py") {
             auto mod = std::make_shared<ModuleValue>();

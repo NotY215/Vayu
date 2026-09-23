@@ -1,0 +1,11 @@
+import gui
+
+def main() -> None:
+    gui.init()
+    w = gui.create_window("Vayu Window", 800, 600)
+    gui.show_window(w)
+    gui.set_title(w, "Hello from Vayu")
+    gui.run(w)
+    gui.close(w)
+
+main()

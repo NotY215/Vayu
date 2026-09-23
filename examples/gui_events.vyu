@@ -1,0 +1,40 @@
+import gui
+
+box_x: int = 100
+box_y: int = 150
+box_color: int = 0xFF4444
+ticks: int = 0
+
+def on_event(ev: int) -> None:
+    if ev == gui.EV_PAINT:
+        gui.clear(0x1E1E1E)
+        gui.fill_rect(box_x, box_y, 240, 120, box_color)
+        gui.outline_rect(box_x, box_y, 240, 120, 0xFFFFFF)
+        gui.line(20, 100, 560, 100, 0x444444)
+        gui.text("Click the box, or press SPACE", 20, 30, 0xFFFFFF)
+        gui.text("Vayu GUI - phase 19.2", 20, 55, 0xAAAAAA)
+        gui.text("ticks: " + str(ticks), 20, 430, 0x88FF88)
+    elif ev == gui.EV_MOUSE_DOWN:
+        mx: int = gui.mouse_x()
+        my: int = gui.mouse_y()
+        if gui.rect_hit(box_x, box_y, 240, 120, mx, my) == 1:
+            box_color = 0x44FF44
+    elif ev == gui.EV_KEY_DOWN:
+        if gui.last_key() == 32:
+            box_color = 0x4444FF
+    elif ev == gui.EV_TIMER:
+        ticks = ticks + 1
+    elif ev == gui.EV_CLOSE:
+        gui.clear_timer()
+        gui.quit()
+
+def main() -> None:
+    gui.init()
+    w = gui.create_window("Vayu GUI - events + widgets", 600, 480)
+    gui.show_window(w)
+    gui.set_callback(&on_event)
+    gui.set_timer(1000)
+    gui.run(w)
+    gui.close(w)
+
+main()

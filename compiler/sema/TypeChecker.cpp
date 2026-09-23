@@ -130,6 +130,7 @@ namespace vayu {
         B("read_int", Types::Function({}, Types::Int()));
         B("print_raw", Types::Function({ Types::Str() }, Types::None()));
 
+        B("gui", Types::Any());
         B("fs", Types::Any());
         B("time", Types::Any());
         B("json", Types::Any());

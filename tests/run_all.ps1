@@ -40,7 +40,10 @@ $native_only = @(
     "py_init_test.vyu", "py_bridge_test.vyu", "py_call_test.vyu",
     "py_bidi_test.vyu", "py_close_test.vyu", "py_eval_test.vyu",
     "py_callback_test.vyu",
-    "self_host_17_7.vyu", "self_host_17_8.vyu"
+    "self_host_17_7.vyu", "self_host_17_8.vyu",
+    "gui_window.vyu",
+    "gui_events.vyu",
+    "gui_widgets.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )
