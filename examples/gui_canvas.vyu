@@ -43,7 +43,7 @@ def on_event(ev: int) -> None:
 
     gui.line_width(c, 5)
     gui.line_cap(c, 2)
-    gui.arc(c, 400, 300, 70, 30.0, 270.0, 0xFFFFC107)
+    gui.arc(c, 400, 300, 70, 30, 270, 0xFFFFC107)
 
     pts: list<int> = [540, 260, 600, 320, 560, 400, 500, 400, 460, 320]
     gui.polygon(c, pts, 0xFF7E57C2)
@@ -62,7 +62,7 @@ def main() -> None:
     font_big = gui.font_new("Segoe UI", 32, 700, 0)
     font_med = gui.font_new("Segoe UI", 20, 400, 0)
     font_sm  = gui.font_new("Consolas", 14, 400, 0)
-    gui.set_callback(on_event)
+    gui.set_callback(&on_event)
     gui.show_window(win)
     gui.set_timer(1500)
     gui.run(win)

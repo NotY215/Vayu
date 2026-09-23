@@ -3957,6 +3957,19 @@ namespace vayu {
                 if (m == "draw_bitmap_part") { Val c = a0(); Val b = a1(); Val sx = a2(); Val sy = a3(); Val sw = a4(); Val sh = a5(); Val dx = emitExpr(n->args[6].value.get()); Val dy = emitExpr(n->args[7].value.get()); line("call $vayu_gui_draw_bitmap_part(l " + c.ssa + ", l " + b.ssa + ", l " + sx.ssa + ", l " + sy.ssa + ", l " + sw.ssa + ", l " + sh.ssa + ", l " + dx.ssa + ", l " + dy.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "draw_bitmap_alpha") { Val c = a0(); Val b = a1(); Val x = a2(); Val y = a3(); Val al = a4(); line("call $vayu_gui_draw_bitmap_alpha(l " + c.ssa + ", l " + b.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + al.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "canvas_save_png") { Val c = a0(); Val p = a1(); std::string t = newTemp(); line(t + " =l call $vayu_gui_canvas_save_png(l " + c.ssa + ", l " + p.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "bitmap_from_pixels") { Val w = a0(); Val h = a1(); Val lst = a2(); std::string t = newTemp(); line(t + " =l call $vayu_gui_bitmap_from_pixels(l " + w.ssa + ", l " + h.ssa + ", l " + lst.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+
+                if (m == "push_transform") { Val h = a0(); line("call $vayu_gui_push_transform(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "pop_transform") { Val h = a0(); line("call $vayu_gui_pop_transform(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "reset_transform") { Val h = a0(); line("call $vayu_gui_reset_transform(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "translate") { Val h = a0(); Val dx = a1(); Val dy = a2(); line("call $vayu_gui_translate(l " + h.ssa + ", l " + dx.ssa + ", l " + dy.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "rotate") { Val h = a0(); Val d = a1(); line("call $vayu_gui_rotate(l " + h.ssa + ", l " + d.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "rotate_at") { Val h = a0(); Val d = a1(); Val cx = a2(); Val cy = a3(); line("call $vayu_gui_rotate_at(l " + h.ssa + ", l " + d.ssa + ", l " + cx.ssa + ", l " + cy.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "scale") { Val h = a0(); Val sx = a1(); Val sy = a2(); line("call $vayu_gui_scale(l " + h.ssa + ", l " + sx.ssa + ", l " + sy.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "clip_rect") { Val h = a0(); Val x = a1(); Val y = a2(); Val w = a3(); Val k = a4(); line("call $vayu_gui_clip_rect(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + w.ssa + ", l " + k.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "clip_reset") { Val h = a0(); line("call $vayu_gui_clip_reset(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fill_mode") { Val h = a0(); Val mm = a1(); line("call $vayu_gui_fill_mode(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "compositing_mode") { Val h = a0(); Val mm = a1(); line("call $vayu_gui_compositing_mode(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
                 if (m == "listbox_set_index") { Val e = a0(); Val i = a1(); line("call $vayu_gui_listbox_set_index(l " + e.ssa + ", l " + i.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
@@ -8772,6 +8785,11 @@ typedef struct VayuCanvas {
     REAL        line_width;
     GpLineCap   line_cap;
     GpLineJoin  line_join;
+    /* Phase 20.3 - transform / clip state */
+    GraphicsState state_stack[32];
+    int           state_sp;
+    int           fill_mode;   /* 0=alternate, 1=winding */
+    int           composite;   /* 0=source-over, 1=source-copy */
 } VayuCanvas;
 
 typedef struct VayuFont {
@@ -8786,6 +8804,9 @@ static VayuCanvas* vayu_canvas_alloc(void) {
     c->line_width = 1.0f;
     c->line_cap   = LineCapFlat;
     c->line_join  = LineJoinMiter;
+    c->state_sp   = 0;
+    c->fill_mode  = 1;   /* winding, matches prior polygon behaviour */
+    c->composite  = 0;   /* source-over */
     return c;
 }
 
@@ -8805,7 +8826,7 @@ static GpSolidFill* vayu_solid(ARGB color) {
 static GpPen* vayu_canvas_make_pen(VayuCanvas* c, ARGB color) {
     GpPen* p = NULL;
     GdipCreatePen1(color, c->line_width, UnitPixel, &p);
-    GdipSetPenLineCap197819(p, c->line_cap, c->line_cap, GpDashCapFlat);
+    GdipSetPenLineCap197819(p, c->line_cap, c->line_cap, DashCapFlat);
     GdipSetPenLineJoin(p, c->line_join);
     return p;
 }
@@ -8988,7 +9009,8 @@ void vayu_gui_polygon(int64_t h, int64_t pts, int64_t argb) {
         pf[i].Y = (REAL)lst->items[i * 2 + 1];
     }
     GpSolidFill* b = vayu_solid((ARGB)argb);
-    GdipFillPolygon(c->g, (GpBrush*)b, pf, npts, FillModeWinding);
+    GpFillMode fm = (c->fill_mode == 1) ? FillModeWinding : FillModeAlternate;
+    GdipFillPolygon(c->g, (GpBrush*)b, pf, npts, fm);
     GdipDeleteBrush((GpBrush*)b);
     free(pf);
 }
@@ -9216,10 +9238,132 @@ int64_t vayu_gui_canvas_save_png(int64_t canvas_h, int64_t path_sp) {
     if (!c || !c->bmp) return 0;
     VayuStr* s = (VayuStr*)path_sp;
     WCHAR* w = vayu_utf8_to_w(s->data, (int)s->len);
-    Status st = GdipSaveImageToFile((GpImage*)c->bmp, w,
-                                    &VAYU_PNG_CLSID, NULL);
+    GpStatus st = GdipSaveImageToFile((GpImage*)c->bmp, w,
+                                      &VAYU_PNG_CLSID, NULL);
     free(w);
     return st == 0 ? 1 : 0;
+}
+
+/* Codec-independent bitmap construction.  argb_list is a flat list of
+   0xAARRGGBB ints, row-major, length w*h.  Useful when we need a bitmap
+   but the platform's image encoder path is unreliable. */
+int64_t vayu_gui_bitmap_from_pixels(int64_t w, int64_t h, int64_t argb_list) {
+    if (!g_gdiplus_ready) return 0;
+    if (w <= 0 || h <= 0) return 0;
+    VayuList* lst = (VayuList*)argb_list;
+    if (!lst || lst->len < w * h) return 0;
+
+    GpBitmap* bmp = NULL;
+    GdipCreateBitmapFromScan0((INT)w, (INT)h, 0,
+                              PixelFormat32bppARGB, NULL, &bmp);
+    if (!bmp) return 0;
+
+    GpRect rc;
+    rc.X = 0; rc.Y = 0; rc.Width = (INT)w; rc.Height = (INT)h;
+    BitmapData bd;
+    memset(&bd, 0, sizeof(bd));
+    GdipBitmapLockBits(bmp, &rc, ImageLockModeWrite,
+                       PixelFormat32bppARGB, &bd);
+
+    for (int y = 0; y < (int)h; ++y) {
+        uint8_t* row = (uint8_t*)bd.Scan0 + y * bd.Stride;
+        for (int x = 0; x < (int)w; ++x) {
+            int64_t argb = lst->items[y * (int)w + x];
+            row[x * 4 + 0] = (uint8_t)( argb        & 0xFF); /* B */
+            row[x * 4 + 1] = (uint8_t)((argb >>  8) & 0xFF); /* G */
+            row[x * 4 + 2] = (uint8_t)((argb >> 16) & 0xFF); /* R */
+            row[x * 4 + 3] = (uint8_t)((argb >> 24) & 0xFF); /* A */
+        }
+    }
+    GdipBitmapUnlockBits(bmp, &bd);
+
+    VayuBitmap* b = (VayuBitmap*)malloc(sizeof(VayuBitmap));
+    b->img = (GpImage*)bmp;
+    return (int64_t)b;
+}
+
+/* ===========================================================================
+ * Phase 20.3 - affine transforms, clipping, fill / compositing modes.
+ * ========================================================================= */
+
+void vayu_gui_push_transform(int64_t h) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    if (c->state_sp >= 32) return;
+    GraphicsState st = 0;
+    GdipSaveGraphics(c->g, &st);
+    c->state_stack[c->state_sp++] = st;
+}
+
+void vayu_gui_pop_transform(int64_t h) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g || c->state_sp == 0) return;
+    GraphicsState st = c->state_stack[--c->state_sp];
+    GdipRestoreGraphics(c->g, st);
+}
+
+void vayu_gui_reset_transform(int64_t h) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipResetWorldTransform(c->g);
+}
+
+void vayu_gui_translate(int64_t h, int64_t dx, int64_t dy) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipTranslateWorldTransform(c->g, (REAL)dx, (REAL)dy, MatrixOrderPrepend);
+}
+
+void vayu_gui_rotate(int64_t h, int64_t deg) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipRotateWorldTransform(c->g, (REAL)deg, MatrixOrderPrepend);
+}
+
+void vayu_gui_rotate_at(int64_t h, int64_t deg, int64_t cx, int64_t cy) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipTranslateWorldTransform(c->g, (REAL)cx,  (REAL)cy,  MatrixOrderPrepend);
+    GdipRotateWorldTransform(c->g,    (REAL)deg,            MatrixOrderPrepend);
+    GdipTranslateWorldTransform(c->g, (REAL)-cx, (REAL)-cy, MatrixOrderPrepend);
+}
+
+/* scale takes integer percent: 100 = 1.0x, 50 = 0.5x, 150 = 1.5x. */
+void vayu_gui_scale(int64_t h, int64_t sx_pct, int64_t sy_pct) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    REAL sx = (REAL)sx_pct / 100.0f;
+    REAL sy = (REAL)sy_pct / 100.0f;
+    GdipScaleWorldTransform(c->g, sx, sy, MatrixOrderPrepend);
+}
+
+void vayu_gui_clip_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipSetClipRect(c->g, (REAL)x, (REAL)y, (REAL)w, (REAL)k,
+                    CombineModeIntersect);
+}
+
+void vayu_gui_clip_reset(int64_t h) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    GdipResetClip(c->g);
+}
+
+void vayu_gui_fill_mode(int64_t h, int64_t mode) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c) return;
+    c->fill_mode = (mode == 1) ? 1 : 0;
+}
+
+/* GDI+ exposes only source-over and source-copy.  XOR would need a blend
+   hack; not exposed.  mode: 0=source-over, 1=source-copy. */
+void vayu_gui_compositing_mode(int64_t h, int64_t mode) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    c->composite = (mode == 1) ? 1 : 0;
+    GdipSetCompositingMode(c->g,
+        c->composite ? CompositingModeSourceCopy : CompositingModeSourceOver);
 }
 
 // ---- child controls ----
@@ -9395,6 +9539,18 @@ void vayu_gui_draw_bitmap_scaled(int64_t c, int64_t b, int64_t x, int64_t y, int
 void vayu_gui_draw_bitmap_part(int64_t c, int64_t b, int64_t sx, int64_t sy, int64_t sw, int64_t sh, int64_t dx, int64_t dy) { (void)c;(void)b;(void)sx;(void)sy;(void)sw;(void)sh;(void)dx;(void)dy; }
 void vayu_gui_draw_bitmap_alpha(int64_t c, int64_t b, int64_t x, int64_t y, int64_t a) { (void)c;(void)b;(void)x;(void)y;(void)a; }
 int64_t vayu_gui_canvas_save_png(int64_t c, int64_t p) { (void)c;(void)p; return 0; }
+int64_t vayu_gui_bitmap_from_pixels(int64_t w, int64_t h, int64_t l) { (void)w;(void)h;(void)l; return 0; }
+void vayu_gui_push_transform(int64_t h) { (void)h; }
+void vayu_gui_pop_transform(int64_t h) { (void)h; }
+void vayu_gui_reset_transform(int64_t h) { (void)h; }
+void vayu_gui_translate(int64_t h, int64_t dx, int64_t dy) { (void)h;(void)dx;(void)dy; }
+void vayu_gui_rotate(int64_t h, int64_t d) { (void)h;(void)d; }
+void vayu_gui_rotate_at(int64_t h, int64_t d, int64_t cx, int64_t cy) { (void)h;(void)d;(void)cx;(void)cy; }
+void vayu_gui_scale(int64_t h, int64_t sx, int64_t sy) { (void)h;(void)sx;(void)sy; }
+void vayu_gui_clip_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k) { (void)h;(void)x;(void)y;(void)w;(void)k; }
+void vayu_gui_clip_reset(int64_t h) { (void)h; }
+void vayu_gui_fill_mode(int64_t h, int64_t m) { (void)h;(void)m; }
+void vayu_gui_compositing_mode(int64_t h, int64_t m) { (void)h;(void)m; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----

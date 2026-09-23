@@ -44,7 +44,9 @@ $native_only = @(
     "gui_window.vyu",
     "gui_events.vyu",
     "gui_widgets.vyu",
-    "gui_canvas.vyu"
+    "gui_canvas.vyu",
+    "gui_bitmap.vyu",
+    "gui_transform.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )
