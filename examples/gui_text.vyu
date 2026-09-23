@@ -1,0 +1,125 @@
+# examples/gui_text.vyu -- Phase 20.4 demo.
+# Font metrics, alignment, word-wrap.
+
+import gui
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const W: int = 720
+const H: int = 520
+
+f_big: int = 0
+f_med: int = 0
+f_sm:  int = 0
+
+# Wrap s into lines that each fit within max_w.
+def wrap(c: int, font: int, s: str, max_w: int) -> list<str>:
+    words: list<str> = s.split(" ")
+    lines: list<str> = []
+    cur: str = ""
+    i: int = 0
+    while i < len(words):
+        w: str = words[i]
+        trial: str = w
+        if len(cur) > 0:
+            trial = cur + " " + w
+        tw: int = gui.text_width(c, font, trial)
+        if tw > max_w and len(cur) > 0:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = trial
+        i = i + 1
+    if len(cur) > 0:
+        lines.append(cur)
+    return lines
+
+def draw_wrapped(c: int, font: int, s: str, x: int, y: int, max_w: int, argb: int) -> None:
+    lines: list<str> = wrap(c, font, s, max_w)
+    lh: int = gui.font_line_spacing(font)
+    i: int = 0
+    while i < len(lines):
+        gui.text_ex(c, font, lines[i], x, y + i * lh, argb)
+        i = i + 1
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        gui.quit()
+        return
+    if ev != EV_PAINT:
+        return
+    c: int = gui.canvas_from_window()
+    gui.canvas_clear(c, 0xFF1A1A2E)
+
+    # ---- Alignment column headers ----
+    gui.canvas_fill_rect(c, 20,  20, 1, 200, 0xFF333355)
+    gui.canvas_fill_rect(c, 240, 20, 1, 200, 0xFF333355)
+    gui.canvas_fill_rect(c, 460, 20, 1, 200, 0xFF333355)
+    gui.canvas_fill_rect(c, 680, 20, 1, 200, 0xFF333355)
+
+    gui.text_align(c, gui.ALIGN_LEFT)
+    gui.text_ex(c, f_med, "left",       20, 20, 0xFFB0BEC5)
+    gui.text_align(c, gui.ALIGN_CENTER)
+    gui.text_ex(c, f_med, "center",    460, 20, 0xFFB0BEC5)
+    gui.text_align(c, gui.ALIGN_RIGHT)
+    gui.text_ex(c, f_med, "right",     680, 20, 0xFFB0BEC5)
+
+    gui.text_align(c, gui.ALIGN_LEFT)
+    gui.text_ex(c, f_sm, "The quick brown fox", 20,  60, 0xFFFFFFFF)
+    gui.text_align(c, gui.ALIGN_CENTER)
+    gui.text_ex(c, f_sm, "The quick brown fox", 460, 60, 0xFFFFFFFF)
+    gui.text_align(c, gui.ALIGN_RIGHT)
+    gui.text_ex(c, f_sm, "The quick brown fox", 680, 60, 0xFFFFFFFF)
+
+    gui.text_align(c, gui.ALIGN_LEFT)
+    gui.text_ex(c, f_med, "Vayu 2D text quality", 20, 110, 0xFF4CAF50)
+    gui.text_align(c, gui.ALIGN_CENTER)
+    gui.text_ex(c, f_med, "measured, aligned, wrapped", 460, 110, 0xFF4CAF50)
+    gui.text_align(c, gui.ALIGN_RIGHT)
+    gui.text_ex(c, f_med, "2026", 680, 110, 0xFF4CAF50)
+
+    # ---- Metrics readout ----
+    gui.text_align(c, gui.ALIGN_LEFT)
+    sample: str = "Measure me!"
+    sw: int = gui.text_width(c, f_sm, sample)
+    sh: int = gui.text_height(c, f_sm, sample)
+    fh: int = gui.font_height(f_sm)
+    ls: int = gui.font_line_spacing(f_sm)
+
+    gui.text_ex(c, f_sm, "sample: " + sample,          20, 250, 0xFF80CBC4)
+    gui.text_ex(c, f_sm, "text_width  = " + str(sw),   20, 275, 0xFF80CBC4)
+    gui.text_ex(c, f_sm, "text_height = " + str(sh),   20, 300, 0xFF80CBC4)
+    gui.text_ex(c, f_sm, "font_height = " + str(fh),   20, 325, 0xFF80CBC4)
+    gui.text_ex(c, f_sm, "line_spacing= " + str(ls),   20, 350, 0xFF80CBC4)
+
+    # Bounding box visualisation
+    gui.canvas_outline_rect(c, 20, 375, sw, sh, 0xFFFFC107, 1)
+
+    # ---- Wrapped paragraph ----
+    para: str = "Vayu lays out text with byte-precise metrics. Wrapping " + "breaks on spaces; each line's width is measured before " + "commit, so no word ever spills past the right edge of " + "the paragraph box."
+    gui.canvas_outline_rect(c, 380, 240, 320, 220, 0xFF333355, 1)
+    draw_wrapped(c, f_sm, para, 390, 250, 300, 0xFFB0BEC5)
+
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    win: int = gui.create_window("Vayu text", W, H)
+    f_big = gui.font_new("Segoe UI", 28, 700, 0)
+    f_med = gui.font_new("Segoe UI", 18, 400, 0)
+    f_sm  = gui.font_new("Consolas", 14, 400, 0)
+    gui.set_callback(&on_event)
+    gui.show_window(win)
+    gui.set_timer(1500)
+    gui.run(win)
+    gui.font_free(f_big)
+    gui.font_free(f_med)
+    gui.font_free(f_sm)
+    print("text demo done")
+
+main()

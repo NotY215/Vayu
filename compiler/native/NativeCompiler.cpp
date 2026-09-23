@@ -325,7 +325,8 @@ namespace vayu {
                             n->moduleName != "thread" && n->moduleName != "net" &&
                             n->moduleName != "crypto" && n->moduleName != "random" &&
                             n->moduleName != "os" && n->moduleName != "py" &&
-                            n->moduleName != "gui" && !modules_.count(n->moduleName))
+                            n->moduleName != "gui" && n->moduleName != "raster" &&
+                            !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
                     else if (s->kind == StmtKind::FromImport) {
@@ -1936,6 +1937,9 @@ namespace vayu {
                             if (mm == "EV_FOCUS_OUT") { r.ssa = "12"; r.type = VType::Int; return r; }
                             if (mm == "EV_ENTER") { r.ssa = "13"; r.type = VType::Int; return r; }
                             if (mm == "EV_CONTROL") { r.ssa = "14"; r.type = VType::Int; return r; }
+                            if (mm == "ALIGN_LEFT") { r.ssa = "0"; r.type = VType::Int; return r; }
+                            if (mm == "ALIGN_CENTER") { r.ssa = "1"; r.type = VType::Int; return r; }
+                            if (mm == "ALIGN_RIGHT") { r.ssa = "2"; r.type = VType::Int; return r; }
                         }
 
                         auto eit = enums_.find(tn->name);
@@ -3971,9 +3975,40 @@ namespace vayu {
                 if (m == "fill_mode") { Val h = a0(); Val mm = a1(); line("call $vayu_gui_fill_mode(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "compositing_mode") { Val h = a0(); Val mm = a1(); line("call $vayu_gui_compositing_mode(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
+                if (m == "text_align") { Val h = a0(); Val mm = a1(); line("call $vayu_gui_text_align(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "text_width") { Val h = a0(); Val f = a1(); Val s = a2(); std::string t = newTemp(); line(t + " =l call $vayu_gui_text_width(l " + h.ssa + ", l " + f.ssa + ", l " + s.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "text_height") { Val h = a0(); Val f = a1(); Val s = a2(); std::string t = newTemp(); line(t + " =l call $vayu_gui_text_height(l " + h.ssa + ", l " + f.ssa + ", l " + s.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "font_height") { Val f = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_font_height(l " + f.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "font_line_spacing") { Val f = a0(); std::string t = newTemp(); line(t + " =l call $vayu_gui_font_line_spacing(l " + f.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+
                 if (m == "listbox_set_index") { Val e = a0(); Val i = a1(); line("call $vayu_gui_listbox_set_index(l " + e.ssa + ", l " + i.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
                 throw std::runtime_error("native: gui has no method '" + m + "'");
+            }
+
+            Val emitRasterCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                auto a0 = [&]() { return emitExpr(n->args[0].value.get()); };
+                auto a1 = [&]() { return emitExpr(n->args[1].value.get()); };
+                auto a2 = [&]() { return emitExpr(n->args[2].value.get()); };
+                auto a3 = [&]() { return emitExpr(n->args[3].value.get()); };
+                auto a4 = [&]() { return emitExpr(n->args[4].value.get()); };
+                auto a5 = [&]() { return emitExpr(n->args[5].value.get()); };
+                auto a6 = [&]() { return emitExpr(n->args[6].value.get()); };
+
+                if (m == "fb_new") { Val w = a0(); Val h = a1(); std::string t = newTemp(); line(t + " =l call $vayu_raster_fb_new(l " + w.ssa + ", l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "fb_free") { Val h = a0(); line("call $vayu_raster_fb_free(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fb_width") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_raster_fb_width(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "fb_height") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_raster_fb_height(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "fb_clear") { Val h = a0(); Val c = a1(); line("call $vayu_raster_fb_clear(l " + h.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fb_set") { Val h = a0(); Val x = a1(); Val y = a2(); Val c = a3(); line("call $vayu_raster_fb_set(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fb_get") { Val h = a0(); Val x = a1(); Val y = a2(); std::string t = newTemp(); line(t + " =l call $vayu_raster_fb_get(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "fb_present") { Val h = a0(); Val c = a1(); Val x = a2(); Val y = a3(); line("call $vayu_raster_fb_present(l " + h.ssa + ", l " + c.ssa + ", l " + x.ssa + ", l " + y.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_line") { Val h = a0(); Val x0 = a1(); Val y0 = a2(); Val x1 = a3(); Val y1 = a4(); Val c = a5(); line("call $vayu_raster_draw_line(l " + h.ssa + ", l " + x0.ssa + ", l " + y0.ssa + ", l " + x1.ssa + ", l " + y1.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_tri") { Val h = a0(); Val x0 = a1(); Val y0 = a2(); Val x1 = a3(); Val y1 = a4(); Val x2 = a5(); Val y2 = a6(); Val c = emitExpr(n->args[7].value.get()); line("call $vayu_raster_draw_tri(l " + h.ssa + ", l " + x0.ssa + ", l " + y0.ssa + ", l " + x1.ssa + ", l " + y1.ssa + ", l " + x2.ssa + ", l " + y2.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                throw std::runtime_error("native: raster has no method '" + m + "'");
             }
 
             Val emitCall(const CallExpr* n) {
@@ -4066,6 +4101,7 @@ namespace vayu {
                         const auto* tn0 = static_cast<const NameRefExpr*>(
                             attr->target.get());
                         if (tn0->name == "gui")   return emitGuiCall(n, attr);
+                        if (tn0->name == "raster")return emitRasterCall(n, attr);
                         if (tn0->name == "fs")    return emitFsCall(n, attr);
                         if (tn0->name == "time")  return emitTimeCall(n, attr);
                         if (tn0->name == "json")  return emitJsonCall(n, attr);
@@ -6009,6 +6045,8 @@ namespace vayu {
 #  include <commctrl.h>
 #  include <bcrypt.h>
 #  include <gdiplus.h>
+#  include <wincodec.h>
+#  include <objbase.h>
 #else
 #  include <pthread.h>
 #  include <unistd.h>
@@ -8790,6 +8828,8 @@ typedef struct VayuCanvas {
     int           state_sp;
     int           fill_mode;   /* 0=alternate, 1=winding */
     int           composite;   /* 0=source-over, 1=source-copy */
+    /* Phase 20.4 - text alignment applied to text_ex. */
+    int           text_align;  /* 0=left, 1=center, 2=right */
 } VayuCanvas;
 
 typedef struct VayuFont {
@@ -8807,6 +8847,7 @@ static VayuCanvas* vayu_canvas_alloc(void) {
     c->state_sp   = 0;
     c->fill_mode  = 1;   /* winding, matches prior polygon behaviour */
     c->composite  = 0;   /* source-over */
+    c->text_align = 0;   /* left */
     return c;
 }
 
@@ -9109,9 +9150,77 @@ void vayu_gui_text_ex(int64_t canvas_h, int64_t font_h, int64_t str_sp,
     RectF rf;
     rf.X = (REAL)x; rf.Y = (REAL)y;
     rf.Width = 100000.0f; rf.Height = 100000.0f;
+    if (c->text_align != 0) {
+        RectF bounds;
+        memset(&bounds, 0, sizeof(bounds));
+        GdipMeasureString(c->g, w, wlen, f->font, &rf, NULL, &bounds, NULL, NULL);
+        if (c->text_align == 1)       rf.X = (REAL)x - bounds.Width * 0.5f;
+        else /* == 2, right */        rf.X = (REAL)x - bounds.Width;
+    }
     GdipDrawString(c->g, w, wlen, f->font, &rf, NULL, (GpBrush*)b);
     GdipDeleteBrush((GpBrush*)b);
     free(w);
+}
+
+/* ===========================================================================
+ * Phase 20.4 - text metrics + alignment.
+ * ========================================================================= */
+
+void vayu_gui_text_align(int64_t h, int64_t mode) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c) return;
+    if (mode < 0) mode = 0;
+    if (mode > 2) mode = 2;
+    c->text_align = (int)mode;
+}
+
+static int64_t vayu_text_measure_common(int64_t h, int64_t fh,
+                                        int64_t str_sp, int want_h) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    VayuFont*   f = (VayuFont*)fh;
+    if (!c || !c->g || !f || !f->font) return 0;
+    VayuStr* s = (VayuStr*)str_sp;
+    if (s->len == 0) return 0;
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, NULL, 0);
+    if (wlen < 0) wlen = 0;
+    WCHAR* w = (WCHAR*)malloc((size_t)(wlen + 1) * sizeof(WCHAR));
+    MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, w, wlen);
+    w[wlen] = 0;
+    RectF layout;
+    layout.X = 0; layout.Y = 0;
+    layout.Width = 100000.0f; layout.Height = 100000.0f;
+    RectF bounds;
+    memset(&bounds, 0, sizeof(bounds));
+    GdipMeasureString(c->g, w, wlen, f->font, &layout, NULL, &bounds, NULL, NULL);
+    free(w);
+    if (want_h) return (int64_t)(bounds.Height + 0.5f);
+    return (int64_t)(bounds.Width + 0.5f);
+}
+
+int64_t vayu_gui_text_width(int64_t h, int64_t fh, int64_t str_sp) {
+    return vayu_text_measure_common(h, fh, str_sp, 0);
+}
+
+int64_t vayu_gui_text_height(int64_t h, int64_t fh, int64_t str_sp) {
+    return vayu_text_measure_common(h, fh, str_sp, 1);
+}
+
+int64_t vayu_gui_font_height(int64_t fh) {
+    VayuFont* f = (VayuFont*)fh;
+    if (!f || !f->font) return 0;
+    REAL h = 0;
+    GdipGetFontHeight(f->font, NULL, &h);
+    return (int64_t)(h + 0.5f);
+}
+
+int64_t vayu_gui_font_line_spacing(int64_t fh) {
+    VayuFont* f = (VayuFont*)fh;
+    if (!f || !f->font) return 0;
+    REAL h = 0;
+    GdipGetFontHeight(f->font, NULL, &h);
+    /* GDI+ exposes no line-spacing call. 1.2x height approximates the
+       standard text-line advance for the default face. */
+    return (int64_t)(h * 1.2f + 0.5f);
 }
 
 /* ===========================================================================
@@ -9122,6 +9231,12 @@ void vayu_gui_text_ex(int64_t canvas_h, int64_t font_h, int64_t str_sp,
 typedef struct VayuBitmap {
     GpImage* img;
 } VayuBitmap;
+
+/* Phase 20.5 - WIC helpers (defined further down).  Returns a GpBitmap
+   on success, NULL on failure.  Caller takes ownership. */
+static GpBitmap* vayu_wic_load_bitmap(const char* utf8, int len);
+static int       vayu_wic_save_bitmap_png(GpBitmap* bmp, int w, int h,
+                                          const char* utf8, int len);
 
 static WCHAR* vayu_utf8_to_w(const char* s, int len) {
     int wlen = MultiByteToWideChar(CP_UTF8, 0, s, len, NULL, 0);
@@ -9135,6 +9250,16 @@ static WCHAR* vayu_utf8_to_w(const char* s, int len) {
 int64_t vayu_gui_bitmap_load(int64_t path_sp) {
     if (!g_gdiplus_ready) return 0;
     VayuStr* s = (VayuStr*)path_sp;
+
+    /* Phase 20.5 - try WIC first (reliable codec path on MinGW). */
+    GpBitmap* wicbmp = vayu_wic_load_bitmap(s->data, (int)s->len);
+    if (wicbmp) {
+        VayuBitmap* b = (VayuBitmap*)malloc(sizeof(VayuBitmap));
+        b->img = (GpImage*)wicbmp;
+        return (int64_t)b;
+    }
+
+    /* Fallback: GDI+ codec (may fail on some MinGW builds). */
     WCHAR* w = vayu_utf8_to_w(s->data, (int)s->len);
     GpImage* img = NULL;
     GdipLoadImageFromFile(w, &img);
@@ -9237,6 +9362,12 @@ int64_t vayu_gui_canvas_save_png(int64_t canvas_h, int64_t path_sp) {
     VayuCanvas* c = (VayuCanvas*)canvas_h;
     if (!c || !c->bmp) return 0;
     VayuStr* s = (VayuStr*)path_sp;
+
+    /* Phase 20.5 - WIC PNG encoder. */
+    if (vayu_wic_save_bitmap_png(c->bmp, c->w, c->h,
+                                 s->data, (int)s->len)) return 1;
+
+    /* Fallback: GDI+ codec. */
     WCHAR* w = vayu_utf8_to_w(s->data, (int)s->len);
     GpStatus st = GdipSaveImageToFile((GpImage*)c->bmp, w,
                                       &VAYU_PNG_CLSID, NULL);
@@ -9364,6 +9495,308 @@ void vayu_gui_compositing_mode(int64_t h, int64_t mode) {
     c->composite = (mode == 1) ? 1 : 0;
     GdipSetCompositingMode(c->g,
         c->composite ? CompositingModeSourceCopy : CompositingModeSourceOver);
+}
+
+/* ===========================================================================
+ * Phase 20.5 - Windows Imaging Component (WIC) codec path.
+ * Reliable decode/encode on every MinGW-w64 build, unlike GDI+'s codec
+ * dispatch which silently returns failure on some stripped libgdiplus.a.
+ * ========================================================================= */
+
+static IWICImagingFactory* g_wic_factory = NULL;
+
+static int vayu_wic_ensure(void) {
+    if (g_wic_factory) return 1;
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    /* RPC_E_CHANGED_MODE = 0x80010106 - already init'd; still usable. */
+    if (FAILED(hr) && hr != (HRESULT)0x80010106L) return 0;
+    hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+                          &IID_IWICImagingFactory, (void**)&g_wic_factory);
+    if (FAILED(hr) || !g_wic_factory) return 0;
+    return 1;
+}
+
+static GpBitmap* vayu_wic_load_bitmap(const char* utf8, int len) {
+    if (!vayu_wic_ensure()) return NULL;
+    WCHAR* wpath = vayu_utf8_to_w(utf8, len);
+
+    IWICBitmapDecoder* dec = NULL;
+    HRESULT hr = g_wic_factory->lpVtbl->CreateDecoderFromFilename(
+        g_wic_factory, wpath, NULL, GENERIC_READ,
+        WICDecodeMetadataCacheOnLoad, &dec);
+    free(wpath);
+    if (FAILED(hr) || !dec) return NULL;
+
+    IWICBitmapFrameDecode* frame = NULL;
+    hr = dec->lpVtbl->GetFrame(dec, 0, &frame);
+    if (FAILED(hr) || !frame) { dec->lpVtbl->Release(dec); return NULL; }
+
+    IWICFormatConverter* conv = NULL;
+    hr = g_wic_factory->lpVtbl->CreateFormatConverter(g_wic_factory, &conv);
+    if (FAILED(hr) || !conv) {
+        frame->lpVtbl->Release(frame); dec->lpVtbl->Release(dec);
+        return NULL;
+    }
+
+    hr = conv->lpVtbl->Initialize(conv, (IWICBitmapSource*)frame,
+        &GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
+        NULL, 0.0, WICBitmapPaletteTypeCustom);
+    if (FAILED(hr)) {
+        conv->lpVtbl->Release(conv); frame->lpVtbl->Release(frame);
+        dec->lpVtbl->Release(dec); return NULL;
+    }
+
+    UINT ww = 0, hh = 0;
+    conv->lpVtbl->GetSize(conv, &ww, &hh);
+    if (ww == 0 || hh == 0) {
+        conv->lpVtbl->Release(conv); frame->lpVtbl->Release(frame);
+        dec->lpVtbl->Release(dec); return NULL;
+    }
+
+    UINT stride = ww * 4;
+    UINT bufsz  = stride * hh;
+    BYTE* pixels = (BYTE*)malloc(bufsz);
+    hr = conv->lpVtbl->CopyPixels(conv, NULL, stride, bufsz, pixels);
+    conv->lpVtbl->Release(conv);
+    frame->lpVtbl->Release(frame);
+    dec->lpVtbl->Release(dec);
+    if (FAILED(hr)) { free(pixels); return NULL; }
+
+    /* 32bppBGRA in WIC == 32bppARGB as GDI+ names it (both are B,G,R,A in
+       memory on little-endian).  Direct handoff works. */
+    GpBitmap* bmp = NULL;
+    GdipCreateBitmapFromScan0((INT)ww, (INT)hh, (INT)stride,
+                              PixelFormat32bppARGB, pixels, &bmp);
+    free(pixels);
+    return bmp;
+}
+
+static int vayu_wic_save_bitmap_png(GpBitmap* bmp, int w, int h,
+                                    const char* utf8, int len) {
+    if (!bmp) return 0;
+    if (!vayu_wic_ensure()) return 0;
+
+    GpRect rc;
+    rc.X = 0; rc.Y = 0; rc.Width = w; rc.Height = h;
+    BitmapData bd;
+    memset(&bd, 0, sizeof(bd));
+    if (GdipBitmapLockBits(bmp, &rc, ImageLockModeRead,
+                           PixelFormat32bppARGB, &bd) != 0) return 0;
+
+    WCHAR* wpath = vayu_utf8_to_w(utf8, len);
+
+    IWICStream* stream = NULL;
+    HRESULT hr = g_wic_factory->lpVtbl->CreateStream(g_wic_factory, &stream);
+    if (FAILED(hr) || !stream) {
+        GdipBitmapUnlockBits(bmp, &bd); free(wpath); return 0;
+    }
+    hr = stream->lpVtbl->InitializeFromFilename(stream, wpath, GENERIC_WRITE);
+    free(wpath);
+    if (FAILED(hr)) {
+        stream->lpVtbl->Release(stream);
+        GdipBitmapUnlockBits(bmp, &bd); return 0;
+    }
+
+    IWICBitmapEncoder* enc = NULL;
+    hr = g_wic_factory->lpVtbl->CreateEncoder(g_wic_factory,
+                                               &GUID_ContainerFormatPng,
+                                               NULL, &enc);
+    if (FAILED(hr) || !enc) {
+        stream->lpVtbl->Release(stream);
+        GdipBitmapUnlockBits(bmp, &bd); return 0;
+    }
+    hr = enc->lpVtbl->Initialize(enc, (IStream*)stream, WICBitmapEncoderNoCache);
+    if (FAILED(hr)) {
+        enc->lpVtbl->Release(enc); stream->lpVtbl->Release(stream);
+        GdipBitmapUnlockBits(bmp, &bd); return 0;
+    }
+
+    IWICBitmapFrameEncode* frame = NULL;
+    IPropertyBag2* props = NULL;
+    hr = enc->lpVtbl->CreateNewFrame(enc, &frame, &props);
+    if (FAILED(hr) || !frame) {
+        enc->lpVtbl->Release(enc); stream->lpVtbl->Release(stream);
+        GdipBitmapUnlockBits(bmp, &bd); return 0;
+    }
+    frame->lpVtbl->Initialize(frame, props);
+    if (props) props->lpVtbl->Release(props);
+    frame->lpVtbl->SetSize(frame, (UINT)w, (UINT)h);
+    WICPixelFormatGUID fmt = GUID_WICPixelFormat32bppBGRA;
+    frame->lpVtbl->SetPixelFormat(frame, &fmt);
+
+    UINT dstStride = (UINT)(w * 4);
+    UINT bufsz = dstStride * (UINT)h;
+    BYTE* tmp = (BYTE*)malloc(bufsz);
+    memset(tmp, 0, bufsz);
+    int absStride = bd.Stride < 0 ? -bd.Stride : bd.Stride;
+    for (int y = 0; y < h; ++y) {
+        BYTE* src = (BYTE*)bd.Scan0 + (size_t)y * (size_t)absStride;
+        BYTE* dst = tmp + (size_t)y * (size_t)dstStride;
+        memcpy(dst, src, (size_t)w * 4);
+    }
+    hr = frame->lpVtbl->WritePixels(frame, (UINT)h, dstStride, bufsz, tmp);
+    free(tmp);
+
+    frame->lpVtbl->Commit(frame);
+    frame->lpVtbl->Release(frame);
+    enc->lpVtbl->Commit(enc);
+    enc->lpVtbl->Release(enc);
+    stream->lpVtbl->Release(stream);
+
+    GdipBitmapUnlockBits(bmp, &bd);
+    return SUCCEEDED(hr) ? 1 : 0;
+}
+
+/* ===========================================================================
+ * Phase 21.1 - software framebuffer + triangle / line raster.
+ * Framebuffer is a raw uint32 ARGB buffer owned by C.  present() builds a
+ * transient GDI+ bitmap referencing that buffer and blits it to a canvas.
+ * ========================================================================= */
+
+typedef struct VayuFramebuffer {
+    uint32_t* pixels;
+    int       w, h;
+} VayuFramebuffer;
+
+int64_t vayu_raster_fb_new(int64_t w, int64_t h) {
+    if (w <= 0 || h <= 0) return 0;
+    VayuFramebuffer* fb = (VayuFramebuffer*)malloc(sizeof(VayuFramebuffer));
+    fb->w = (int)w;
+    fb->h = (int)h;
+    fb->pixels = (uint32_t*)malloc(sizeof(uint32_t) * (size_t)(w * h));
+    if (!fb->pixels) { free(fb); return 0; }
+    memset(fb->pixels, 0, sizeof(uint32_t) * (size_t)(w * h));
+    return (int64_t)fb;
+}
+
+void vayu_raster_fb_free(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return;
+    if (fb->pixels) free(fb->pixels);
+    free(fb);
+}
+
+int64_t vayu_raster_fb_width(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    return fb ? (int64_t)fb->w : 0;
+}
+
+int64_t vayu_raster_fb_height(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    return fb ? (int64_t)fb->h : 0;
+}
+
+void vayu_raster_fb_clear(int64_t fh, int64_t argb) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return;
+    uint32_t c = (uint32_t)argb;
+    int64_t n = (int64_t)fb->w * (int64_t)fb->h;
+    int64_t i = 0;
+    while (i < n) { fb->pixels[i] = c; i = i + 1; }
+}
+
+void vayu_raster_fb_set(int64_t fh, int64_t x, int64_t y, int64_t argb) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return;
+    if (x < 0 || x >= fb->w || y < 0 || y >= fb->h) return;
+    fb->pixels[(int)y * fb->w + (int)x] = (uint32_t)argb;
+}
+
+int64_t vayu_raster_fb_get(int64_t fh, int64_t x, int64_t y) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return 0;
+    if (x < 0 || x >= fb->w || y < 0 || y >= fb->h) return 0;
+    return (int64_t)fb->pixels[(int)y * fb->w + (int)x];
+}
+
+void vayu_raster_fb_present(int64_t fh, int64_t canvas_h,
+                            int64_t x, int64_t y) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    VayuCanvas* c = (VayuCanvas*)canvas_h;
+    if (!fb || !c || !c->g) return;
+    GpBitmap* bmp = NULL;
+    /* GdipCreateBitmapFromScan0 with a non-NULL scan0 references our
+       pixels - no copy.  We dispose the wrapper immediately after the
+       draw, so the reference is short-lived and safe. */
+    GdipCreateBitmapFromScan0((INT)fb->w, (INT)fb->h, (INT)(fb->w * 4),
+                              PixelFormat32bppARGB,
+                              (BYTE*)fb->pixels, &bmp);
+    if (!bmp) return;
+    GdipDrawImageI(c->g, (GpImage*)bmp, (INT)x, (INT)y);
+    GdipDisposeImage((GpImage*)bmp);
+}
+
+void vayu_raster_draw_line(int64_t fh,
+                           int64_t x0, int64_t y0,
+                           int64_t x1, int64_t y1,
+                           int64_t argb) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return;
+    int dx = (int)(x1 - x0);
+    int dy = (int)(y1 - y0);
+    int adx = dx < 0 ? -dx : dx;
+    int ady = dy < 0 ? -dy : dy;
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+    int err = adx - ady;
+    int cx = (int)x0;
+    int cy = (int)y0;
+    uint32_t col = (uint32_t)argb;
+    for (;;) {
+        if (cx >= 0 && cx < fb->w && cy >= 0 && cy < fb->h)
+            fb->pixels[cy * fb->w + cx] = col;
+        if (cx == (int)x1 && cy == (int)y1) break;
+        int e2 = 2 * err;
+        if (e2 > -ady) { err -= ady; cx += sx; }
+        if (e2 <  adx) { err += adx; cy += sy; }
+    }
+}
+
+void vayu_raster_draw_tri(int64_t fh,
+                          int64_t x0, int64_t y0,
+                          int64_t x1, int64_t y1,
+                          int64_t x2, int64_t y2,
+                          int64_t argb) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb) return;
+
+    int minx = (int)x0, maxx = (int)x0;
+    int miny = (int)y0, maxy = (int)y0;
+    if ((int)x1 < minx) minx = (int)x1;
+    if ((int)x1 > maxx) maxx = (int)x1;
+    if ((int)x2 < minx) minx = (int)x2;
+    if ((int)x2 > maxx) maxx = (int)x2;
+    if ((int)y1 < miny) miny = (int)y1;
+    if ((int)y1 > maxy) maxy = (int)y1;
+    if ((int)y2 < miny) miny = (int)y2;
+    if ((int)y2 > maxy) maxy = (int)y2;
+    if (minx < 0) minx = 0;
+    if (miny < 0) miny = 0;
+    if (maxx >= fb->w) maxx = fb->w - 1;
+    if (maxy >= fb->h) maxy = fb->h - 1;
+    if (minx > maxx || miny > maxy) return;
+
+    int64_t area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if (area == 0) return;
+
+    uint32_t col = (uint32_t)argb;
+    int y = miny;
+    while (y <= maxy) {
+        int x = minx;
+        while (x <= maxx) {
+            int64_t w0 = (x1 - x) * (y2 - y) - (x2 - x) * (y1 - y);
+            int64_t w1 = (x2 - x) * (y0 - y) - (x0 - x) * (y2 - y);
+            int64_t w2 = (x0 - x) * (y1 - y) - (x1 - x) * (y0 - y);
+            int inside;
+            if (area > 0)
+                inside = (w0 >= 0 && w1 >= 0 && w2 >= 0);
+            else
+                inside = (w0 <= 0 && w1 <= 0 && w2 <= 0);
+            if (inside) fb->pixels[y * fb->w + x] = col;
+            x = x + 1;
+        }
+        y = y + 1;
+    }
 }
 
 // ---- child controls ----
@@ -9551,6 +9984,23 @@ void vayu_gui_clip_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k) {
 void vayu_gui_clip_reset(int64_t h) { (void)h; }
 void vayu_gui_fill_mode(int64_t h, int64_t m) { (void)h;(void)m; }
 void vayu_gui_compositing_mode(int64_t h, int64_t m) { (void)h;(void)m; }
+void vayu_gui_text_align(int64_t h, int64_t m) { (void)h;(void)m; }
+int64_t vayu_gui_text_width(int64_t h, int64_t f, int64_t s) { (void)h;(void)f;(void)s; return 0; }
+int64_t vayu_gui_text_height(int64_t h, int64_t f, int64_t s) { (void)h;(void)f;(void)s; return 0; }
+int64_t vayu_gui_font_height(int64_t f) { (void)f; return 0; }
+int64_t vayu_gui_font_line_spacing(int64_t f) { (void)f; return 0; }
+
+/* ---- Phase 21.1 raster stubs (non-Windows) ---- */
+int64_t vayu_raster_fb_new(int64_t w, int64_t h) { (void)w;(void)h; return 0; }
+void vayu_raster_fb_free(int64_t h) { (void)h; }
+int64_t vayu_raster_fb_width(int64_t h) { (void)h; return 0; }
+int64_t vayu_raster_fb_height(int64_t h) { (void)h; return 0; }
+void vayu_raster_fb_clear(int64_t h, int64_t c) { (void)h;(void)c; }
+void vayu_raster_fb_set(int64_t h, int64_t x, int64_t y, int64_t c) { (void)h;(void)x;(void)y;(void)c; }
+int64_t vayu_raster_fb_get(int64_t h, int64_t x, int64_t y) { (void)h;(void)x;(void)y; return 0; }
+void vayu_raster_fb_present(int64_t h, int64_t c, int64_t x, int64_t y) { (void)h;(void)c;(void)x;(void)y; }
+void vayu_raster_draw_line(int64_t h, int64_t a, int64_t b, int64_t c, int64_t d, int64_t e) { (void)h;(void)a;(void)b;(void)c;(void)d;(void)e; }
+void vayu_raster_draw_tri(int64_t h, int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f, int64_t g) { (void)h;(void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----
@@ -11419,7 +11869,7 @@ int main(int argc, char** argv) {
         {
             std::string linkLibs;
 #ifdef _WIN32
-            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32 -lgdiplus -lole32 -luuid";
+            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32 -lgdiplus -lole32 -luuid -lwindowscodecs";
 #endif
             // Phase 15.1: extra link libraries for extern "C" functions.
             // Space-separated list; usually `-lfoo -lbar` or `.lib` paths.

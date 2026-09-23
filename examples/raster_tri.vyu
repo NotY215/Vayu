@@ -1,0 +1,87 @@
+# examples/raster_tri.vyu -- Phase 21.1 demo.
+# Software framebuffer + Bresenham line + flat-shaded triangle.
+
+import gui
+import raster
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const W: int = 640
+const H: int = 480
+
+fb: int = 0
+
+def render() -> None:
+    raster.fb_clear(fb, 0xFF202038)
+
+    # Big filled triangle, top-left.
+    raster.draw_tri(fb,
+        60, 60,
+        300, 60,
+        180, 320,
+        0xFFFFD54F)
+
+    # Second filled triangle, right side.
+    raster.draw_tri(fb,
+        380, 100,
+        560, 200,
+        380, 300,
+        0xFF4FC3F7)
+
+    # Three lines with distinct colours, forming a triangle in the
+    # bottom-left.
+    raster.draw_line(fb,  60, 380, 200, 380, 0xFFFF5252)
+    raster.draw_line(fb, 200, 380, 130, 460, 0xFF69F0AE)
+    raster.draw_line(fb, 130, 460,  60, 380, 0xFF40C4FF)
+
+    # fb_set dot grid in the top-right corner.
+    y: int = 20
+    while y < 120:
+        x: int = 500
+        while x < 620:
+            raster.fb_set(fb, x, y, 0xFFFFFFFF)
+            x = x + 6
+        y = y + 6
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        raster.fb_free(fb)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        gui.quit()
+        return
+    if ev != EV_PAINT:
+        return
+    c: int = gui.canvas_from_window()
+    render()
+    raster.fb_present(fb, c, 0, 0)
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    fb = raster.fb_new(W, H)
+    if fb == 0:
+        print("failed to allocate framebuffer")
+        exit(1)
+    print("fb allocated")
+    print("fb size = " + str(raster.fb_width(fb)) + "x" + str(raster.fb_height(fb)))
+
+    # Headless render once, before the window opens, so fb_get can be
+    # exercised on a known state.
+    render()
+    print("fb_get(0,0)     = " + str(raster.fb_get(fb, 0, 0)))
+    print("fb_get(180, 200) = " + str(raster.fb_get(fb, 180, 200)))
+
+    win: int = gui.create_window("Vayu raster", W, H)
+    gui.set_callback(&on_event)
+    gui.show_window(win)
+    gui.set_timer(1500)
+    gui.run(win)
+    if fb != 0:
+        raster.fb_free(fb)
+    print("raster demo done")
+
+main()

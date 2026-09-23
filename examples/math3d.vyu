@@ -1,0 +1,354 @@
+# examples/math3d.vyu -- Phase 21.0.
+# 3D math: Vec2, Vec3, Vec4, Mat4, view/proj/model, helpers.
+# Float-backed. Runs on tree-walk + VM. Native cannot compile it
+# until the native ABI gains float support.
+
+import math
+
+const PI: float = 3.14159265358979323846
+const DEG2RAD: float = PI / 180.0
+const RAD2DEG: float = 180.0 / PI
+
+# ---------- helpers ----------
+
+def clamp(x: float, lo: float, hi: float) -> float:
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+
+def lerp(a: float, b: float, t: float) -> float:
+    return a + (b - a) * t
+
+def deg2rad(d: float) -> float:
+    return d * DEG2RAD
+
+def rad2deg(r: float) -> float:
+    return r * RAD2DEG
+
+def fmt(x: float) -> str:
+    # Fixed 4 decimals so output is stable across tree/vm/reruns.
+    neg: bool = x < 0.0
+    ax: float = x
+    if neg:
+        ax = 0.0 - x
+    scaled: int = 0
+    # multiply by 10000 by repeated addition to keep int math exact
+    i: int = 0
+    while i < 10000:
+        scaled = scaled + 0
+        i = i + 1
+    scaled = int(ax * 10000.0)
+    whole: int = scaled // 10000
+    frac: int = scaled - whole * 10000
+    sign: str = ""
+    if neg:
+        sign = "-"
+    fs: str = str(frac)
+    while len(fs) < 4:
+        fs = "0" + fs
+    return sign + str(whole) + "." + fs
+
+def v3str(v: Vec3) -> str:
+    return "(" + fmt(v.x) + ", " + fmt(v.y) + ", " + fmt(v.z) + ")"
+
+def v4str(v: Vec4) -> str:
+    return "(" + fmt(v.x) + ", " + fmt(v.y) + ", " + fmt(v.z) + ", " + fmt(v.w) + ")"
+
+# ---------- Vec2 ----------
+
+class Vec2:
+    x: float
+    y: float
+
+    def __init__(self, x: float, y: float) -> None:
+        self.x = x
+        self.y = y
+
+    def add(self, o: Vec2) -> Vec2:
+        return Vec2(self.x + o.x, self.y + o.y)
+
+    def sub(self, o: Vec2) -> Vec2:
+        return Vec2(self.x - o.x, self.y - o.y)
+
+    def mul(self, s: float) -> Vec2:
+        return Vec2(self.x * s, self.y * s)
+
+    def dot(self, o: Vec2) -> float:
+        return self.x * o.x + self.y * o.y
+
+    def length(self) -> float:
+        return math.sqrt(self.x * self.x + self.y * self.y)
+
+    def normalize(self) -> Vec2:
+        l: float = self.length()
+        if l == 0.0:
+            return Vec2(0.0, 0.0)
+        return self.mul(1.0 / l)
+
+# ---------- Vec3 ----------
+
+class Vec3:
+    x: float
+    y: float
+    z: float
+
+    def __init__(self, x: float, y: float, z: float) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def add(self, o: Vec3) -> Vec3:
+        return Vec3(self.x + o.x, self.y + o.y, self.z + o.z)
+
+    def sub(self, o: Vec3) -> Vec3:
+        return Vec3(self.x - o.x, self.y - o.y, self.z - o.z)
+
+    def mul(self, s: float) -> Vec3:
+        return Vec3(self.x * s, self.y * s, self.z * s)
+
+    def dot(self, o: Vec3) -> float:
+        return self.x * o.x + self.y * o.y + self.z * o.z
+
+    def cross(self, o: Vec3) -> Vec3:
+        return Vec3(
+            self.y * o.z - self.z * o.y,
+            self.z * o.x - self.x * o.z,
+            self.x * o.y - self.y * o.x
+        )
+
+    def length(self) -> float:
+        return math.sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
+
+    def normalize(self) -> Vec3:
+        l: float = self.length()
+        if l == 0.0:
+            return Vec3(0.0, 0.0, 0.0)
+        return self.mul(1.0 / l)
+
+# ---------- Vec4 ----------
+
+class Vec4:
+    x: float
+    y: float
+    z: float
+    w: float
+
+    def __init__(self, x: float, y: float, z: float, w: float) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+        self.w = w
+
+    def add(self, o: Vec4) -> Vec4:
+        return Vec4(self.x + o.x, self.y + o.y, self.z + o.z, self.w + o.w)
+
+    def sub(self, o: Vec4) -> Vec4:
+        return Vec4(self.x - o.x, self.y - o.y, self.z - o.z, self.w - o.w)
+
+    def mul(self, s: float) -> Vec4:
+        return Vec4(self.x * s, self.y * s, self.z * s, self.w * s)
+
+    def dot(self, o: Vec4) -> float:
+        return self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w
+
+    def xyz(self) -> Vec3:
+        return Vec3(self.x, self.y, self.z)
+
+# ---------- Mat4 ----------
+
+class Mat4:
+    m: list<float>
+
+    def __init__(self) -> None:
+        self.m = [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, 0.0, 1.0
+        ]
+
+    def get(self, i: int, j: int) -> float:
+        return self.m[i * 4 + j]
+
+    def set(self, i: int, j: int, v: float) -> None:
+        self.m[i * 4 + j] = v
+
+    def mul(self, o: Mat4) -> Mat4:
+        r: Mat4 = Mat4()
+        i: int = 0
+        while i < 4:
+            j: int = 0
+            while j < 4:
+                s: float = 0.0
+                k: int = 0
+                while k < 4:
+                    s = s + self.m[i * 4 + k] * o.m[k * 4 + j]
+                    k = k + 1
+                r.m[i * 4 + j] = s
+                j = j + 1
+            i = i + 1
+        return r
+
+    def mul_vec4(self, v: Vec4) -> Vec4:
+        return Vec4(
+            self.m[0]  * v.x + self.m[1]  * v.y + self.m[2]  * v.z + self.m[3]  * v.w,
+            self.m[4]  * v.x + self.m[5]  * v.y + self.m[6]  * v.z + self.m[7]  * v.w,
+            self.m[8]  * v.x + self.m[9]  * v.y + self.m[10] * v.z + self.m[11] * v.w,
+            self.m[12] * v.x + self.m[13] * v.y + self.m[14] * v.z + self.m[15] * v.w
+        )
+
+    def transpose(self) -> Mat4:
+        r: Mat4 = Mat4()
+        i: int = 0
+        while i < 4:
+            j: int = 0
+            while j < 4:
+                r.m[i * 4 + j] = self.m[j * 4 + i]
+                j = j + 1
+            i = i + 1
+        return r
+
+# ---------- matrix constructors ----------
+
+def mat_translate(x: float, y: float, z: float) -> Mat4:
+    m: Mat4 = Mat4()
+    m.m[3]  = x
+    m.m[7]  = y
+    m.m[11] = z
+    return m
+
+def mat_scale(sx: float, sy: float, sz: float) -> Mat4:
+    m: Mat4 = Mat4()
+    m.m[0]  = sx
+    m.m[5]  = sy
+    m.m[10] = sz
+    return m
+
+def mat_rotate_x(deg: float) -> Mat4:
+    m: Mat4 = Mat4()
+    c: float = math.cos(deg2rad(deg))
+    s: float = math.sin(deg2rad(deg))
+    m.m[5]  = c
+    m.m[6]  = 0.0 - s
+    m.m[9]  = s
+    m.m[10] = c
+    return m
+
+def mat_rotate_y(deg: float) -> Mat4:
+    m: Mat4 = Mat4()
+    c: float = math.cos(deg2rad(deg))
+    s: float = math.sin(deg2rad(deg))
+    m.m[0]  = c
+    m.m[2]  = s
+    m.m[8]  = 0.0 - s
+    m.m[10] = c
+    return m
+
+def mat_rotate_z(deg: float) -> Mat4:
+    m: Mat4 = Mat4()
+    c: float = math.cos(deg2rad(deg))
+    s: float = math.sin(deg2rad(deg))
+    m.m[0] = c
+    m.m[1] = 0.0 - s
+    m.m[4] = s
+    m.m[5] = c
+    return m
+
+def mat_perspective(fov_deg: float, aspect: float, near: float, far: float) -> Mat4:
+    m: Mat4 = Mat4()
+    f: float = 1.0 / math.tan(deg2rad(fov_deg) / 2.0)
+    m.m[0]  = f / aspect
+    m.m[5]  = f
+    m.m[10] = (far + near) / (near - far)
+    m.m[11] = (2.0 * far * near) / (near - far)
+    m.m[14] = -1.0
+    m.m[15] = 0.0
+    return m
+
+def mat_look_at(eye: Vec3, target: Vec3, up: Vec3) -> Mat4:
+    f: Vec3 = target.sub(eye).normalize()
+    s: Vec3 = f.cross(up).normalize()
+    u: Vec3 = s.cross(f)
+    m: Mat4 = Mat4()
+    m.m[0]  = s.x
+    m.m[1]  = s.y
+    m.m[2]  = s.z
+    m.m[3]  = 0.0 - s.dot(eye)
+    m.m[4]  = u.x
+    m.m[5]  = u.y
+    m.m[6]  = u.z
+    m.m[7]  = 0.0 - u.dot(eye)
+    m.m[8]  = 0.0 - f.x
+    m.m[9]  = 0.0 - f.y
+    m.m[10] = 0.0 - f.z
+    m.m[11] = f.dot(eye)
+    m.m[12] = 0.0
+    m.m[13] = 0.0
+    m.m[14] = 0.0
+    m.m[15] = 1.0
+    return m
+
+# ---------- tests ----------
+
+def main() -> None:
+    print("== Vec3 ==")
+    a: Vec3 = Vec3(1.0, 2.0, 3.0)
+    b: Vec3 = Vec3(4.0, 5.0, 6.0)
+    print("a + b   = " + v3str(a.add(b)))
+    print("a - b   = " + v3str(a.sub(b)))
+    print("a * 2.0 = " + v3str(a.mul(2.0)))
+    print("a . b   = " + fmt(a.dot(b)))
+    print("a x b   = " + v3str(a.cross(b)))
+    print("|a|     = " + fmt(a.length()))
+    print("a_norm  = " + v3str(a.normalize()))
+
+    print("")
+    print("== angles ==")
+    print("deg2rad(180) = " + fmt(deg2rad(180.0)))
+    print("rad2deg(3.14159265) = " + fmt(rad2deg(3.14159265)))
+    print("clamp(-1, 0, 5) = " + fmt(clamp(0.0 - 1.0, 0.0, 5.0)))
+    print("lerp(0, 10, 0.25) = " + fmt(lerp(0.0, 10.0, 0.25)))
+
+    print("")
+    print("== Mat4 identity * Vec4 ==")
+    ident: Mat4 = Mat4()
+    v: Vec4 = ident.mul_vec4(Vec4(1.0, 2.0, 3.0, 1.0))
+    print("ident*(1,2,3,1) = " + v4str(v))
+
+    print("")
+    print("== translate * rotate ==")
+    m: Mat4 = mat_translate(10.0, 0.0, 0.0).mul(mat_rotate_z(90.0))
+    p: Vec4 = m.mul_vec4(Vec4(1.0, 0.0, 0.0, 1.0))
+    print("T(10,0,0)*Rz(90)*(1,0,0,1) = " + v4str(p))
+
+    print("")
+    print("== MVP corner transforms ==")
+    view: Mat4 = mat_look_at(
+        Vec3(0.0, 0.0, 5.0),
+        Vec3(0.0, 0.0, 0.0),
+        Vec3(0.0, 1.0, 0.0)
+    )
+    proj: Mat4 = mat_perspective(60.0, 16.0 / 9.0, 0.1, 100.0)
+    model: Mat4 = mat_rotate_y(45.0)
+    mvp: Mat4 = proj.mul(view).mul(model)
+
+    corners: list<Vec4> = [
+        Vec4(0.0 - 1.0, 0.0 - 1.0, 0.0 - 1.0, 1.0),
+        Vec4(1.0,       0.0 - 1.0, 0.0 - 1.0, 1.0),
+        Vec4(1.0,       1.0,       0.0 - 1.0, 1.0),
+        Vec4(0.0 - 1.0, 1.0,       0.0 - 1.0, 1.0),
+        Vec4(0.0 - 1.0, 0.0 - 1.0, 1.0,       1.0),
+        Vec4(1.0,       0.0 - 1.0, 1.0,       1.0),
+        Vec4(1.0,       1.0,       1.0,       1.0),
+        Vec4(0.0 - 1.0, 1.0,       1.0,       1.0)
+    ]
+
+    i: int = 0
+    while i < len(corners):
+        c: Vec4 = mvp.mul_vec4(corners[i])
+        print("  in " + v4str(corners[i]) + " -> " + v4str(c))
+        i = i + 1
+
+main()
