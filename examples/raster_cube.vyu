@@ -1,0 +1,158 @@
+# examples/raster_cube.vyu -- Phase 21.2 + 21.3 demo.
+# Depth-tested, textured, mip-mapped, perspective-correct rotating cube.
+
+import gui
+import raster
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const ONE: int = 65536
+
+const W: int = 640
+const H: int = 480
+
+fb: int = 0
+mesh: int = 0
+view: int = 0
+proj: int = 0
+model: int = 0
+mvp: int = 0
+tmp_a: int = 0
+tex: int = 0
+frame: int = 0
+
+def build_texture() -> int:
+    # 64x64 checker, purple / light-blue.  Eight-pixel cells.
+    t: int = raster.tex_new(64, 64)
+    y: int = 0
+    while y < 64:
+        x: int = 0
+        while x < 64:
+            cx: int = x // 8
+            cy: int = y // 8
+            if (cx + cy) % 2 == 0:
+                raster.tex_set(t, x, y, 0xFFCC66FF)
+            else:
+                raster.tex_set(t, x, y, 0xFF66DDFF)
+            x = x + 1
+        y = y + 1
+    raster.tex_gen_mipmaps(t)
+    raster.tex_set_filter(t, 2)   # trilinear
+    return t
+
+def build_cube() -> int:
+    m: int = raster.mesh_new()
+    S: int = ONE            # half-size 1.0
+    U_MAX: int = 65535
+    # 8 verts, one per corner, with UVs on each face via duplicated verts.
+    # Front (-z): 0..3
+    raster.mesh_add_vert(m, 0-S, 0-S, 0-S, 0,     U_MAX)
+    raster.mesh_add_vert(m,   S, 0-S, 0-S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m,   S,   S, 0-S, U_MAX, 0)
+    raster.mesh_add_vert(m, 0-S,   S, 0-S, 0,     0)
+    # Back (+z): 4..7
+    raster.mesh_add_vert(m, 0-S, 0-S,   S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m,   S, 0-S,   S, 0,     U_MAX)
+    raster.mesh_add_vert(m,   S,   S,   S, 0,     0)
+    raster.mesh_add_vert(m, 0-S,   S,   S, U_MAX, 0)
+    # Right (+x): 8..11
+    raster.mesh_add_vert(m,   S, 0-S, 0-S, 0,     U_MAX)
+    raster.mesh_add_vert(m,   S, 0-S,   S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m,   S,   S,   S, U_MAX, 0)
+    raster.mesh_add_vert(m,   S,   S, 0-S, 0,     0)
+    # Left (-x): 12..15
+    raster.mesh_add_vert(m, 0-S, 0-S,   S, 0,     U_MAX)
+    raster.mesh_add_vert(m, 0-S, 0-S, 0-S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m, 0-S,   S, 0-S, U_MAX, 0)
+    raster.mesh_add_vert(m, 0-S,   S,   S, 0,     0)
+    # Top (+y): 16..19
+    raster.mesh_add_vert(m, 0-S,   S, 0-S, 0,     U_MAX)
+    raster.mesh_add_vert(m,   S,   S, 0-S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m,   S,   S,   S, U_MAX, 0)
+    raster.mesh_add_vert(m, 0-S,   S,   S, 0,     0)
+    # Bottom (-y): 20..23
+    raster.mesh_add_vert(m, 0-S, 0-S,   S, 0,     U_MAX)
+    raster.mesh_add_vert(m,   S, 0-S,   S, U_MAX, U_MAX)
+    raster.mesh_add_vert(m,   S, 0-S, 0-S, U_MAX, 0)
+    raster.mesh_add_vert(m, 0-S, 0-S, 0-S, 0,     0)
+    # 12 tris, two per face, CCW from outside.
+    i: int = 0
+    while i < 24:
+        raster.mesh_add_tri(m, i, i + 1, i + 2)
+        raster.mesh_add_tri(m, i, i + 2, i + 3)
+        i = i + 4
+    return m
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        raster.tex_free(tex)
+        raster.mesh_free(mesh)
+        raster.mat_free(view)
+        raster.mat_free(proj)
+        raster.mat_free(model)
+        raster.mat_free(mvp)
+        raster.mat_free(tmp_a)
+        raster.fb_free(fb)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        frame = frame + 1
+        gui.invalidate()
+        return
+    if ev != EV_PAINT:
+        return
+
+    # Model: rotate around Y then X.
+    angle: int = (frame * 4) % 360
+    raster.mat_identity(model)
+    raster.mat_rotate_y(model, angle)
+    raster.mat_rotate_x(model, (angle * 3) // 4)
+
+    # mvp = proj * view * model
+    raster.mat_mul(tmp_a, view, model)
+    raster.mat_mul(mvp, proj, tmp_a)
+
+    raster.fb_clear(fb, 0xFF101018)
+    raster.fb_clear_depth(fb)
+    raster.draw_mesh(fb, mesh, mvp, tex, 0xFFFFFFFF)
+
+    c: int = gui.canvas_from_window()
+    raster.fb_present(fb, c, 0, 0)
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    fb = raster.fb_new(W, H)
+    if fb == 0:
+        print("fb alloc failed")
+        exit(1)
+    raster.fb_enable_depth(fb)
+    mesh = build_cube()
+    tex = build_texture()
+    view = raster.mat_new()
+    proj = raster.mat_new()
+    model = raster.mat_new()
+    mvp = raster.mat_new()
+    tmp_a = raster.mat_new()
+
+    # View: eye at (0, 0, 4), looking at origin.
+    raster.mat_look_at(view,
+        0, 0, 4 * ONE,
+        0, 0, 0,
+        0, ONE, 0)
+    # Projection: 60 deg FOV, 4:3, near 0.1, far 100.
+    raster.mat_perspective(proj, 60, 133, 6553, 6553600)
+
+    print("cube: " + str(24) + " verts, " + str(12) + " tris")
+    print("tex:  " + str(raster.tex_width(tex)) + "x" + str(raster.tex_height(tex)))
+
+    win: int = gui.create_window("Vayu 3D cube", W, H)
+    gui.set_callback(&on_event)
+    gui.show_window(win)
+    gui.set_timer(60)
+    gui.run(win)
+    print("cube demo done")
+
+main()

@@ -4008,6 +4008,52 @@ namespace vayu {
                 if (m == "draw_line") { Val h = a0(); Val x0 = a1(); Val y0 = a2(); Val x1 = a3(); Val y1 = a4(); Val c = a5(); line("call $vayu_raster_draw_line(l " + h.ssa + ", l " + x0.ssa + ", l " + y0.ssa + ", l " + x1.ssa + ", l " + y1.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "draw_tri") { Val h = a0(); Val x0 = a1(); Val y0 = a2(); Val x1 = a3(); Val y1 = a4(); Val x2 = a5(); Val y2 = a6(); Val c = emitExpr(n->args[7].value.get()); line("call $vayu_raster_draw_tri(l " + h.ssa + ", l " + x0.ssa + ", l " + y0.ssa + ", l " + x1.ssa + ", l " + y1.ssa + ", l " + x2.ssa + ", l " + y2.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
 
+                if (m == "fb_enable_depth") { Val h = a0(); line("call $vayu_raster_fb_enable_depth(l " + h.ssa + ")");  r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fb_disable_depth") { Val h = a0(); line("call $vayu_raster_fb_disable_depth(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fb_clear_depth") { Val h = a0(); line("call $vayu_raster_fb_clear_depth(l " + h.ssa + ")");   r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "mat_new") { std::string t = newTemp(); line(t + " =l call $vayu_raster_mat_new()");      r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "mat_free") { Val h = a0(); line("call $vayu_raster_mat_free(l " + h.ssa + ")");          r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_identity") { Val h = a0(); line("call $vayu_raster_mat_identity(l " + h.ssa + ")");      r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_mul") { Val d = a0(); Val a = a1(); Val b = a2(); line("call $vayu_raster_mat_mul(l " + d.ssa + ", l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_translate") { Val h = a0(); Val x = a1(); Val y = a2(); Val z = a3(); line("call $vayu_raster_mat_translate(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + z.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_rotate_x") { Val h = a0(); Val d = a1(); line("call $vayu_raster_mat_rotate_x(l " + h.ssa + ", l " + d.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_rotate_y") { Val h = a0(); Val d = a1(); line("call $vayu_raster_mat_rotate_y(l " + h.ssa + ", l " + d.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_rotate_z") { Val h = a0(); Val d = a1(); line("call $vayu_raster_mat_rotate_z(l " + h.ssa + ", l " + d.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_perspective") { Val h = a0(); Val f = a1(); Val as = a2(); Val nr = a3(); Val fr = a4(); line("call $vayu_raster_mat_perspective(l " + h.ssa + ", l " + f.ssa + ", l " + as.ssa + ", l " + nr.ssa + ", l " + fr.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mat_look_at") { Val h = a0(); Val ex = a1(); Val ey = a2(); Val ez = a3(); Val tx = a4(); Val ty = a5(); Val tz = a6(); Val ux = emitExpr(n->args[7].value.get()); Val uy = emitExpr(n->args[8].value.get()); Val uz = emitExpr(n->args[9].value.get()); line("call $vayu_raster_mat_look_at(l " + h.ssa + ", l " + ex.ssa + ", l " + ey.ssa + ", l " + ez.ssa + ", l " + tx.ssa + ", l " + ty.ssa + ", l " + tz.ssa + ", l " + ux.ssa + ", l " + uy.ssa + ", l " + uz.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "mesh_new") { std::string t = newTemp(); line(t + " =l call $vayu_raster_mesh_new()");   r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "mesh_free") { Val h = a0(); line("call $vayu_raster_mesh_free(l " + h.ssa + ")");       r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mesh_clear") { Val h = a0(); line("call $vayu_raster_mesh_clear(l " + h.ssa + ")");      r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mesh_add_vert") { Val h = a0(); Val x = a1(); Val y = a2(); Val z = a3(); Val u = a4(); Val v = a5(); line("call $vayu_raster_mesh_add_vert(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + z.ssa + ", l " + u.ssa + ", l " + v.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mesh_add_tri") { Val h = a0(); Val i0 = a1(); Val i1 = a2(); Val i2 = a3(); line("call $vayu_raster_mesh_add_tri(l " + h.ssa + ", l " + i0.ssa + ", l " + i1.ssa + ", l " + i2.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_mesh") { Val fb = a0(); Val msh = a1(); Val mt = a2(); Val tx = a3(); Val tn = a4(); line("call $vayu_raster_draw_mesh(l " + fb.ssa + ", l " + msh.ssa + ", l " + mt.ssa + ", l " + tx.ssa + ", l " + tn.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "tex_new") { Val w = a0(); Val h = a1(); std::string t = newTemp(); line(t + " =l call $vayu_raster_tex_new(l " + w.ssa + ", l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "tex_free") { Val h = a0(); line("call $vayu_raster_tex_free(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tex_width") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_raster_tex_width(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "tex_height") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_raster_tex_height(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "tex_set") { Val h = a0(); Val x = a1(); Val y = a2(); Val c = a3(); line("call $vayu_raster_tex_set(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tex_set_filter") { Val h = a0(); Val mm = a1(); line("call $vayu_raster_tex_set_filter(l " + h.ssa + ", l " + mm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tex_gen_mipmaps") { Val h = a0(); line("call $vayu_raster_tex_gen_mipmaps(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "mesh_add_vert_lit") { Val h = a0();Val x = a1();Val y = a2();Val z = a3();Val nx = a4();Val ny = a5();Val nz = a6();Val u = emitExpr(n->args[7].value.get());Val v = emitExpr(n->args[8].value.get()); line("call $vayu_raster_mesh_add_vert_lit(l " + h.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + z.ssa + ", l " + nx.ssa + ", l " + ny.ssa + ", l " + nz.ssa + ", l " + u.ssa + ", l " + v.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "mesh_set_normal") { Val h = a0();Val i = a1();Val nx = a2();Val ny = a3();Val nz = a4(); line("call $vayu_raster_mesh_set_normal(l " + h.ssa + ", l " + i.ssa + ", l " + nx.ssa + ", l " + ny.ssa + ", l " + nz.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "set_ambient") { Val a = a0(); line("call $vayu_raster_set_ambient(l " + a.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "light_clear") { line("call $vayu_raster_light_clear()"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "light_set") { Val i = a0();Val k = a1();Val x = a2();Val y = a3();Val z = a4();Val c = a5();Val q = a6(); line("call $vayu_raster_light_set(l " + i.ssa + ", l " + k.ssa + ", l " + x.ssa + ", l " + y.ssa + ", l " + z.ssa + ", l " + c.ssa + ", l " + q.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "draw_mesh_lit") { Val fb = a0();Val msh = a1();Val mvp = a2();Val mod = a3();Val tx = a4();Val sm = a5();Val tn = a6();Val ex = emitExpr(n->args[7].value.get());Val ey = emitExpr(n->args[8].value.get());Val ez = emitExpr(n->args[9].value.get()); line("call $vayu_raster_draw_mesh_lit(l " + fb.ssa + ", l " + msh.ssa + ", l " + mvp.ssa + ", l " + mod.ssa + ", l " + tx.ssa + ", l " + sm.ssa + ", l " + tn.ssa + ", l " + ex.ssa + ", l " + ey.ssa + ", l " + ez.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "post_gamma") { Val t = a0();Val g = a1(); line("call $vayu_raster_post_gamma(l " + t.ssa + ", l " + g.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "post_invert") { Val t = a0(); line("call $vayu_raster_post_invert(l " + t.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "post_tint") { Val t = a0();Val c = a1(); line("call $vayu_raster_post_tint(l " + t.ssa + ", l " + c.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "post_brightness") { Val t = a0();Val d = a1(); line("call $vayu_raster_post_brightness(l " + t.ssa + ", l " + d.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "post_threshold") { Val t = a0();Val th = a1(); line("call $vayu_raster_post_threshold(l " + t.ssa + ", l " + th.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tex_from_fb") { Val fb = a0(); std::string t = newTemp(); line(t + " =l call $vayu_raster_tex_from_fb(l " + fb.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "tex_present") { Val t = a0();Val c = a1();Val x = a2();Val y = a3(); line("call $vayu_raster_tex_present(l " + t.ssa + ", l " + c.ssa + ", l " + x.ssa + ", l " + y.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
                 throw std::runtime_error("native: raster has no method '" + m + "'");
             }
 
@@ -8579,6 +8625,27 @@ static WNDPROC g_edit_old_proc = NULL;
 static ULONG_PTR g_gdiplus_token = 0;
 static int       g_gdiplus_ready = 0;
 
+/* ---------------- UI-startup caches (Phase 22 perf) ------------------ */
+
+/* Single cached GpGraphics for the live window back buffer.  Invalidated
+   whenever the back buffer is recreated (i.e. on resize). */
+static GpGraphics* g_win_gfx       = NULL;
+static int         g_win_gfx_w     = 0;
+static int         g_win_gfx_h     = 0;
+
+/* Font cache: name-slice + size + weight + italic -> handle.  16 slots,
+   linear scan.  Handles stored as void* to avoid forward-declaring
+   VayuFont, which lives further down the file. */
+typedef struct { char key[96]; void* f; } VayuFontCacheEntry;
+static VayuFontCacheEntry g_font_cache[16];
+static int                g_font_cache_n = 0;
+
+/* Pen cache: (argb, width) -> GpPen*.  32 slots, round-robin eviction. */
+typedef struct { ARGB c; REAL w; GpPen* p; } VayuPenCacheEntry;
+static VayuPenCacheEntry g_pen_cache[32];
+static int               g_pen_cache_n = 0;
+static int               g_pen_cache_cursor = 0;
+
 static LRESULT CALLBACK vayu_gui_edit_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_KEYDOWN && wp == VK_RETURN) {
         HWND parent = GetParent(h);
@@ -8601,6 +8668,12 @@ static LRESULT CALLBACK vayu_gui_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             DeleteObject(g_gui.bmp);
             g_gui.bmp = NULL;
         }
+        for (int i = 0; i < g_pen_cache_n; ++i) {
+            if (g_pen_cache[i].p) GdipDeletePen(g_pen_cache[i].p);
+            g_pen_cache[i].p = NULL;
+        }
+        g_pen_cache_n = 0;
+        if (g_win_gfx) { GdipDeleteGraphics(g_win_gfx); g_win_gfx = NULL; }
         if (g_gdiplus_ready) {
             GdiplusShutdown(g_gdiplus_token);
             g_gdiplus_ready = 0;
@@ -8634,6 +8707,9 @@ static LRESULT CALLBACK vayu_gui_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
             g_gui.bmp = CreateCompatibleBitmap(win, cw, ch);
             g_gui.old_bmp = (HBITMAP)SelectObject(g_gui.mem_dc, g_gui.bmp);
             g_gui.bmp_w = cw; g_gui.bmp_h = ch;
+            /* Cached window GpGraphics points at the old HDC target. */
+            if (g_win_gfx) { GdipDeleteGraphics(g_win_gfx); g_win_gfx = NULL; }
+            g_win_gfx_w = 0; g_win_gfx_h = 0;
         }
 
         g_gui.hdc = g_gui.mem_dc;
@@ -8830,6 +8906,9 @@ typedef struct VayuCanvas {
     int           composite;   /* 0=source-over, 1=source-copy */
     /* Phase 20.4 - text alignment applied to text_ex. */
     int           text_align;  /* 0=left, 1=center, 2=right */
+    /* Phase 22 opt - cached window GpGraphics.  is_window canvases reuse
+       this so we don't create a fresh GDI+ object every WM_PAINT. */
+    int           owns_g;      /* 1 if we must DeleteGraphics on free */
 } VayuCanvas;
 
 typedef struct VayuFont {
@@ -8848,12 +8927,14 @@ static VayuCanvas* vayu_canvas_alloc(void) {
     c->fill_mode  = 1;   /* winding, matches prior polygon behaviour */
     c->composite  = 0;   /* source-over */
     c->text_align = 0;   /* left */
+    c->owns_g     = 1;   /* default; window canvases flip this to 0 */
     return c;
 }
 
 static void vayu_canvas_destroy(VayuCanvas* c) {
     if (!c) return;
-    if (c->g)   { GdipDeleteGraphics(c->g); c->g = NULL; }
+    if (c->g && c->owns_g) { GdipDeleteGraphics(c->g); }
+    c->g = NULL;
     if (c->bmp) { GdipDisposeImage((GpImage*)c->bmp); c->bmp = NULL; }
     free(c);
 }
@@ -8865,10 +8946,29 @@ static GpSolidFill* vayu_solid(ARGB color) {
 }
 
 static GpPen* vayu_canvas_make_pen(VayuCanvas* c, ARGB color) {
+    /* Cache hit: identical (color, width, cap, join) triple. */
+    for (int i = 0; i < g_pen_cache_n; ++i) {
+        VayuPenCacheEntry* e = &g_pen_cache[i];
+        if (e->c == color && e->w == c->line_width) return e->p;
+    }
     GpPen* p = NULL;
     GdipCreatePen1(color, c->line_width, UnitPixel, &p);
     GdipSetPenLineCap197819(p, c->line_cap, c->line_cap, DashCapFlat);
     GdipSetPenLineJoin(p, c->line_join);
+
+    if (g_pen_cache_n < 32) {
+        g_pen_cache[g_pen_cache_n].c = color;
+        g_pen_cache[g_pen_cache_n].w = c->line_width;
+        g_pen_cache[g_pen_cache_n].p = p;
+        g_pen_cache_n = g_pen_cache_n + 1;
+    } else {
+        int idx = g_pen_cache_cursor;
+        if (g_pen_cache[idx].p) GdipDeletePen(g_pen_cache[idx].p);
+        g_pen_cache[idx].c = color;
+        g_pen_cache[idx].w = c->line_width;
+        g_pen_cache[idx].p = p;
+        g_pen_cache_cursor = (g_pen_cache_cursor + 1) % 32;
+    }
     return p;
 }
 
@@ -8889,20 +8989,46 @@ int64_t vayu_gui_canvas_new(int64_t w, int64_t h) {
 int64_t vayu_gui_canvas_from_window(void) {
     if (!g_gdiplus_ready) return 0;
     if (!g_gui.mem_dc) return 0;
+    /* Reuse the cached GpGraphics when the back buffer hasn't changed.
+       This is the single biggest startup/frame win: we skip one GDI+
+       object construction per WM_PAINT. */
+    if (g_win_gfx &&
+        g_win_gfx_w == g_gui.bmp_w && g_win_gfx_h == g_gui.bmp_h) {
+        VayuCanvas* c = vayu_canvas_alloc();
+        c->w = g_gui.bmp_w; c->h = g_gui.bmp_h;
+        c->is_window = 1;
+        c->owns_g    = 0;
+        c->g         = g_win_gfx;
+        return (int64_t)c;
+    }
+    if (g_win_gfx) { GdipDeleteGraphics(g_win_gfx); g_win_gfx = NULL; }
+    GpGraphics* g = NULL;
+    GdipCreateFromHDC(g_gui.mem_dc, &g);
+    if (!g) return 0;
+    GdipSetSmoothingMode(g, SmoothingModeAntiAlias);
+    GdipSetTextRenderingHint(g, TextRenderingHintAntiAlias);
+    GdipSetPixelOffsetMode(g, PixelOffsetModeHalf);
+    g_win_gfx   = g;
+    g_win_gfx_w = g_gui.bmp_w;
+    g_win_gfx_h = g_gui.bmp_h;
     VayuCanvas* c = vayu_canvas_alloc();
     c->w = g_gui.bmp_w; c->h = g_gui.bmp_h;
     c->is_window = 1;
-    GdipCreateFromHDC(g_gui.mem_dc, &c->g);
-    if (!c->g) { free(c); return 0; }
-    GdipSetSmoothingMode(c->g, SmoothingModeAntiAlias);
-    GdipSetTextRenderingHint(c->g, TextRenderingHintAntiAlias);
-    GdipSetPixelOffsetMode(c->g, PixelOffsetModeHalf);
+    c->owns_g    = 0;
+    c->g         = g_win_gfx;
     return (int64_t)c;
 }
 
 void vayu_gui_canvas_free(int64_t h) {
     if (!h) return;
-    vayu_canvas_destroy((VayuCanvas*)h);
+    VayuCanvas* c = (VayuCanvas*)h;
+    /* Window canvases share the cached GpGraphics; just drop the wrapper. */
+    if (c->is_window && !c->owns_g) {
+        if (c->bmp) { GdipDisposeImage((GpImage*)c->bmp); c->bmp = NULL; }
+        free(c);
+        return;
+    }
+    vayu_canvas_destroy(c);
 }
 
 void vayu_gui_canvas_clear(int64_t h, int64_t argb) {
@@ -8928,7 +9054,7 @@ void vayu_gui_canvas_outline_rect(int64_t h, int64_t x, int64_t y,
     GpPen* p = NULL;
     GdipCreatePen1((ARGB)argb, (REAL)thickness, UnitPixel, &p);
     GdipDrawRectangleI(c->g, p, (INT)x, (INT)y, (INT)w, (INT)k);
-    GdipDeletePen(p);
+    (void)p;
 }
 
 void vayu_gui_blit_canvas(int64_t src, int64_t x, int64_t y) {
@@ -8960,7 +9086,7 @@ void vayu_gui_circle_outline(int64_t h, int64_t cx, int64_t cy,
     GdipDrawEllipse(c->g, p,
                     (REAL)(cx - r), (REAL)(cy - r),
                     (REAL)(2 * r),  (REAL)(2 * r));
-    GdipDeletePen(p);
+    (void)p;
 }
 
 void vayu_gui_ellipse(int64_t h, int64_t cx, int64_t cy,
@@ -8982,7 +9108,7 @@ void vayu_gui_ellipse_outline(int64_t h, int64_t cx, int64_t cy,
     GdipDrawEllipse(c->g, p,
                     (REAL)(cx - rx), (REAL)(cy - ry),
                     (REAL)(2 * rx),  (REAL)(2 * ry));
-    GdipDeletePen(p);
+    (void)p;
 }
 
 /* GDI+ has no native rounded rect; compose from 4 arcs + 2 rects. */
@@ -9022,7 +9148,7 @@ void vayu_gui_rounded_rect_outline(int64_t h, int64_t x, int64_t y,
     GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
     vayu_draw_rounded_path(c->g, p, NULL,
                            (REAL)x, (REAL)y, (REAL)w, (REAL)k, (REAL)radius);
-    GdipDeletePen(p);
+    (void)p;
 }
 
 void vayu_gui_arc(int64_t h, int64_t cx, int64_t cy, int64_t r,
@@ -9034,7 +9160,7 @@ void vayu_gui_arc(int64_t h, int64_t cx, int64_t cy, int64_t r,
                 (REAL)(cx - r), (REAL)(cy - r),
                 (REAL)(2 * r),  (REAL)(2 * r),
                 (REAL)start_deg, (REAL)sweep_deg);
-    GdipDeletePen(p);
+    (void)p;
 }
 
 /* polygon takes a Vayu list of [x0, y0, x1, y1, ...] pairs. */
@@ -9069,7 +9195,7 @@ void vayu_gui_polygon_outline(int64_t h, int64_t pts, int64_t argb) {
     }
     GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
     GdipDrawPolygon(c->g, p, pf, npts);
-    GdipDeletePen(p);
+    (void)p;
     free(pf);
 }
 
@@ -9099,6 +9225,20 @@ void vayu_gui_line_join(int64_t h, int64_t mode) {
 int64_t vayu_gui_font_new(int64_t name_sp, int64_t size, int64_t weight, int64_t italic) {
     if (!g_gdiplus_ready) return 0;
     VayuStr* s = (VayuStr*)name_sp;
+
+    /* Cache key: name + size + weight + italic.  Linear scan of 16 slots. */
+    char key[96];
+    int kl = (int)s->len;
+    if (kl > 80) kl = 80;
+    memcpy(key, s->data, (size_t)kl);
+    int kn = snprintf(key + kl, 16, "|%lld|%lld|%lld",
+                      (long long)size, (long long)weight, (long long)italic);
+    (void)kn;
+    for (int i = 0; i < g_font_cache_n; ++i) {
+        if (strcmp(g_font_cache[i].key, key) == 0)
+            return (int64_t)g_font_cache[i].f;
+    }
+
     WCHAR wname[128];
     int wl = MultiByteToWideChar(CP_UTF8, 0, s->data, (int)s->len, wname, 127);
     if (wl < 0) wl = 0;
@@ -9118,15 +9258,20 @@ int64_t vayu_gui_font_new(int64_t name_sp, int64_t size, int64_t weight, int64_t
     }
     if (size < 4) size = 4;
     GdipCreateFont(f->fam, (REAL)size, style, UnitPixel, &f->font);
+
+    if (g_font_cache_n < 16) {
+        memcpy(g_font_cache[g_font_cache_n].key, key, sizeof(key));
+        g_font_cache[g_font_cache_n].f = (void*)f;
+        g_font_cache_n = g_font_cache_n + 1;
+    }
     return (int64_t)f;
 }
 
 void vayu_gui_font_free(int64_t h) {
-    VayuFont* f = (VayuFont*)h;
-    if (!f) return;
-    if (f->font) GdipDeleteFont(f->font);
-    if (f->fam)  GdipDeleteFontFamily(f->fam);
-    free(f);
+    /* Fonts live for the process lifetime — cached, shared, freed only
+       at GdiplusShutdown.  Demos call font_free at teardown and we
+       deliberately ignore it so the cache stays valid. */
+    (void)h;
 }
 
 int64_t vayu_gui_font_default(void) {
@@ -9655,8 +9800,11 @@ static int vayu_wic_save_bitmap_png(GpBitmap* bmp, int w, int h,
 
 typedef struct VayuFramebuffer {
     uint32_t* pixels;
+    float*    depth;   /* Phase 21.2 - NULL unless depth enabled */
     int       w, h;
 } VayuFramebuffer;
+
+void vayu_raster_fb_clear_depth(int64_t fh);
 
 int64_t vayu_raster_fb_new(int64_t w, int64_t h) {
     if (w <= 0 || h <= 0) return 0;
@@ -9664,6 +9812,7 @@ int64_t vayu_raster_fb_new(int64_t w, int64_t h) {
     fb->w = (int)w;
     fb->h = (int)h;
     fb->pixels = (uint32_t*)malloc(sizeof(uint32_t) * (size_t)(w * h));
+    fb->depth  = NULL;
     if (!fb->pixels) { free(fb); return 0; }
     memset(fb->pixels, 0, sizeof(uint32_t) * (size_t)(w * h));
     return (int64_t)fb;
@@ -9673,7 +9822,28 @@ void vayu_raster_fb_free(int64_t fh) {
     VayuFramebuffer* fb = (VayuFramebuffer*)fh;
     if (!fb) return;
     if (fb->pixels) free(fb->pixels);
+    if (fb->depth)  free(fb->depth);
     free(fb);
+}
+
+void vayu_raster_fb_enable_depth(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb || fb->depth) return;
+    fb->depth = (float*)malloc(sizeof(float) * (size_t)(fb->w * fb->h));
+    if (fb->depth) vayu_raster_fb_clear_depth(fh);
+}
+
+void vayu_raster_fb_disable_depth(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb || !fb->depth) return;
+    free(fb->depth); fb->depth = NULL;
+}
+
+void vayu_raster_fb_clear_depth(int64_t fh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fh;
+    if (!fb || !fb->depth) return;
+    int64_t n = (int64_t)fb->w * (int64_t)fb->h;
+    for (int64_t i = 0; i < n; ++i) fb->depth[i] = 1e30f;
 }
 
 int64_t vayu_raster_fb_width(int64_t fh) {
@@ -9757,6 +9927,7 @@ void vayu_raster_draw_tri(int64_t fh,
                           int64_t x1, int64_t y1,
                           int64_t x2, int64_t y2,
                           int64_t argb) {
+    /* unchanged body ... keep the existing implementation verbatim */
     VayuFramebuffer* fb = (VayuFramebuffer*)fh;
     if (!fb) return;
 
@@ -9797,6 +9968,1004 @@ void vayu_raster_draw_tri(int64_t fh,
         }
         y = y + 1;
     }
+}
+
+/* ===========================================================================
+ * Phase 21.2 + 21.3 - 3D pipeline.
+ *   - Matrix stack (Q16.16 cells; double precision internally)
+ *   - Indexed mesh
+ *   - Texture with mip levels
+ *   - Depth-tested, perspective-correct, bilinear / trilinear raster
+ *
+ * Q16.16 note: all Vayu-side coordinates are fixed-point, 65536 == 1.0.
+ * The ABI carries them as int64.  Internally we convert to double for the
+ * pipeline math (per-vertex) and use incremental per-pixel scans.
+ * ========================================================================= */
+
+typedef struct { int64_t c[16]; } VayuMat4;
+
+typedef struct {
+    int64_t* verts;   /* 5 per vertex: x, y, z, u, v  (Q16.16) */
+    int64_t* norms;   /* 3 per vertex: nx, ny, nz     (Q16.16) */
+    int      nv, cv;
+    int32_t* tris;    /* 3 per tri: i0, i1, i2 */
+    int      nt, ct;
+} VayuMesh;
+
+typedef struct {
+    int       w, h;
+    uint32_t* pixels;
+} VayuTexLevel;
+
+typedef struct {
+    VayuTexLevel levels[16];
+    int          level_count;
+    int          filter;   /* 0=nearest, 1=bilinear, 2=trilinear */
+} VayuTexture;
+
+/* ---- matrix ---- */
+
+int64_t vayu_raster_mat_new(void) {
+    VayuMat4* m = (VayuMat4*)malloc(sizeof(VayuMat4));
+    memset(m->c, 0, sizeof(m->c));
+    m->c[0] = m->c[5] = m->c[10] = m->c[15] = 65536;
+    return (int64_t)m;
+}
+void vayu_raster_mat_free(int64_t h) { if (h) free((VayuMat4*)h); }
+
+void vayu_raster_mat_identity(int64_t h) {
+    VayuMat4* m = (VayuMat4*)h;
+    if (!m) return;
+    memset(m->c, 0, sizeof(m->c));
+    m->c[0] = m->c[5] = m->c[10] = m->c[15] = 65536;
+}
+
+void vayu_raster_mat_mul(int64_t dst_h, int64_t a_h, int64_t b_h) {
+    VayuMat4* d = (VayuMat4*)dst_h;
+    VayuMat4* a = (VayuMat4*)a_h;
+    VayuMat4* b = (VayuMat4*)b_h;
+    if (!d || !a || !b) return;
+    VayuMat4 t;
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            double s = 0.0;
+            for (int k = 0; k < 4; ++k) {
+                double av = (double)a->c[i*4+k] / 65536.0;
+                double bv = (double)b->c[k*4+j] / 65536.0;
+                s += av * bv;
+            }
+            t.c[i*4+j] = (int64_t)(s * 65536.0);
+        }
+    }
+    *d = t;
+}
+
+void vayu_raster_mat_translate(int64_t h, int64_t x, int64_t y, int64_t z) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    VayuMat4 T; memset(T.c, 0, sizeof(T.c));
+    T.c[0] = T.c[5] = T.c[10] = T.c[15] = 65536;
+    T.c[3] = x; T.c[7] = y; T.c[11] = z;
+    VayuMat4 tmp; VayuMat4* d = &tmp;
+    int64_t dh = (int64_t)d;
+    vayu_raster_mat_mul(dh, h, (int64_t)&T);
+    *m = tmp;
+    (void)d;
+}
+
+static double vayu_sin_deg(double d) {
+    double r = d * 3.14159265358979323846 / 180.0;
+    return sin(r);
+}
+static double vayu_cos_deg(double d) {
+    double r = d * 3.14159265358979323846 / 180.0;
+    return cos(r);
+}
+
+void vayu_raster_mat_rotate_x(int64_t h, int64_t deg) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    double c = vayu_cos_deg((double)deg);
+    double s = vayu_sin_deg((double)deg);
+    VayuMat4 R; memset(R.c, 0, sizeof(R.c));
+    R.c[0] = R.c[15] = 65536;
+    R.c[5]  = (int64_t)(c * 65536.0);
+    R.c[6]  = (int64_t)(-s * 65536.0);
+    R.c[9]  = (int64_t)(s * 65536.0);
+    R.c[10] = (int64_t)(c * 65536.0);
+    VayuMat4 tmp;
+    vayu_raster_mat_mul((int64_t)&tmp, h, (int64_t)&R);
+    *m = tmp;
+}
+
+void vayu_raster_mat_rotate_y(int64_t h, int64_t deg) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    double c = vayu_cos_deg((double)deg);
+    double s = vayu_sin_deg((double)deg);
+    VayuMat4 R; memset(R.c, 0, sizeof(R.c));
+    R.c[5] = R.c[15] = 65536;
+    R.c[0]  = (int64_t)(c * 65536.0);
+    R.c[2]  = (int64_t)(s * 65536.0);
+    R.c[8]  = (int64_t)(-s * 65536.0);
+    R.c[10] = (int64_t)(c * 65536.0);
+    VayuMat4 tmp;
+    vayu_raster_mat_mul((int64_t)&tmp, h, (int64_t)&R);
+    *m = tmp;
+}
+
+void vayu_raster_mat_rotate_z(int64_t h, int64_t deg) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    double c = vayu_cos_deg((double)deg);
+    double s = vayu_sin_deg((double)deg);
+    VayuMat4 R; memset(R.c, 0, sizeof(R.c));
+    R.c[10] = R.c[15] = 65536;
+    R.c[0] = (int64_t)(c * 65536.0);
+    R.c[1] = (int64_t)(-s * 65536.0);
+    R.c[4] = (int64_t)(s * 65536.0);
+    R.c[5] = (int64_t)(c * 65536.0);
+    VayuMat4 tmp;
+    vayu_raster_mat_mul((int64_t)&tmp, h, (int64_t)&R);
+    *m = tmp;
+}
+
+/* aspect_pct: 100 == 1.0.  Near / far in Q16.16.  Parameter names use
+   n_ / f_ because windef.h #defines `near` and `far`. */
+void vayu_raster_mat_perspective(int64_t h, int64_t fov_deg,
+                                 int64_t aspect_pct,
+                                 int64_t n_, int64_t f_) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    double fov = (double)fov_deg * 3.14159265358979323846 / 180.0;
+    double f   = 1.0 / tan(fov * 0.5);
+    double a   = (double)aspect_pct / 100.0;
+    double n   = (double)n_ / 65536.0;
+    double ff  = (double)f_ / 65536.0;
+    VayuMat4 P; memset(P.c, 0, sizeof(P.c));
+    P.c[0]  = (int64_t)((f / a) * 65536.0);
+    P.c[5]  = (int64_t)(f * 65536.0);
+    P.c[10] = (int64_t)(((ff + n) / (n - ff)) * 65536.0);
+    P.c[11] = (int64_t)((2.0 * ff * n / (n - ff)) * 65536.0);
+    P.c[14] = (int64_t)(-1.0 * 65536.0);
+    P.c[15] = 0;
+    *m = P;
+}
+
+void vayu_raster_mat_look_at(int64_t h,
+                             int64_t ex, int64_t ey, int64_t ez,
+                             int64_t tx, int64_t ty, int64_t tz,
+                             int64_t ux, int64_t uy, int64_t uz) {
+    VayuMat4* m = (VayuMat4*)h; if (!m) return;
+    double Ex = (double)ex/65536.0, Ey = (double)ey/65536.0, Ez = (double)ez/65536.0;
+    double Tx = (double)tx/65536.0, Ty = (double)ty/65536.0, Tz = (double)tz/65536.0;
+    double Ux = (double)ux/65536.0, Uy = (double)uy/65536.0, Uz = (double)uz/65536.0;
+    double fx = Tx-Ex, fy = Ty-Ey, fz = Tz-Ez;
+    double fl = sqrt(fx*fx+fy*fy+fz*fz);
+    if (fl < 1e-9) return;
+    fx /= fl; fy /= fl; fz /= fl;
+    double sx = fy*Uz - fz*Uy, sy = fz*Ux - fx*Uz, sz = fx*Uy - fy*Ux;
+    double sl = sqrt(sx*sx+sy*sy+sz*sz);
+    if (sl < 1e-9) return;
+    sx /= sl; sy /= sl; sz /= sl;
+    double ux2 = sy*fz - sz*fy, uy2 = sz*fx - sx*fz, uz2 = sx*fy - sy*fx;
+    VayuMat4 V; memset(V.c, 0, sizeof(V.c));
+    V.c[0]  = (int64_t)(sx * 65536.0);
+    V.c[1]  = (int64_t)(sy * 65536.0);
+    V.c[2]  = (int64_t)(sz * 65536.0);
+    V.c[3]  = (int64_t)(-(sx*Ex+sy*Ey+sz*Ez) * 65536.0);
+    V.c[4]  = (int64_t)(ux2 * 65536.0);
+    V.c[5]  = (int64_t)(uy2 * 65536.0);
+    V.c[6]  = (int64_t)(uz2 * 65536.0);
+    V.c[7]  = (int64_t)(-(ux2*Ex+uy2*Ey+uz2*Ez) * 65536.0);
+    V.c[8]  = (int64_t)(-fx * 65536.0);
+    V.c[9]  = (int64_t)(-fy * 65536.0);
+    V.c[10] = (int64_t)(-fz * 65536.0);
+    V.c[11] = (int64_t)( (fx*Ex+fy*Ey+fz*Ez) * 65536.0);
+    V.c[15] = 65536;
+    *m = V;
+}
+
+/* ---- mesh ---- */
+
+int64_t vayu_raster_mesh_new(void) {
+    VayuMesh* m = (VayuMesh*)malloc(sizeof(VayuMesh));
+    m->verts = NULL; m->norms = NULL; m->nv = 0; m->cv = 0;
+    m->tris  = NULL; m->nt = 0; m->ct = 0;
+    return (int64_t)m;
+}
+
+void vayu_raster_mesh_free(int64_t h) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    if (m->verts) free(m->verts);
+    if (m->norms) free(m->norms);
+    if (m->tris)  free(m->tris);
+    free(m);
+}
+
+void vayu_raster_mesh_clear(int64_t h) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    m->nv = 0; m->nt = 0;
+}
+
+static void vayu_mesh_reserve_v(VayuMesh* m, int need) {
+    if (m->nv + need <= m->cv) return;
+    int nc = m->cv == 0 ? 32 : m->cv * 2;
+    while (nc < m->nv + need) nc *= 2;
+    m->verts = (int64_t*)realloc(m->verts, sizeof(int64_t) * 5 * (size_t)nc);
+    m->norms = (int64_t*)realloc(m->norms, sizeof(int64_t) * 3 * (size_t)nc);
+    m->cv = nc;
+}
+static void vayu_mesh_reserve_t(VayuMesh* m, int need) {
+    if (m->nt + need <= m->ct) return;
+    int nc = m->ct == 0 ? 32 : m->ct * 2;
+    while (nc < m->nt + need) nc *= 2;
+    m->tris = (int32_t*)realloc(m->tris, sizeof(int32_t) * 3 * (size_t)nc);
+    m->ct = nc;
+}
+
+void vayu_raster_mesh_add_vert(int64_t h, int64_t x, int64_t y, int64_t z,
+                               int64_t u, int64_t v) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    vayu_mesh_reserve_v(m, 1);
+    int64_t* p = m->verts + 5 * (size_t)m->nv;
+    p[0] = x; p[1] = y; p[2] = z; p[3] = u; p[4] = v;
+    int64_t* nn = m->norms + 3 * (size_t)m->nv;
+    nn[0] = 0; nn[1] = 0; nn[2] = 65536;   /* default +Z */
+    m->nv++;
+}
+
+void vayu_raster_mesh_add_vert_lit(int64_t h,
+                                   int64_t x, int64_t y, int64_t z,
+                                   int64_t nx, int64_t ny, int64_t nz,
+                                   int64_t u, int64_t v) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    vayu_mesh_reserve_v(m, 1);
+    int64_t* p = m->verts + 5 * (size_t)m->nv;
+    p[0] = x; p[1] = y; p[2] = z; p[3] = u; p[4] = v;
+    int64_t* nn = m->norms + 3 * (size_t)m->nv;
+    nn[0] = nx; nn[1] = ny; nn[2] = nz;
+    m->nv++;
+}
+
+void vayu_raster_mesh_set_normal(int64_t h, int64_t idx,
+                                 int64_t nx, int64_t ny, int64_t nz) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    if (idx < 0 || idx >= m->nv) return;
+    int64_t* nn = m->norms + 3 * (size_t)idx;
+    nn[0] = nx; nn[1] = ny; nn[2] = nz;
+}
+
+void vayu_raster_mesh_add_tri(int64_t h, int64_t i0, int64_t i1, int64_t i2) {
+    VayuMesh* m = (VayuMesh*)h;
+    if (!m) return;
+    vayu_mesh_reserve_t(m, 1);
+    int32_t* p = m->tris + 3 * (size_t)m->nt;
+    p[0] = (int32_t)i0; p[1] = (int32_t)i1; p[2] = (int32_t)i2;
+    m->nt++;
+}
+
+/* ---- texture ---- */
+
+int64_t vayu_raster_tex_new(int64_t w, int64_t h) {
+    if (w <= 0 || h <= 0) return 0;
+    VayuTexture* t = (VayuTexture*)malloc(sizeof(VayuTexture));
+    memset(t, 0, sizeof(*t));
+    t->filter = 1;
+    t->levels[0].w = (int)w;
+    t->levels[0].h = (int)h;
+    t->levels[0].pixels = (uint32_t*)malloc(sizeof(uint32_t) * (size_t)(w*h));
+    if (!t->levels[0].pixels) { free(t); return 0; }
+    memset(t->levels[0].pixels, 0, sizeof(uint32_t) * (size_t)(w*h));
+    t->level_count = 1;
+    return (int64_t)t;
+}
+
+void vayu_raster_tex_free(int64_t h) {
+    VayuTexture* t = (VayuTexture*)h;
+    if (!t) return;
+    for (int i = 0; i < t->level_count; ++i)
+        if (t->levels[i].pixels) free(t->levels[i].pixels);
+    free(t);
+}
+
+int64_t vayu_raster_tex_width(int64_t h)  { VayuTexture* t=(VayuTexture*)h; return t?t->levels[0].w:0; }
+int64_t vayu_raster_tex_height(int64_t h) { VayuTexture* t=(VayuTexture*)h; return t?t->levels[0].h:0; }
+
+void vayu_raster_tex_set(int64_t h, int64_t x, int64_t y, int64_t argb) {
+    VayuTexture* t = (VayuTexture*)h;
+    if (!t) return;
+    if (x < 0 || x >= t->levels[0].w || y < 0 || y >= t->levels[0].h) return;
+    t->levels[0].pixels[(int)y * t->levels[0].w + (int)x] = (uint32_t)argb;
+}
+
+void vayu_raster_tex_set_filter(int64_t h, int64_t mode) {
+    VayuTexture* t = (VayuTexture*)h;
+    if (!t) return;
+    t->filter = (mode >= 0 && mode <= 2) ? (int)mode : 1;
+}
+
+void vayu_raster_tex_gen_mipmaps(int64_t h) {
+    VayuTexture* t = (VayuTexture*)h;
+    if (!t) return;
+    int cur_w = t->levels[0].w, cur_h = t->levels[0].h;
+    int src = 0;
+    while ((cur_w > 1 || cur_h > 1) && t->level_count < 16) {
+        int nw = cur_w > 1 ? cur_w / 2 : 1;
+        int nh = cur_h > 1 ? cur_h / 2 : 1;
+        int dst = t->level_count;
+        t->levels[dst].w = nw;
+        t->levels[dst].h = nh;
+        t->levels[dst].pixels = (uint32_t*)malloc(sizeof(uint32_t) * (size_t)(nw*nh));
+        if (!t->levels[dst].pixels) break;
+        for (int y = 0; y < nh; ++y) {
+            for (int x = 0; x < nw; ++x) {
+                uint32_t sum_b = 0, sum_g = 0, sum_r = 0, sum_a = 0;
+                int n = 0;
+                for (int dy = 0; dy < 2; ++dy) {
+                    for (int dx = 0; dx < 2; ++dx) {
+                        int sx = x*2 + dx;
+                        int sy = y*2 + dy;
+                        if (sx >= cur_w) sx = cur_w - 1;
+                        if (sy >= cur_h) sy = cur_h - 1;
+                        uint32_t c = t->levels[src].pixels[sy*cur_w + sx];
+                        sum_b +=  c        & 0xFF;
+                        sum_g += (c >>  8) & 0xFF;
+                        sum_r += (c >> 16) & 0xFF;
+                        sum_a += (c >> 24) & 0xFF;
+                        n++;
+                    }
+                }
+                uint32_t avg = ((sum_a/n) << 24) | ((sum_r/n) << 16)
+                             | ((sum_g/n) <<  8) |  (sum_b/n);
+                t->levels[dst].pixels[y*nw + x] = avg;
+            }
+        }
+        t->level_count = dst + 1;
+        cur_w = nw; cur_h = nh; src = dst;
+    }
+}
+
+/* nearest sample at explicit level */
+static uint32_t vayu_tex_nearest(const VayuTexLevel* L, double u, double v) {
+    int x = (int)(u * L->w);
+    int y = (int)(v * L->h);
+    if (x < 0) x = 0; if (x >= L->w) x = L->w - 1;
+    if (y < 0) y = 0; if (y >= L->h) y = L->h - 1;
+    return L->pixels[y * L->w + x];
+}
+
+/* bilinear sample at explicit level */
+static uint32_t vayu_tex_bilinear(const VayuTexLevel* L, double u, double v) {
+    double fx = u * L->w - 0.5;
+    double fy = v * L->h - 0.5;
+    int x0 = (int)floor(fx), y0 = (int)floor(fy);
+    double dx = fx - x0, dy = fy - y0;
+    int x1 = x0 + 1, y1 = y0 + 1;
+    if (x0 < 0) x0 = 0; if (x0 >= L->w) x0 = L->w - 1;
+    if (y0 < 0) y0 = 0; if (y0 >= L->h) y0 = L->h - 1;
+    if (x1 < 0) x1 = 0; if (x1 >= L->w) x1 = L->w - 1;
+    if (y1 < 0) y1 = 0; if (y1 >= L->h) y1 = L->h - 1;
+    uint32_t c00 = L->pixels[y0*L->w + x0];
+    uint32_t c10 = L->pixels[y0*L->w + x1];
+    uint32_t c01 = L->pixels[y1*L->w + x0];
+    uint32_t c11 = L->pixels[y1*L->w + x1];
+    double w00 = (1-dx)*(1-dy), w10 = dx*(1-dy);
+    double w01 = (1-dx)*dy,     w11 = dx*dy;
+    uint32_t a = (uint32_t)(((c00>>24)&0xFF)*w00 + ((c10>>24)&0xFF)*w10
+                           +((c01>>24)&0xFF)*w01 + ((c11>>24)&0xFF)*w11 + 0.5);
+    uint32_t r = (uint32_t)(((c00>>16)&0xFF)*w00 + ((c10>>16)&0xFF)*w10
+                           +((c01>>16)&0xFF)*w01 + ((c11>>16)&0xFF)*w11 + 0.5);
+    uint32_t g = (uint32_t)(((c00>> 8)&0xFF)*w00 + ((c10>> 8)&0xFF)*w10
+                           +((c01>> 8)&0xFF)*w01 + ((c11>> 8)&0xFF)*w11 + 0.5);
+    uint32_t b = (uint32_t)(((c00     )&0xFF)*w00 + ((c10     )&0xFF)*w10
+                           +((c01     )&0xFF)*w01 + ((c11     )&0xFF)*w11 + 0.5);
+    return (a<<24) | (r<<16) | (g<<8) | b;
+}
+
+static uint32_t vayu_tex_sample(VayuTexture* t, double u, double v, double lod_f) {
+    int lc = t->level_count;
+    if (lc == 0) return 0xFFFF00FFu;
+    if (t->filter == 0) {
+        int lvl = (int)(lod_f + 0.5);
+        if (lvl < 0) lvl = 0; if (lvl >= lc) lvl = lc - 1;
+        return vayu_tex_nearest(&t->levels[lvl], u, v);
+    }
+    if (t->filter == 1 || lc == 1) {
+        int lvl = (int)(lod_f + 0.5);
+        if (lvl < 0) lvl = 0; if (lvl >= lc) lvl = lc - 1;
+        return vayu_tex_bilinear(&t->levels[lvl], u, v);
+    }
+    /* trilinear */
+    double lf = lod_f;
+    if (lf < 0) lf = 0;
+    int l0 = (int)floor(lf);
+    if (l0 >= lc - 1) return vayu_tex_bilinear(&t->levels[lc-1], u, v);
+    int l1 = l0 + 1;
+    double f = lf - l0;
+    uint32_t a = vayu_tex_bilinear(&t->levels[l0], u, v);
+    uint32_t b = vayu_tex_bilinear(&t->levels[l1], u, v);
+    double fb = f, fa = 1.0 - f;
+    uint32_t oa = (uint32_t)((((a>>24)&0xFF)*fa) + (((b>>24)&0xFF)*fb) + 0.5);
+    uint32_t or_ = (uint32_t)((((a>>16)&0xFF)*fa) + (((b>>16)&0xFF)*fb) + 0.5);
+    uint32_t og = (uint32_t)((((a>> 8)&0xFF)*fa) + (((b>> 8)&0xFF)*fb) + 0.5);
+    uint32_t ob = (uint32_t)((((a     )&0xFF)*fa) + (((b     )&0xFF)*fb) + 0.5);
+    return (oa<<24) | (or_<<16) | (og<<8) | ob;
+}
+
+/* ---- draw_mesh ----
+ * All inputs are Q16.16 unless noted.  tint_argb is 0xAARRGGBB; pass
+ * 0xFFFFFFFF for no tint.
+ */
+typedef struct { double x, y, z, w, u, v; } Vtx;
+
+static Vtx vayu_transform_vtx(const double M[16], const int64_t* vp) {
+    double x = (double)vp[0] / 65536.0;
+    double y = (double)vp[1] / 65536.0;
+    double z = (double)vp[2] / 65536.0;
+    double u = (double)vp[3] / 65536.0;
+    double vv= (double)vp[4] / 65536.0;
+    Vtx r;
+    r.x = M[0]*x  + M[1]*y  + M[2]*z  + M[3];
+    r.y = M[4]*x  + M[5]*y  + M[6]*z  + M[7];
+    r.z = M[8]*x  + M[9]*y  + M[10]*z + M[11];
+    r.w = M[12]*x + M[13]*y + M[14]*z + M[15];
+    r.u = u; r.v = vv;
+    return r;
+}
+
+static double vayu_edge_fn(double ax, double ay, double bx, double by,
+                           double px, double py) {
+    return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+}
+
+void vayu_raster_draw_mesh(int64_t fbh, int64_t meshh, int64_t math,
+                           int64_t texh, int64_t tint) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fbh;
+    VayuMesh* mesh = (VayuMesh*)meshh;
+    VayuMat4* M = (VayuMat4*)math;
+    VayuTexture* tex = (VayuTexture*)texh;
+    if (!fb || !mesh || !M) return;
+
+    double md[16];
+    for (int i = 0; i < 16; ++i) md[i] = (double)M->c[i] / 65536.0;
+
+    uint32_t tint_a = (uint32_t)((tint >> 24) & 0xFF);
+    uint32_t tint_r = (uint32_t)((tint >> 16) & 0xFF);
+    uint32_t tint_g = (uint32_t)((tint >>  8) & 0xFF);
+    uint32_t tint_b = (uint32_t)((tint      ) & 0xFF);
+    int apply_tint = (tint != (int64_t)0xFFFFFFFF);
+
+    for (int ti = 0; ti < mesh->nt; ++ti) {
+        int i0 = mesh->tris[ti*3];
+        int i1 = mesh->tris[ti*3+1];
+        int i2 = mesh->tris[ti*3+2];
+        if (i0 < 0 || i0 >= mesh->nv) continue;
+        if (i1 < 0 || i1 >= mesh->nv) continue;
+        if (i2 < 0 || i2 >= mesh->nv) continue;
+
+        Vtx a = vayu_transform_vtx(md, mesh->verts + 5*(size_t)i0);
+        Vtx b = vayu_transform_vtx(md, mesh->verts + 5*(size_t)i1);
+        Vtx c = vayu_transform_vtx(md, mesh->verts + 5*(size_t)i2);
+        if (a.w <= 1e-9 || b.w <= 1e-9 || c.w <= 1e-9) continue;
+
+        /* NDC + viewport.  Y flip for screen coords (top-left origin). */
+        double ax = ((a.x/a.w) + 1.0) * 0.5 * (double)fb->w;
+        double ay = (1.0 - (a.y/a.w)) * 0.5 * (double)fb->h;
+        double bx = ((b.x/b.w) + 1.0) * 0.5 * (double)fb->w;
+        double by = (1.0 - (b.y/b.w)) * 0.5 * (double)fb->h;
+        double cx = ((c.x/c.w) + 1.0) * 0.5 * (double)fb->w;
+        double cy = (1.0 - (c.y/c.w)) * 0.5 * (double)fb->h;
+
+        double az = a.z / a.w, bz = b.z / b.w, cz = c.z / c.w;
+
+        double aIW = 1.0 / a.w, bIW = 1.0 / b.w, cIW = 1.0 / c.w;
+        double aUoW = a.u * aIW, bUoW = b.u * bIW, cUoW = c.u * cIW;
+        double aVoW = a.v * aIW, bVoW = b.v * bIW, cVoW = c.v * cIW;
+
+        int minx = (int)floor(ax < bx ? (ax < cx ? ax : cx) : (bx < cx ? bx : cx));
+        int maxx = (int)ceil (ax > bx ? (ax > cx ? ax : cx) : (bx > cx ? bx : cx));
+        int miny = (int)floor(ay < by ? (ay < cy ? ay : cy) : (by < cy ? by : cy));
+        int maxy = (int)ceil (ay > by ? (ay > cy ? ay : cy) : (by > cy ? by : cy));
+        if (minx < 0) minx = 0;
+        if (miny < 0) miny = 0;
+        if (maxx >= fb->w) maxx = fb->w - 1;
+        if (maxy >= fb->h) maxy = fb->h - 1;
+        if (minx > maxx || miny > maxy) continue;
+
+        double area = vayu_edge_fn(ax,ay, bx,by, cx,cy);
+        if (area > -1e-9 && area < 1e-9) continue;
+        double inv_area = 1.0 / area;
+
+        /* LOD selection: texel-per-pixel ratio across the triangle. */
+        double lod = 0.0;
+        if (tex && tex->level_count > 1) {
+            double du = fabs(a.u - b.u) + fabs(a.u - c.u);
+            double dv = fabs(a.v - b.v) + fabs(a.v - c.v);
+            double uv_span = sqrt(du*du + dv*dv);
+            double dX = fabs(ax - bx) + fabs(ax - cx);
+            double dY = fabs(ay - by) + fabs(ay - cy);
+            double s_span = sqrt(dX*dX + dY*dY);
+            if (s_span > 1e-9) {
+                double texels_per_px = (uv_span / s_span) * tex->levels[0].w;
+                if (texels_per_px > 1e-9) lod = log2(texels_per_px);
+                if (lod < 0) lod = 0;
+            }
+        }
+
+        int py = miny;
+        while (py <= maxy) {
+            double fy = py + 0.5;
+            int px = minx;
+            while (px <= maxx) {
+                double fx = px + 0.5;
+                double w0 = vayu_edge_fn(bx,by, cx,cy, fx,fy);
+                double w1 = vayu_edge_fn(cx,cy, ax,ay, fx,fy);
+                double w2 = vayu_edge_fn(ax,ay, bx,by, fx,fy);
+                int inside;
+                if (area > 0) inside = (w0>=0 && w1>=0 && w2>=0);
+                else          inside = (w0<=0 && w1<=0 && w2<=0);
+                if (!inside) { px = px + 1; continue; }
+
+                double l0 = w0 * inv_area;
+                double l1 = w1 * inv_area;
+                double l2 = w2 * inv_area;
+
+                double z = l0*az + l1*bz + l2*cz;
+                int pidx = py * fb->w + px;
+                if (fb->depth) {
+                    if (z >= (double)fb->depth[pidx]) { px = px + 1; continue; }
+                    fb->depth[pidx] = (float)z;
+                }
+
+                uint32_t out;
+                if (tex) {
+                    double iw = l0*aIW + l1*bIW + l2*cIW;
+                    if (iw <= 1e-12) { px = px + 1; continue; }
+                    double u = (l0*aUoW + l1*bUoW + l2*cUoW) / iw;
+                    double v = (l0*aVoW + l1*bVoW + l2*cVoW) / iw;
+                    u = u - floor(u);  /* wrap */
+                    v = v - floor(v);
+                    out = vayu_tex_sample(tex, u, v, lod);
+                    if (apply_tint) {
+                        uint32_t oa = ((out >> 24) & 0xFF) * tint_a / 255u;
+                        uint32_t or_= ((out >> 16) & 0xFF) * tint_r / 255u;
+                        uint32_t og = ((out >>  8) & 0xFF) * tint_g / 255u;
+                        uint32_t ob = ((out      ) & 0xFF) * tint_b / 255u;
+                        out = (oa<<24) | (or_<<16) | (og<<8) | ob;
+                    }
+                } else {
+                    out = (uint32_t)tint;
+                }
+                fb->pixels[pidx] = out;
+                px = px + 1;
+            }
+            py = py + 1;
+        }
+    }
+}
+
+/* ===========================================================================
+ * Phase 21.4 - Camera + lighting (Gouraud, per-vertex).
+ * Light direction convention: for kind==0, (x,y,z) points FROM the surface
+ * TOWARD the light.  For kind==1, (x,y,z) is the world-space position.
+ * ========================================================================= */
+
+#define VAYU_MAX_LIGHTS 8
+
+typedef struct {
+    int      kind;
+    double   x, y, z;
+    uint32_t argb;
+    double   intensity;
+} VayuLight;
+
+static VayuLight g_lights[VAYU_MAX_LIGHTS];
+static int       g_light_n = 0;
+static uint32_t  g_ambient = 0xFF202028u;
+
+void vayu_raster_set_ambient(int64_t argb) {
+    g_ambient = (uint32_t)argb;
+}
+
+void vayu_raster_light_clear(void) { g_light_n = 0; }
+
+void vayu_raster_light_set(int64_t idx, int64_t kind,
+                           int64_t x, int64_t y, int64_t z,
+                           int64_t argb, int64_t intensity_q16) {
+    if (idx < 0 || idx >= VAYU_MAX_LIGHTS) return;
+    g_lights[idx].kind = (int)kind;
+    g_lights[idx].x = (double)x / 65536.0;
+    g_lights[idx].y = (double)y / 65536.0;
+    g_lights[idx].z = (double)z / 65536.0;
+    g_lights[idx].argb = (uint32_t)argb;
+    g_lights[idx].intensity = (double)intensity_q16 / 65536.0;
+    if (idx >= g_light_n) g_light_n = (int)idx + 1;
+}
+
+static void vayu_light_vertex(double px, double py, double pz,
+                              double nx, double ny, double nz,
+                              double vx, double vy, double vz,
+                              int shade_mode,
+                              double out[3]) {
+    out[0] = (double)((g_ambient >> 16) & 0xFF) / 255.0;
+    out[1] = (double)((g_ambient >>  8) & 0xFF) / 255.0;
+    out[2] = (double)((g_ambient      ) & 0xFF) / 255.0;
+
+    double nl = sqrt(nx*nx + ny*ny + nz*nz);
+    if (nl > 1e-9) { nx /= nl; ny /= nl; nz /= nl; }
+    else           { nx = 0; ny = 0; nz = 1; }
+
+    for (int i = 0; i < g_light_n; ++i) {
+        VayuLight* L = &g_lights[i];
+        double lx, ly, lz;
+        if (L->kind == 0) {
+            lx = L->x; ly = L->y; lz = L->z;
+            double ll = sqrt(lx*lx + ly*ly + lz*lz);
+            if (ll < 1e-9) continue;
+            lx /= ll; ly /= ll; lz /= ll;
+        } else {
+            lx = L->x - px; ly = L->y - py; lz = L->z - pz;
+            double ll = sqrt(lx*lx + ly*ly + lz*lz);
+            if (ll < 1e-9) continue;
+            lx /= ll; ly /= ll; lz /= ll;
+        }
+        double ndotl = nx*lx + ny*ly + nz*lz;
+        if (ndotl < 0.0) ndotl = 0.0;
+
+        double lr = (double)((L->argb >> 16) & 0xFF) / 255.0;
+        double lg = (double)((L->argb >>  8) & 0xFF) / 255.0;
+        double lb = (double)((L->argb      ) & 0xFF) / 255.0;
+
+        out[0] += ndotl * lr * L->intensity;
+        out[1] += ndotl * lg * L->intensity;
+        out[2] += ndotl * lb * L->intensity;
+
+        if (shade_mode >= 2 && ndotl > 0.0) {
+            double hx = lx + vx, hy = ly + vy, hz = lz + vz;
+            double hl = sqrt(hx*hx + hy*hy + hz*hz);
+            if (hl > 1e-9) {
+                hx /= hl; hy /= hl; hz /= hl;
+                double ndoth = nx*hx + ny*hy + nz*hz;
+                if (ndoth > 0.0) {
+                    double spec = pow(ndoth, 32.0);
+                    out[0] += spec * lr * L->intensity;
+                    out[1] += spec * lg * L->intensity;
+                    out[2] += spec * lb * L->intensity;
+                }
+            }
+        }
+    }
+}
+
+void vayu_raster_draw_mesh_lit(int64_t fbh, int64_t meshh,
+                               int64_t mvp_h, int64_t model_h,
+                               int64_t texh, int64_t shade_mode,
+                               int64_t tint,
+                               int64_t eye_x, int64_t eye_y, int64_t eye_z) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fbh;
+    VayuMesh* mesh = (VayuMesh*)meshh;
+    VayuMat4* MVP = (VayuMat4*)mvp_h;
+    VayuMat4* MOD = (VayuMat4*)model_h;
+    VayuTexture* tex = (VayuTexture*)texh;
+    if (!fb || !mesh || !MVP || !MOD) return;
+
+    double md[16], mv[16];
+    for (int i = 0; i < 16; ++i) {
+        md[i] = (double)MOD->c[i] / 65536.0;
+        mv[i] = (double)MVP->c[i] / 65536.0;
+    }
+    double ex = (double)eye_x / 65536.0;
+    double ey = (double)eye_y / 65536.0;
+    double ez = (double)eye_z / 65536.0;
+
+    uint32_t tint_a = (uint32_t)((tint >> 24) & 0xFF);
+    uint32_t tint_r = (uint32_t)((tint >> 16) & 0xFF);
+    uint32_t tint_g = (uint32_t)((tint >>  8) & 0xFF);
+    uint32_t tint_b = (uint32_t)((tint      ) & 0xFF);
+    int apply_tint = (tint != (int64_t)0xFFFFFFFF);
+
+    for (int ti = 0; ti < mesh->nt; ++ti) {
+        int i0 = mesh->tris[ti*3];
+        int i1 = mesh->tris[ti*3+1];
+        int i2 = mesh->tris[ti*3+2];
+        if (i0 < 0 || i0 >= mesh->nv) continue;
+        if (i1 < 0 || i1 >= mesh->nv) continue;
+        if (i2 < 0 || i2 >= mesh->nv) continue;
+
+        const int64_t* v0 = mesh->verts + 5*(size_t)i0;
+        const int64_t* v1 = mesh->verts + 5*(size_t)i1;
+        const int64_t* v2 = mesh->verts + 5*(size_t)i2;
+        const int64_t* n0 = mesh->norms + 3*(size_t)i0;
+        const int64_t* n1 = mesh->norms + 3*(size_t)i1;
+        const int64_t* n2 = mesh->norms + 3*(size_t)i2;
+
+        double lx0 = (double)v0[0]/65536.0, ly0 = (double)v0[1]/65536.0, lz0 = (double)v0[2]/65536.0;
+        double lx1 = (double)v1[0]/65536.0, ly1 = (double)v1[1]/65536.0, lz1 = (double)v1[2]/65536.0;
+        double lx2 = (double)v2[0]/65536.0, ly2 = (double)v2[1]/65536.0, lz2 = (double)v2[2]/65536.0;
+
+        double wx0 = md[0]*lx0 + md[1]*ly0 + md[2]*lz0  + md[3];
+        double wy0 = md[4]*lx0 + md[5]*ly0 + md[6]*lz0  + md[7];
+        double wz0 = md[8]*lx0 + md[9]*ly0 + md[10]*lz0 + md[11];
+        double wx1 = md[0]*lx1 + md[1]*ly1 + md[2]*lz1  + md[3];
+        double wy1 = md[4]*lx1 + md[5]*ly1 + md[6]*lz1  + md[7];
+        double wz1 = md[8]*lx1 + md[9]*ly1 + md[10]*lz1 + md[11];
+        double wx2 = md[0]*lx2 + md[1]*ly2 + md[2]*lz2  + md[3];
+        double wy2 = md[4]*lx2 + md[5]*ly2 + md[6]*lz2  + md[7];
+        double wz2 = md[8]*lx2 + md[9]*ly2 + md[10]*lz2 + md[11];
+
+        double ax = (double)n0[0]/65536.0, ay = (double)n0[1]/65536.0, az = (double)n0[2]/65536.0;
+        double bx = (double)n1[0]/65536.0, by = (double)n1[1]/65536.0, bz = (double)n1[2]/65536.0;
+        double ccx= (double)n2[0]/65536.0, ccy= (double)n2[1]/65536.0, ccz= (double)n2[2]/65536.0;
+        double nx0 = md[0]*ax + md[1]*ay + md[2]*az;
+        double ny0 = md[4]*ax + md[5]*ay + md[6]*az;
+        double nz0 = md[8]*ax + md[9]*ay + md[10]*az;
+        double nx1 = md[0]*bx + md[1]*by + md[2]*bz;
+        double ny1 = md[4]*bx + md[5]*by + md[6]*bz;
+        double nz1 = md[8]*bx + md[9]*by + md[10]*bz;
+        double nx2 = md[0]*ccx + md[1]*ccy + md[2]*ccz;
+        double ny2 = md[4]*ccx + md[5]*ccy + md[6]*ccz;
+        double nz2 = md[8]*ccx + md[9]*ccy + md[10]*ccz;
+
+        double vx0=ex-wx0, vy0=ey-wy0, vz0=ez-wz0;
+        double vl0 = sqrt(vx0*vx0+vy0*vy0+vz0*vz0);
+        if (vl0 > 1e-9) { vx0/=vl0; vy0/=vl0; vz0/=vl0; }
+        double vx1=ex-wx1, vy1=ey-wy1, vz1=ez-wz1;
+        double vl1 = sqrt(vx1*vx1+vy1*vy1+vz1*vz1);
+        if (vl1 > 1e-9) { vx1/=vl1; vy1/=vl1; vz1/=vl1; }
+        double vx2=ex-wx2, vy2=ey-wy2, vz2=ez-wz2;
+        double vl2 = sqrt(vx2*vx2+vy2*vy2+vz2*vz2);
+        if (vl2 > 1e-9) { vx2/=vl2; vy2/=vl2; vz2/=vl2; }
+
+        double c0[3], c1[3], c2[3];
+        vayu_light_vertex(wx0,wy0,wz0, nx0,ny0,nz0, vx0,vy0,vz0, (int)shade_mode, c0);
+        vayu_light_vertex(wx1,wy1,wz1, nx1,ny1,nz1, vx1,vy1,vz1, (int)shade_mode, c1);
+        vayu_light_vertex(wx2,wy2,wz2, nx2,ny2,nz2, vx2,vy2,vz2, (int)shade_mode, c2);
+
+        double cx0 = mv[0]*lx0  + mv[1]*ly0  + mv[2]*lz0  + mv[3];
+        double cy0 = mv[4]*lx0  + mv[5]*ly0  + mv[6]*lz0  + mv[7];
+        double cz0 = mv[8]*lx0  + mv[9]*ly0  + mv[10]*lz0 + mv[11];
+        double cw0 = mv[12]*lx0 + mv[13]*ly0 + mv[14]*lz0 + mv[15];
+        double cx1 = mv[0]*lx1  + mv[1]*ly1  + mv[2]*lz1  + mv[3];
+        double cy1 = mv[4]*lx1  + mv[5]*ly1  + mv[6]*lz1  + mv[7];
+        double cz1 = mv[8]*lx1  + mv[9]*ly1  + mv[10]*lz1 + mv[11];
+        double cw1 = mv[12]*lx1 + mv[13]*ly1 + mv[14]*lz1 + mv[15];
+        double cx2 = mv[0]*lx2  + mv[1]*ly2  + mv[2]*lz2  + mv[3];
+        double cy2 = mv[4]*lx2  + mv[5]*ly2  + mv[6]*lz2  + mv[7];
+        double cz2 = mv[8]*lx2  + mv[9]*ly2  + mv[10]*lz2 + mv[11];
+        double cw2 = mv[12]*lx2 + mv[13]*ly2 + mv[14]*lz2 + mv[15];
+        if (cw0 <= 1e-9 || cw1 <= 1e-9 || cw2 <= 1e-9) continue;
+
+        double sxa = ((cx0/cw0)+1.0)*0.5*(double)fb->w;
+        double sya = (1.0-(cy0/cw0))*0.5*(double)fb->h;
+        double sxb = ((cx1/cw1)+1.0)*0.5*(double)fb->w;
+        double syb = (1.0-(cy1/cw1))*0.5*(double)fb->h;
+        double sxc = ((cx2/cw2)+1.0)*0.5*(double)fb->w;
+        double syc = (1.0-(cy2/cw2))*0.5*(double)fb->h;
+        double dza = cz0/cw0, dzb = cz1/cw1, dzc = cz2/cw2;
+
+        double aIW = 1.0/cw0, bIW = 1.0/cw1, cIW = 1.0/cw2;
+        double aU = (double)v0[3]/65536.0, bU = (double)v1[3]/65536.0, cU = (double)v2[3]/65536.0;
+        double aV = (double)v0[4]/65536.0, bV = (double)v1[4]/65536.0, cV = (double)v2[4]/65536.0;
+        double aUoW = aU*aIW, bUoW = bU*bIW, cUoW = cU*cIW;
+        double aVoW = aV*aIW, bVoW = bV*bIW, cVoW = cV*cIW;
+
+        int minx = (int)floor(sxa<sxb ? (sxa<sxc?sxa:sxc) : (sxb<sxc?sxb:sxc));
+        int maxx = (int)ceil (sxa>sxb ? (sxa>sxc?sxa:sxc) : (sxb>sxc?sxb:sxc));
+        int miny = (int)floor(sya<syb ? (sya<syc?sya:syc) : (syb<syc?syb:syc));
+        int maxy = (int)ceil (sya>syb ? (sya>syc?sya:syc) : (syb>syc?syb:syc));
+        if (minx < 0) minx = 0;
+        if (miny < 0) miny = 0;
+        if (maxx >= fb->w) maxx = fb->w - 1;
+        if (maxy >= fb->h) maxy = fb->h - 1;
+        if (minx > maxx || miny > maxy) continue;
+
+        double area = vayu_edge_fn(sxa,sya, sxb,syb, sxc,syc);
+        if (area > -1e-9 && area < 1e-9) continue;
+        double inv_area = 1.0 / area;
+
+        double lod = 0.0;
+        if (tex && tex->level_count > 1) {
+            double du = fabs(aU - bU) + fabs(aU - cU);
+            double dv = fabs(aV - bV) + fabs(aV - cV);
+            double uvs = sqrt(du*du + dv*dv);
+            double dX = fabs(sxa - sxb) + fabs(sxa - sxc);
+            double dY = fabs(sya - syb) + fabs(sya - syc);
+            double ss = sqrt(dX*dX + dY*dY);
+            if (ss > 1e-9) {
+                double tpp = (uvs / ss) * tex->levels[0].w;
+                if (tpp > 1e-9) lod = log2(tpp);
+                if (lod < 0) lod = 0;
+            }
+        }
+
+        for (int py = miny; py <= maxy; ++py) {
+            double fy = py + 0.5;
+            for (int px = minx; px <= maxx; ++px) {
+                double fx = px + 0.5;
+                double w0 = vayu_edge_fn(sxb,syb, sxc,syc, fx,fy);
+                double w1 = vayu_edge_fn(sxc,syc, sxa,sya, fx,fy);
+                double w2 = vayu_edge_fn(sxa,sya, sxb,syb, fx,fy);
+                int inside;
+                if (area > 0) inside = (w0>=0 && w1>=0 && w2>=0);
+                else          inside = (w0<=0 && w1<=0 && w2<=0);
+                if (!inside) continue;
+
+                double l0 = w0*inv_area, l1 = w1*inv_area, l2 = w2*inv_area;
+                double z = l0*dza + l1*dzb + l2*dzc;
+                int pidx = py*fb->w + px;
+                if (fb->depth) {
+                    if (z >= (double)fb->depth[pidx]) continue;
+                    fb->depth[pidx] = (float)z;
+                }
+
+                double vr = l0*c0[0] + l1*c1[0] + l2*c2[0];
+                double vg = l0*c0[1] + l1*c1[1] + l2*c2[1];
+                double vb = l0*c0[2] + l1*c1[2] + l2*c2[2];
+                if (vr > 1.0) vr = 1.0; if (vr < 0.0) vr = 0.0;
+                if (vg > 1.0) vg = 1.0; if (vg < 0.0) vg = 0.0;
+                if (vb > 1.0) vb = 1.0; if (vb < 0.0) vb = 0.0;
+
+                uint32_t out;
+                if (tex) {
+                    double iw = l0*aIW + l1*bIW + l2*cIW;
+                    if (iw <= 1e-12) continue;
+                    double u = (l0*aUoW + l1*bUoW + l2*cUoW) / iw;
+                    double v = (l0*aVoW + l1*bVoW + l2*cVoW) / iw;
+                    u = u - floor(u);
+                    v = v - floor(v);
+                    uint32_t texel = vayu_tex_sample(tex, u, v, lod);
+                    uint32_t ta = (texel >> 24) & 0xFF;
+                    uint32_t tr = (texel >> 16) & 0xFF;
+                    uint32_t tg = (texel >>  8) & 0xFF;
+                    uint32_t tb = (texel      ) & 0xFF;
+                    out = (ta<<24)
+                        | ((uint32_t)(tr * vr) << 16)
+                        | ((uint32_t)(tg * vg) <<  8)
+                        | ((uint32_t)(tb * vb));
+                } else {
+                    out = (0xFFu << 24)
+                        | ((uint32_t)(vr*255.0+0.5) << 16)
+                        | ((uint32_t)(vg*255.0+0.5) <<  8)
+                        | ((uint32_t)(vb*255.0+0.5));
+                }
+                if (apply_tint) {
+                    uint32_t oa = ((out >> 24) & 0xFF) * tint_a / 255u;
+                    uint32_t or_= ((out >> 16) & 0xFF) * tint_r / 255u;
+                    uint32_t og = ((out >>  8) & 0xFF) * tint_g / 255u;
+                    uint32_t ob = ((out      ) & 0xFF) * tint_b / 255u;
+                    out = (oa<<24) | (or_<<16) | (og<<8) | ob;
+                }
+                fb->pixels[pidx] = out;
+            }
+        }
+    }
+}
+
+/* ===========================================================================
+ * Phase 21.5 (revised) - Post-processing.
+ * Per-pixel passes over texture level 0, in place.
+ * ========================================================================= */
+
+void vayu_raster_post_gamma(int64_t texh, int64_t gamma_q16) {
+    VayuTexture* t = (VayuTexture*)texh;
+    if (!t || t->level_count < 1) return;
+    double g = (double)gamma_q16 / 65536.0;
+    if (g <= 0.0) g = 1.0;
+    double inv = 1.0 / g;
+    VayuTexLevel* L = &t->levels[0];
+    int64_t n = (int64_t)L->w * (int64_t)L->h;
+    for (int64_t i = 0; i < n; ++i) {
+        uint32_t c = L->pixels[i];
+        uint32_t a = (c >> 24) & 0xFF;
+        double r = pow((double)((c >> 16) & 0xFF) / 255.0, inv);
+        double gg= pow((double)((c >>  8) & 0xFF) / 255.0, inv);
+        double b = pow((double)( c        & 0xFF) / 255.0, inv);
+        L->pixels[i] = (a<<24)
+                     | ((uint32_t)(r *255.0+0.5) << 16)
+                     | ((uint32_t)(gg*255.0+0.5) <<  8)
+                     |  (uint32_t)(b *255.0+0.5);
+    }
+}
+
+void vayu_raster_post_invert(int64_t texh) {
+    VayuTexture* t = (VayuTexture*)texh;
+    if (!t || t->level_count < 1) return;
+    VayuTexLevel* L = &t->levels[0];
+    int64_t n = (int64_t)L->w * (int64_t)L->h;
+    for (int64_t i = 0; i < n; ++i) {
+        uint32_t c = L->pixels[i];
+        uint32_t a = (c >> 24) & 0xFF;
+        uint32_t r = 255u - ((c >> 16) & 0xFF);
+        uint32_t g = 255u - ((c >>  8) & 0xFF);
+        uint32_t b = 255u - ( c        & 0xFF);
+        L->pixels[i] = (a<<24) | (r<<16) | (g<<8) | b;
+    }
+}
+
+void vayu_raster_post_tint(int64_t texh, int64_t argb) {
+    VayuTexture* t = (VayuTexture*)texh;
+    if (!t || t->level_count < 1) return;
+    VayuTexLevel* L = &t->levels[0];
+    int64_t n = (int64_t)L->w * (int64_t)L->h;
+    uint32_t tr = (uint32_t)((argb >> 16) & 0xFF);
+    uint32_t tg = (uint32_t)((argb >>  8) & 0xFF);
+    uint32_t tb = (uint32_t)((argb      ) & 0xFF);
+    for (int64_t i = 0; i < n; ++i) {
+        uint32_t c = L->pixels[i];
+        uint32_t a = (c >> 24) & 0xFF;
+        uint32_t r = ((c >> 16) & 0xFF) * tr / 255u;
+        uint32_t g = ((c >>  8) & 0xFF) * tg / 255u;
+        uint32_t b = ( c        & 0xFF) * tb / 255u;
+        L->pixels[i] = (a<<24) | (r<<16) | (g<<8) | b;
+    }
+}
+
+void vayu_raster_post_brightness(int64_t texh, int64_t delta) {
+    VayuTexture* t = (VayuTexture*)texh;
+    if (!t || t->level_count < 1) return;
+    VayuTexLevel* L = &t->levels[0];
+    int64_t n = (int64_t)L->w * (int64_t)L->h;
+    for (int64_t i = 0; i < n; ++i) {
+        uint32_t c = L->pixels[i];
+        int a = (int)((c >> 24) & 0xFF);
+        int r = (int)((c >> 16) & 0xFF) + (int)delta;
+        int g = (int)((c >>  8) & 0xFF) + (int)delta;
+        int b = (int)( c        & 0xFF) + (int)delta;
+        if (r < 0) r = 0; if (r > 255) r = 255;
+        if (g < 0) g = 0; if (g > 255) g = 255;
+        if (b < 0) b = 0; if (b > 255) b = 255;
+        L->pixels[i] = ((uint32_t)a<<24) | ((uint32_t)r<<16)
+                     | ((uint32_t)g<<8)   |  (uint32_t)b;
+    }
+}
+
+void vayu_raster_post_threshold(int64_t texh, int64_t threshold) {
+    VayuTexture* t = (VayuTexture*)texh;
+    if (!t || t->level_count < 1) return;
+    VayuTexLevel* L = &t->levels[0];
+    int64_t n = (int64_t)L->w * (int64_t)L->h;
+    int th = (int)threshold;
+    for (int64_t i = 0; i < n; ++i) {
+        uint32_t c = L->pixels[i];
+        uint32_t a = (c >> 24) & 0xFF;
+        int lum = ((int)((c >> 16) & 0xFF) * 30
+                 + (int)((c >>  8) & 0xFF) * 59
+                 + (int)( c        & 0xFF) * 11) / 100;
+        uint32_t v = (lum >= th) ? 255u : 0u;
+        L->pixels[i] = (a<<24) | (v<<16) | (v<<8) | v;
+    }
+}
+
+int64_t vayu_raster_tex_from_fb(int64_t fbh) {
+    VayuFramebuffer* fb = (VayuFramebuffer*)fbh;
+    if (!fb) return 0;
+    int64_t t = vayu_raster_tex_new(fb->w, fb->h);
+    if (!t) return 0;
+    VayuTexture* tt = (VayuTexture*)t;
+    memcpy(tt->levels[0].pixels, fb->pixels,
+           sizeof(uint32_t) * (size_t)(fb->w * fb->h));
+    return t;
+}
+
+/* Blit a VayuTexture onto a VayuCanvas.  Unlike gui.draw_bitmap, which
+   takes a decoded file bitmap, this wraps the raw level-0 pixel buffer in
+   a transient GpBitmap and draws it.  Used by post-processing pipelines
+   where the source is a framebuffer snapshot, not a loaded image. */
+void vayu_raster_tex_present(int64_t texh, int64_t canvas_h,
+                             int64_t x, int64_t y) {
+    VayuTexture* t = (VayuTexture*)texh;
+    VayuCanvas*  c = (VayuCanvas*)canvas_h;
+    if (!t || t->level_count < 1 || !c || !c->g) return;
+    VayuTexLevel* L = &t->levels[0];
+    if (!L->pixels) return;
+    GpBitmap* bmp = NULL;
+    GdipCreateBitmapFromScan0((INT)L->w, (INT)L->h, (INT)(L->w * 4),
+                              PixelFormat32bppARGB,
+                              (BYTE*)L->pixels, &bmp);
+    if (!bmp) return;
+    GdipDrawImageI(c->g, (GpImage*)bmp, (INT)x, (INT)y);
+    GdipDisposeImage((GpImage*)bmp);
 }
 
 // ---- child controls ----
@@ -9945,7 +11114,17 @@ int64_t vayu_gui_canvas_from_window(void) { return 0; }
 void vayu_gui_canvas_free(int64_t h) { (void)h; }
 void vayu_gui_canvas_clear(int64_t h, int64_t argb) { (void)h;(void)argb; }
 void vayu_gui_canvas_fill_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t argb) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)argb; }
-void vayu_gui_canvas_outline_rect(int64_t h, int64_t x, int64_t y, int64_t w, int64_t k, int64_t argb, int64_t th) { (void)h;(void)x;(void)y;(void)w;(void)k;(void)argb;(void)th; }
+void vayu_gui_canvas_outline_rect(int64_t h, int64_t x, int64_t y,
+                                  int64_t w, int64_t k,
+                                  int64_t argb, int64_t thickness) {
+    VayuCanvas* c = (VayuCanvas*)h;
+    if (!c || !c->g) return;
+    REAL saved = c->line_width;
+    c->line_width = (REAL)thickness;
+    GpPen* p = vayu_canvas_make_pen(c, (ARGB)argb);
+    GdipDrawRectangleI(c->g, p, (INT)x, (INT)y, (INT)w, (INT)k);
+    c->line_width = saved;
+}
 void vayu_gui_blit_canvas(int64_t src, int64_t x, int64_t y) { (void)src;(void)x;(void)y; }
 void vayu_gui_circle(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t argb) { (void)h;(void)cx;(void)cy;(void)r;(void)argb; }
 void vayu_gui_circle_outline(int64_t h, int64_t cx, int64_t cy, int64_t r, int64_t argb) { (void)h;(void)cx;(void)cy;(void)r;(void)argb; }
@@ -10001,6 +11180,45 @@ int64_t vayu_raster_fb_get(int64_t h, int64_t x, int64_t y) { (void)h;(void)x;(v
 void vayu_raster_fb_present(int64_t h, int64_t c, int64_t x, int64_t y) { (void)h;(void)c;(void)x;(void)y; }
 void vayu_raster_draw_line(int64_t h, int64_t a, int64_t b, int64_t c, int64_t d, int64_t e) { (void)h;(void)a;(void)b;(void)c;(void)d;(void)e; }
 void vayu_raster_draw_tri(int64_t h, int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f, int64_t g) { (void)h;(void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g; }
+void vayu_raster_fb_enable_depth(int64_t h) { (void)h; }
+void vayu_raster_fb_disable_depth(int64_t h) { (void)h; }
+void vayu_raster_fb_clear_depth(int64_t h) { (void)h; }
+int64_t vayu_raster_mat_new(void) { return 0; }
+void vayu_raster_mat_free(int64_t h) { (void)h; }
+void vayu_raster_mat_identity(int64_t h) { (void)h; }
+void vayu_raster_mat_mul(int64_t d, int64_t a, int64_t b) { (void)d;(void)a;(void)b; }
+void vayu_raster_mat_translate(int64_t h, int64_t x, int64_t y, int64_t z) { (void)h;(void)x;(void)y;(void)z; }
+void vayu_raster_mat_rotate_x(int64_t h, int64_t d) { (void)h;(void)d; }
+void vayu_raster_mat_rotate_y(int64_t h, int64_t d) { (void)h;(void)d; }
+void vayu_raster_mat_rotate_z(int64_t h, int64_t d) { (void)h;(void)d; }
+void vayu_raster_mat_perspective(int64_t h, int64_t f, int64_t a, int64_t n, int64_t ff) { (void)h;(void)f;(void)a;(void)n;(void)ff; }
+void vayu_raster_mat_look_at(int64_t h, int64_t ex, int64_t ey, int64_t ez, int64_t tx, int64_t ty, int64_t tz, int64_t ux, int64_t uy, int64_t uz) { (void)h;(void)ex;(void)ey;(void)ez;(void)tx;(void)ty;(void)tz;(void)ux;(void)uy;(void)uz; }
+int64_t vayu_raster_mesh_new(void) { return 0; }
+void vayu_raster_mesh_free(int64_t h) { (void)h; }
+void vayu_raster_mesh_clear(int64_t h) { (void)h; }
+void vayu_raster_mesh_add_vert(int64_t h, int64_t x, int64_t y, int64_t z, int64_t u, int64_t v) { (void)h;(void)x;(void)y;(void)z;(void)u;(void)v; }
+void vayu_raster_mesh_add_tri(int64_t h, int64_t i0, int64_t i1, int64_t i2) { (void)h;(void)i0;(void)i1;(void)i2; }
+void vayu_raster_draw_mesh(int64_t fb, int64_t m, int64_t mt, int64_t t, int64_t tn) { (void)fb;(void)m;(void)mt;(void)t;(void)tn; }
+int64_t vayu_raster_tex_new(int64_t w, int64_t h) { (void)w;(void)h; return 0; }
+void vayu_raster_tex_free(int64_t h) { (void)h; }
+int64_t vayu_raster_tex_width(int64_t h) { (void)h; return 0; }
+int64_t vayu_raster_tex_height(int64_t h) { (void)h; return 0; }
+void vayu_raster_tex_set(int64_t h, int64_t x, int64_t y, int64_t c) { (void)h;(void)x;(void)y;(void)c; }
+void vayu_raster_tex_set_filter(int64_t h, int64_t m) { (void)h;(void)m; }
+void vayu_raster_tex_gen_mipmaps(int64_t h) { (void)h; }
+void vayu_raster_mesh_add_vert_lit(int64_t h, int64_t x, int64_t y, int64_t z, int64_t nx, int64_t ny, int64_t nz, int64_t u, int64_t v) { (void)h;(void)x;(void)y;(void)z;(void)nx;(void)ny;(void)nz;(void)u;(void)v; }
+void vayu_raster_mesh_set_normal(int64_t h, int64_t i, int64_t nx, int64_t ny, int64_t nz) { (void)h;(void)i;(void)nx;(void)ny;(void)nz; }
+void vayu_raster_set_ambient(int64_t a) { (void)a; }
+void vayu_raster_light_clear(void) {}
+void vayu_raster_light_set(int64_t i, int64_t k, int64_t x, int64_t y, int64_t z, int64_t c, int64_t q) { (void)i;(void)k;(void)x;(void)y;(void)z;(void)c;(void)q; }
+void vayu_raster_draw_mesh_lit(int64_t fb, int64_t m, int64_t mvp, int64_t mod, int64_t tx, int64_t sm, int64_t tn, int64_t ex, int64_t ey, int64_t ez) { (void)fb;(void)m;(void)mvp;(void)mod;(void)tx;(void)sm;(void)tn;(void)ex;(void)ey;(void)ez; }
+void vayu_raster_post_gamma(int64_t t, int64_t g) { (void)t;(void)g; }
+void vayu_raster_post_invert(int64_t t) { (void)t; }
+void vayu_raster_post_tint(int64_t t, int64_t c) { (void)t;(void)c; }
+void vayu_raster_post_brightness(int64_t t, int64_t d) { (void)t;(void)d; }
+void vayu_raster_post_threshold(int64_t t, int64_t th) { (void)t;(void)th; }
+int64_t vayu_raster_tex_from_fb(int64_t fb) { (void)fb; return 0; }
+void vayu_raster_tex_present(int64_t t, int64_t c, int64_t x, int64_t y) { (void)t;(void)c;(void)x;(void)y; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----

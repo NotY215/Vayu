@@ -1,0 +1,162 @@
+# examples/raster_lit_cube.vyu -- Phase 21.4 demo.
+# Textured, depth-tested cube with two directional lights + ambient.
+
+import gui
+import raster
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const ONE: int = 65536
+const NEG_ONE: int = 0 - 65536
+const ZERO: int = 0
+const U_MAX: int = 65535
+
+const W: int = 640
+const H: int = 480
+
+fb: int = 0
+mesh: int = 0
+view: int = 0
+proj: int = 0
+model: int = 0
+mvp: int = 0
+tmp_a: int = 0
+tex: int = 0
+frame: int = 0
+
+def build_texture() -> int:
+    t: int = raster.tex_new(64, 64)
+    y: int = 0
+    while y < 64:
+        x: int = 0
+        while x < 64:
+            cx: int = x // 8
+            cy: int = y // 8
+            if (cx + cy) % 2 == 0:
+                raster.tex_set(t, x, y, 0xFFDDBBFF)
+            else:
+                raster.tex_set(t, x, y, 0xFFFFEEDD)
+            x = x + 1
+        y = y + 1
+    raster.tex_gen_mipmaps(t)
+    raster.tex_set_filter(t, 2)
+    return t
+
+def build_cube() -> int:
+    m: int = raster.mesh_new()
+    S: int = ONE
+    # Front (-z) face, normal (0,0,-1)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S, 0-S, ZERO, ZERO, NEG_ONE, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m,   S, 0-S, 0-S, ZERO, ZERO, NEG_ONE, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m,   S,   S, 0-S, ZERO, ZERO, NEG_ONE, U_MAX, ZERO)
+    raster.mesh_add_vert_lit(m, 0-S,   S, 0-S, ZERO, ZERO, NEG_ONE, ZERO,  ZERO)
+    # Back (+z)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S,   S, ZERO, ZERO, ONE, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m,   S, 0-S,   S, ZERO, ZERO, ONE, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m,   S,   S,   S, ZERO, ZERO, ONE, ZERO,  ZERO)
+    raster.mesh_add_vert_lit(m, 0-S,   S,   S, ZERO, ZERO, ONE, U_MAX, ZERO)
+    # Right (+x)
+    raster.mesh_add_vert_lit(m,   S, 0-S, 0-S, ONE, ZERO, ZERO, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m,   S, 0-S,   S, ONE, ZERO, ZERO, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m,   S,   S,   S, ONE, ZERO, ZERO, U_MAX, ZERO)
+    raster.mesh_add_vert_lit(m,   S,   S, 0-S, ONE, ZERO, ZERO, ZERO,  ZERO)
+    # Left (-x)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S,   S, NEG_ONE, ZERO, ZERO, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S, 0-S, NEG_ONE, ZERO, ZERO, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m, 0-S,   S, 0-S, NEG_ONE, ZERO, ZERO, U_MAX, ZERO)
+    raster.mesh_add_vert_lit(m, 0-S,   S,   S, NEG_ONE, ZERO, ZERO, ZERO,  ZERO)
+    # Top (+y)
+    raster.mesh_add_vert_lit(m, 0-S,   S, 0-S, ZERO, ONE, ZERO, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m,   S,   S, 0-S, ZERO, ONE, ZERO, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m,   S,   S,   S, ZERO, ONE, ZERO, U_MAX, ZERO)
+    raster.mesh_add_vert_lit(m, 0-S,   S,   S, ZERO, ONE, ZERO, ZERO,  ZERO)
+    # Bottom (-y)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S,   S, ZERO, NEG_ONE, ZERO, ZERO,  U_MAX)
+    raster.mesh_add_vert_lit(m,   S, 0-S,   S, ZERO, NEG_ONE, ZERO, U_MAX, U_MAX)
+    raster.mesh_add_vert_lit(m,   S, 0-S, 0-S, ZERO, NEG_ONE, ZERO, U_MAX, ZERO)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S, 0-S, ZERO, NEG_ONE, ZERO, ZERO,  ZERO)
+    i: int = 0
+    while i < 24:
+        raster.mesh_add_tri(m, i, i + 1, i + 2)
+        raster.mesh_add_tri(m, i, i + 2, i + 3)
+        i = i + 4
+    return m
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        raster.tex_free(tex)
+        raster.mesh_free(mesh)
+        raster.mat_free(view)
+        raster.mat_free(proj)
+        raster.mat_free(model)
+        raster.mat_free(mvp)
+        raster.mat_free(tmp_a)
+        raster.fb_free(fb)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        frame = frame + 1
+        if frame >= 90:
+            gui.quit()
+            return
+        gui.invalidate()
+        return
+    if ev != EV_PAINT:
+        return
+
+    angle: int = (frame * 4) % 360
+    raster.mat_identity(model)
+    raster.mat_rotate_y(model, angle)
+    raster.mat_rotate_x(model, angle // 2)
+    raster.mat_mul(tmp_a, view, model)
+    raster.mat_mul(mvp, proj, tmp_a)
+
+    raster.fb_clear(fb, 0xFF101018)
+    raster.fb_clear_depth(fb)
+    # shade_mode 2 = Phong (lambert + blinn-phong specular)
+    # eye at (0, 0, 4)
+    raster.draw_mesh_lit(fb, mesh, mvp, model, tex, 2, 0xFFFFFFFF,
+                         0, 0, 4 * ONE)
+
+    c: int = gui.canvas_from_window()
+    raster.fb_present(fb, c, 0, 0)
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    fb = raster.fb_new(W, H)
+    if fb == 0:
+        print("fb alloc failed")
+        exit(1)
+    raster.fb_enable_depth(fb)
+    mesh = build_cube()
+    tex = build_texture()
+
+    # Lights: key from up-right-front, fill from left.
+    raster.set_ambient(0xFF1E1E28)
+    raster.light_clear()
+    raster.light_set(0, 0, 65536, 65536, 65536, 0xFFFFFFFF, 78643)  # 1.2
+    raster.light_set(1, 0, NEG_ONE, ZERO, ZERO, 0xFF6688FF, 45875)  # 0.7 blue
+
+    view = raster.mat_new()
+    proj = raster.mat_new()
+    model = raster.mat_new()
+    mvp = raster.mat_new()
+    tmp_a = raster.mat_new()
+
+    raster.mat_look_at(view, 0, 0, 4 * ONE, 0, 0, 0, 0, ONE, 0)
+    raster.mat_perspective(proj, 60, 133, 6553, 6553600)
+
+    print("lit cube: 24 verts, 12 tris")
+    print("lights: 2 dir + ambient")
+
+    win: int = gui.create_window("Vayu lit cube", W, H)
+    gui.set_callback(&on_event)
+    gui.show_window(win)
+    gui.set_timer(60)
+    gui.run(win)
+    print("lit cube demo done")
+
+main()

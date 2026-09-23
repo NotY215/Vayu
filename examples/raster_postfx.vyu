@@ -1,0 +1,146 @@
+# examples/raster_postfx.vyu -- Phase 21.5 demo.
+# Renders a scene to a framebuffer, snapshots to texture, applies a post
+# effect cycle (gamma / invert / tint / brightness / threshold), presents.
+
+import gui
+import raster
+
+const EV_PAINT: int = 1
+const EV_CLOSE: int = 7
+const EV_TIMER: int = 8
+
+const ONE: int = 65536
+
+const W: int = 640
+const H: int = 480
+
+scene: int = 0         # framebuffer we render into
+tex: int = 0           # snapshot for post effects
+mesh: int = 0
+view: int = 0
+proj: int = 0
+model: int = 0
+mvp: int = 0
+tmp_a: int = 0
+frame: int = 0
+
+def build_checker_mesh() -> int:
+    # A ground plane (large flat quad) with 5 slices of vertical colour.
+    m: int = raster.mesh_new()
+    S: int = ONE
+    Z: int = 0
+    NN: int = ONE
+    raster.mesh_add_vert_lit(m, 0-S, 0-S, 0-S, Z, NN, Z, Z,      65535)
+    raster.mesh_add_vert_lit(m,   S, 0-S, 0-S, Z, NN, Z, 65535,  65535)
+    raster.mesh_add_vert_lit(m,   S, 0-S,   S, Z, NN, Z, 65535,  Z)
+    raster.mesh_add_vert_lit(m, 0-S, 0-S,   S, Z, NN, Z, Z,      Z)
+    raster.mesh_add_tri(m, 0, 1, 2)
+    raster.mesh_add_tri(m, 0, 2, 3)
+    return m
+
+def build_tint_texture() -> int:
+    t: int = raster.tex_new(8, 8)
+    y: int = 0
+    while y < 8:
+        x: int = 0
+        while x < 8:
+            if (x + y) % 2 == 0:
+                raster.tex_set(t, x, y, 0xFFFFFFFF)
+            else:
+                raster.tex_set(t, x, y, 0xFF404080)
+            x = x + 1
+        y = y + 1
+    return t
+
+def on_event(ev: int) -> None:
+    if ev == EV_CLOSE:
+        raster.tex_free(tex)
+        raster.mesh_free(mesh)
+        raster.mat_free(view)
+        raster.mat_free(proj)
+        raster.mat_free(model)
+        raster.mat_free(mvp)
+        raster.mat_free(tmp_a)
+        raster.fb_free(scene)
+        gui.quit()
+        return
+    if ev == EV_TIMER:
+        frame = frame + 1
+        if frame >= 90:
+            gui.quit()
+            return
+        gui.invalidate()
+        return
+    if ev != EV_PAINT:
+        return
+
+    angle: int = (frame * 4) % 360
+    raster.mat_identity(model)
+    raster.mat_rotate_x(model, 55)
+    raster.mat_rotate_y(model, angle)
+    raster.mat_mul(tmp_a, view, model)
+    raster.mat_mul(mvp, proj, tmp_a)
+
+    # Render scene.
+    raster.fb_clear(scene, 0xFF201828)
+    raster.fb_clear_depth(scene)
+    raster.draw_mesh_lit(scene, mesh, mvp, model, 0, 1, 0xFFFFFFFF,
+                         0, 3 * ONE, 0)
+
+    # Snapshot to a texture.
+    if tex != 0:
+        raster.tex_free(tex)
+    tex = raster.tex_from_fb(scene)
+
+    # Apply one effect per 18 frames.
+    phase: int = (frame // 18) % 5
+    if phase == 0:
+        # gamma 0.6 - brightens shadows
+        raster.post_gamma(tex, 39322)
+    elif phase == 1:
+        raster.post_invert(tex)
+    elif phase == 2:
+        # warm tint
+        raster.post_tint(tex, 0xFFFFCC80)
+    elif phase == 3:
+        raster.post_brightness(tex, 32)
+    else:
+        raster.post_threshold(tex, 128)
+
+    c: int = gui.canvas_from_window()
+    gui.canvas_clear(c, 0xFF000000)
+    raster.tex_present(tex, c, 0, 0)
+    gui.canvas_free(c)
+
+def main() -> None:
+    gui.init()
+    scene = raster.fb_new(W, H)
+    if scene == 0:
+        print("scene fb alloc failed")
+        exit(1)
+    raster.fb_enable_depth(scene)
+    mesh = build_checker_mesh()
+
+    raster.set_ambient(0xFF303038)
+    raster.light_clear()
+    raster.light_set(0, 0, 65536, 65536, 65536, 0xFFFFFFFF, 85196)  # 1.3
+    raster.light_set(1, 0, 0 - 65536, 32768, 0 - 32768, 0xFFFF8040, 52428)
+
+    view = raster.mat_new()
+    proj = raster.mat_new()
+    model = raster.mat_new()
+    mvp = raster.mat_new()
+    tmp_a = raster.mat_new()
+    raster.mat_look_at(view, 0, 2*ONE, 3*ONE, 0, 0, 0, 0, ONE, 0)
+    raster.mat_perspective(proj, 55, 133, 6553, 6553600)
+
+    print("postfx: 5 effects x 18 frames")
+
+    win: int = gui.create_window("Vayu postfx", W, H)
+    gui.set_callback(&on_event)
+    gui.show_window(win)
+    gui.set_timer(60)
+    gui.run(win)
+    print("postfx demo done")
+
+main()
