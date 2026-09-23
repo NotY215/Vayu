@@ -201,7 +201,7 @@ function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) 
     #    halving gcc's peak RSS from ~500MB to ~250MB.
     $gccLine = '-O2 -fno-inline -fno-ipa-cp -fno-tree-vectorize -s "' +
                $selfSPath + '" "' + $rtCPath + '" -o "' + $selfExePath +
-               '" -lws2_32 -lbcrypt'
+               '" -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32'
     $rcG = Invoke-Child "gcc" $gccLine $root $null $gccLogPath
     if ($rcG -ne 0 -or -not (Test-Path $selfExePath)) {
         Write-Host ("  {0}: link failed (see {1})" -f $label, $gccLogPath) -ForegroundColor Red

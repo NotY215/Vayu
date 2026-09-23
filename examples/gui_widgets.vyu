@@ -1,8 +1,3 @@
-# gui_widgets.vyu — Phase 19.3 widget library + demo.
-#
-# Flat design: one Widget class with a `kind` discriminator.  Vayu has
-# static method dispatch, so a class hierarchy with overrides would silently
-# call the base method.  A single struct plus `if kind == ...` works.
 import gui
 
 class Widget:
@@ -64,8 +59,6 @@ class Widget:
             tx: int = self.x + (self.w - text_w) // 2
             ty: int = self.y + (self.h - 12) // 2
             gui.text(self.text, tx, ty, self.fg)
-        elif self.kind == 3:
-            gui.text(self.text, self.x, self.y - 16, 0xB0B0B0)
 
     def on_mouse_down(self, mx: int, my: int) -> None:
         if self.kind == 2:
@@ -101,15 +94,45 @@ def make_button(x: int, y: int, w: int, h: int, t: str) -> Widget:
     wd.text = t
     return wd
 
-def make_input(parent: int, x: int, y: int, w: int, h: int, t: str) -> Widget:
+def make_input(parent: int, x: int, y: int, w: int, h: int) -> Widget:
     wd: Widget = Widget()
     wd.kind = 3
     wd.x = x
     wd.y = y
     wd.w = w
     wd.h = h
-    wd.text = t
     wd.handle = gui.create_input(parent, x, y, w, h)
+    return wd
+
+def make_checkbox(parent: int, x: int, y: int, w: int, h: int, t: str) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 4
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.text = t
+    wd.handle = gui.create_checkbox(parent, x, y, w, h, t)
+    return wd
+
+def make_slider(parent: int, x: int, y: int, w: int, h: int) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 5
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.handle = gui.create_slider(parent, x, y, w, h)
+    return wd
+
+def make_listbox(parent: int, x: int, y: int, w: int, h: int) -> Widget:
+    wd: Widget = Widget()
+    wd.kind = 6
+    wd.x = x
+    wd.y = y
+    wd.w = w
+    wd.h = h
+    wd.handle = gui.create_listbox(parent, x, y, w, h)
     return wd
 
 
@@ -118,13 +141,38 @@ btn_ok: Widget = Widget()
 btn_clear: Widget = Widget()
 input_name: Widget = Widget()
 lbl_status: Widget = Widget()
+chk: Widget = Widget()
+sld: Widget = Widget()
+lst: Widget = Widget()
+lbl_slider_val: Widget = Widget()
+lbl_list_sel: Widget = Widget()
+lbl_check_state: Widget = Widget()
 widgets: list<Widget> = []
+
+def refresh_all() -> None:
+    lbl_slider_val.text = "slider: " + str(gui.slider_get(sld.handle))
+    idx: int = gui.listbox_index(lst.handle)
+    if idx < 0:
+        lbl_list_sel.text = "list: (nothing selected)"
+    else:
+        lbl_list_sel.text = "list: " + gui.listbox_get(lst.handle, idx)
+    if gui.checkbox_get(chk.handle) == 1:
+        lbl_check_state.text = "checkbox: ON"
+    else:
+        lbl_check_state.text = "checkbox: OFF"
+
+def do_greet() -> None:
+    name: str = gui.input_get(input_name.handle)
+    if len(name) == 0:
+        lbl_status.text = "status: enter a name first"
+    else:
+        lbl_status.text = "status: hello, " + name + "!"
 
 def on_event(ev: int) -> None:
     if ev == gui.EV_PAINT:
         gui.clear(0x1E1E1E)
         gui.text("Vayu widgets - phase 19.3", 20, 12, 0xFFFFFF)
-        gui.line(20, 40, 580, 40, 0x404040)
+        gui.line(20, 40, 620, 40, 0x404040)
         for wid in widgets:
             wid.draw()
     elif ev == gui.EV_MOUSE_DOWN:
@@ -139,47 +187,94 @@ def on_event(ev: int) -> None:
             wid.on_mouse_up(mx, my)
         if btn_ok.on_click == 1:
             btn_ok.on_click = 0
-            name: str = gui.input_get(input_name.handle)
-            if len(name) == 0:
-                lbl_status.text = "status: enter a name first"
-            else:
-                lbl_status.text = "status: hello, " + name + "!"
+            do_greet()
         if btn_clear.on_click == 1:
             btn_clear.on_click = 0
             gui.input_set(input_name.handle, "")
             gui.input_focus(input_name.handle)
             lbl_status.text = "status: cleared"
+        refresh_all()
     elif ev == gui.EV_KEY_DOWN:
-        if gui.last_key() == 13:
-            btn_ok.on_click = 1
+        if gui.last_key() == 27:
+            gui.quit()
+    elif ev == gui.EV_ENTER:
+        do_greet()
+    elif ev == gui.EV_CONTROL:
+        refresh_all()
+    elif ev == gui.EV_MOUSE_WHEEL:
+        delta: int = gui.wheel_delta()
+        step: int = 5
+        if delta < 0:
+            step = 0 - 5
+        cur: int = gui.slider_get(sld.handle)
+        nv: int = cur + step
+        if nv < 0:
+            nv = 0
+        if nv > 100:
+            nv = 100
+        gui.slider_set(sld.handle, nv)
+        refresh_all()
+    elif ev == gui.EV_RESIZE:
+        lbl_status.text = "status: window " + str(gui.window_w()) + "x" + str(gui.window_h())
     elif ev == gui.EV_CLOSE:
         gui.quit()
 
 def main() -> None:
     gui.init()
-    w_handle = gui.create_window("Vayu widgets", 600, 320)
-    gui.show_window(w_handle)
+    w_handle = gui.create_window("Vayu widgets", 660, 460)
 
-    input_name = make_input(w_handle, 20, 100, 300, 28, "")
-    widgets.append(input_name)
+    # Callback BEFORE show so the first paint has something to draw.
+    gui.set_callback(&on_event)
 
     lbl_name: Widget = make_label(20, 78, 200, 20, "Name:")
     widgets.append(lbl_name)
 
-    btn_ok = make_button(340, 100, 100, 28, "Greet")
+    input_name = make_input(w_handle, 20, 100, 300, 28)
+    widgets.append(input_name)
+
+    btn_ok = make_button(340, 100, 120, 28, "Greet")
     widgets.append(btn_ok)
 
-    btn_clear = make_button(450, 100, 100, 28, "Clear")
+    btn_clear = make_button(470, 100, 120, 28, "Clear")
     widgets.append(btn_clear)
 
-    lbl_status = make_label(20, 160, 540, 24, "status: ready")
+    lbl_status = make_label(20, 150, 620, 20, "status: ready")
     widgets.append(lbl_status)
 
-    lbl_hint: Widget = make_label(20, 240, 540, 20, "Type a name, press Greet (or Enter). Clear resets.")
+    chk = make_checkbox(w_handle, 20, 190, 240, 22, "Enable feature")
+    widgets.append(chk)
+
+    lbl_check_state = make_label(280, 190, 200, 20, "checkbox: OFF")
+    widgets.append(lbl_check_state)
+
+    lbl_slider: Widget = make_label(20, 232, 260, 20, "Slider (0-100)")
+    widgets.append(lbl_slider)
+
+    sld = make_slider(w_handle, 20, 254, 400, 20)
+    widgets.append(sld)
+
+    lbl_slider_val = make_label(440, 254, 200, 20, "slider: 0")
+    widgets.append(lbl_slider_val)
+
+    lbl_list: Widget = make_label(20, 296, 260, 20, "Pick a fruit:")
+    widgets.append(lbl_list)
+
+    lst = make_listbox(w_handle, 20, 318, 200, 100)
+    widgets.append(lst)
+    gui.listbox_add(lst.handle, "apple")
+    gui.listbox_add(lst.handle, "banana")
+    gui.listbox_add(lst.handle, "cherry")
+    gui.listbox_add(lst.handle, "date")
+    gui.listbox_add(lst.handle, "elderberry")
+
+    lbl_list_sel = make_label(240, 318, 400, 20, "list: (nothing selected)")
+    widgets.append(lbl_list_sel)
+
+    lbl_hint: Widget = make_label(20, 428, 620, 20, "Enter = greet | Wheel = slider | ESC = quit")
     lbl_hint.color = 0x808080
     widgets.append(lbl_hint)
 
-    gui.set_callback(&on_event)
+    gui.show_window(w_handle)
     gui.run(w_handle)
     gui.close(w_handle)
 
