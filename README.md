@@ -530,7 +530,7 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, tooling, FFI layer, Python/CPython interoperability, and native-backend work.
 
-**Phase 17 has been completed, and Phase 18 is the current tooling phase.** The codebase now includes the Vayu Language Server, formatter, linter, and a published VS Code extension. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
+**Phase 21 has been completed, including the software raster and 3D rendering pipeline.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 extends that foundation with framebuffers, depth buffering, 4×4 Q16.16 matrices, meshes, textures, mipmaps, lighting, 3D rasterization, render-to-texture, and post-processing. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
 **Phase 23 remains the long-term native toolchain direction, with VCB being developed as the companion backend project for direct native machine-code generation.**
 
@@ -582,11 +582,11 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
 | **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
-| **18** | LSP · formatter · linter · debugger hooks · VS Code extension. **Current tooling phase; core LSP, formatter, linter, and VS Code extension work is implemented.** |
-| **19** | Window / event / widget layer. |
-| **20** | 2D first, then 3D. |
-| **21** | Tensors · autodiff · ONNX · CUDA. |
-| **22** | `vayu install` · `vypy install` · public index · ecosystem. |
+| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling. **Completed.** |
+| **19** | Native window, event, canvas and widget layer. **Completed.** |
+| **20** | 2D graphics, canvas drawing, text, transforms and image/UI primitives. **Completed foundation.** |
+| **21** | Software raster and 3D pipeline: framebuffers, depth, matrices, meshes, textures, mipmaps, lighting and post-processing. **Completed.** |
+| **22** | Package ecosystem and continued native/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing, and runtime/UI optimization. **Current direction.** |
 | **23** | **Single-binary native toolchain — retire QBE + GCC backend chain; VCB emits native machine code directly. Windows-first, then ELF/Mach-O.** |
 
 > The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
