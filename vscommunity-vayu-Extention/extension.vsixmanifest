@@ -6,7 +6,7 @@
     <Identity Id="Vayu.Language.Community"
               Version="0.2.0"
               Language="en-US"
-              Publisher="Fliczo" />
+              Publisher="NotY215" />
     <DisplayName>Vayu Language Support</DisplayName>
     <Description xml:space="preserve">Syntax highlighting for .vyu files.</Description>
     <MoreInfo>https://github.com/NotY215/Vayu</MoreInfo>
@@ -14,6 +14,11 @@
     <Icon>Vayu_logo.png</Icon>
     <Tags>vayu, vyu, language</Tags>
   </Metadata>
+  <Prerequisites>
+    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
+                   Version="[17.0,)"
+                   DisplayName="Visual Studio core editor" />
+  </Prerequisites>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community"
                         Version="[17.0,)">
