@@ -1,0 +1,98 @@
+# examples/tensor_basic.vyu -- Phase 22.0 demo.
+# Fixed-point (Q16.16) tensors: shape, elementwise, broadcast, matmul,
+# reductions, reshape, transpose, print.
+#
+# Values are Q16.16.  To write 5.0, pass 5*Q.  To write 0.5, pass Q/2.
+
+import tensor
+
+const Q: int = 65536
+
+def main() -> None:
+    # ---- Creation ----
+    a: int = tensor.from_int_list([2, 3], [1*Q, 2*Q, 3*Q, 4*Q, 5*Q, 6*Q])
+    b: int = tensor.from_int_list([2, 3], [10*Q, 20*Q, 30*Q, 40*Q, 50*Q, 60*Q])
+    c: int = tensor.from_int_list([3, 2], [7*Q, 8*Q, 9*Q, 10*Q, 11*Q, 12*Q])
+    tensor.print(a, "a")
+    tensor.print(b, "b")
+    tensor.print(c, "c")
+
+    print("")
+    print("== metadata ==")
+    print("a.ndim  = " + str(tensor.ndim(a)))
+    print("a.shape = [" + str(tensor.shape(a, 0)) + ", " + str(tensor.shape(a, 1)) + "]")
+    print("a.numel = " + str(tensor.numel(a)))
+
+    print("")
+    print("== elementwise ==")
+    s: int = tensor.add(a, b)
+    tensor.print(s, "a+b")
+    d: int = tensor.sub(b, a)
+    tensor.print(d, "b-a")
+    m: int = tensor.mul(a, b)
+    tensor.print(m, "a*b")
+    dv: int = tensor.div(b, a)
+    tensor.print(dv, "b/a")
+
+    print("")
+    print("== scalar ==")
+    a2: int = tensor.mul_scalar(a, 2*Q)
+    tensor.print(a2, "a*2")
+    a3: int = tensor.add_scalar(a, 100*Q)
+    tensor.print(a3, "a+100")
+
+    print("")
+    print("== matmul (2x3 @ 3x2) ==")
+    mm: int = tensor.matmul(a, c)
+    tensor.print(mm, "a@c")
+
+    print("")
+    print("== reductions ==")
+    sum_a: int = tensor.sum(a)
+    print("sum(a)    = " + str(tensor.get(sum_a, 0) // Q))
+    max_a: int = tensor.max(a)
+    print("max(a)    = " + str(tensor.get(max_a, 0) // Q))
+    print("argmax(a) = " + str(tensor.argmax(a)))
+
+    print("")
+    print("== shape ops ==")
+    r: int = tensor.reshape(a, [3, 2])
+    tensor.print(r, "reshape(a,[3,2])")
+    tr: int = tensor.transpose(a)
+    tensor.print(tr, "transpose(a)")
+
+    print("")
+    print("== broadcast ==")
+    bias: int = tensor.from_int_list([3], [100*Q, 200*Q, 300*Q])
+    tensor.print(bias, "bias[3]")
+    badd: int = tensor.add(a, bias)
+    tensor.print(badd, "a + bias")
+
+    print("")
+    print("== misc ==")
+    cp: int = tensor.copy(a)
+    tensor.print(cp, "copy(a)")
+    fm: int = tensor.zeros([2, 2])
+    tensor.fill(fm, 5*Q)
+    tensor.print(fm, "zeros([2,2]) -> fill(5)")
+
+    tensor.free(a)
+    tensor.free(b)
+    tensor.free(c)
+    tensor.free(s)
+    tensor.free(d)
+    tensor.free(m)
+    tensor.free(dv)
+    tensor.free(a2)
+    tensor.free(a3)
+    tensor.free(mm)
+    tensor.free(sum_a)
+    tensor.free(max_a)
+    tensor.free(r)
+    tensor.free(tr)
+    tensor.free(bias)
+    tensor.free(badd)
+    tensor.free(cp)
+    tensor.free(fm)
+
+main()

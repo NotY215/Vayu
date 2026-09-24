@@ -1,0 +1,70 @@
+# examples/tensor_autograd.vyu -- Phase 22.1 demo.
+# Fits y = 3x + 2 by gradient descent using tensor autodiff directly.
+# Native only.
+
+import tensor
+
+const Q: int = 65536
+
+def main() -> None:
+    # Data: x = [1,2,3,4,5], y = [5,8,11,14,17]
+    x: int = tensor.from_int_list([5, 1], [1*Q, 2*Q, 3*Q, 4*Q, 5*Q])
+    y: int = tensor.from_int_list([5, 1], [5*Q, 8*Q, 11*Q, 14*Q, 17*Q])
+
+    # Params: w = 0, b = 0
+    w: int = tensor.from_int_list([1, 1], [0])
+    b: int = tensor.from_int_list([1, 1], [0])
+    tensor.requires_grad(w, 1)
+    tensor.requires_grad(b, 1)
+
+    lr: int = Q // 20   # 0.05
+    epoch: int = 0
+    max_epochs: int = 200
+    while epoch < max_epochs:
+        tensor.tape_clear()
+
+        # pred = w*x + b  (broadcast: x is [5,1], w is [1,1])
+        wx: int = tensor.mul(x, w)
+        pred: int = tensor.add(wx, b)
+
+        # loss = mean((pred - y)^2)
+        diff: int = tensor.sub(pred, y)
+        sq: int = tensor.mul(diff, diff)
+        total: int = tensor.sum(sq)
+        loss: int = tensor.mul_scalar(total, Q // 5)
+
+        tensor.backward(loss)
+
+        # Read loss value
+        lv: int = tensor.get(loss, 0)
+
+        # SGD step
+        g_w: int = tensor.grad(w)
+        g_b: int = tensor.grad(b)
+        if g_w != 0:
+            step_w: int = tensor.mul_scalar(g_w, lr)
+            new_w: int = tensor.sub(w, step_w)
+            tensor.copy_into(w, new_w)
+        if g_b != 0:
+            step_b: int = tensor.mul_scalar(g_b, lr)
+            new_b: int = tensor.sub(b, step_b)
+            tensor.copy_into(b, new_b)
+
+        tensor.zero_grad(w)
+        tensor.zero_grad(b)
+
+        if epoch % 40 == 0:
+            wv: int = tensor.get(w, 0)
+            bv: int = tensor.get(b, 0)
+            tensor.print(w, "w")
+            tensor.print(b, "b")
+            tensor.print(loss, "loss")
+        epoch = epoch + 1
+
+    print("")
+    print("final params:")
+    tensor.print(w, "w")
+    tensor.print(b, "b")
+    print("expected: w=3.0000, b=2.0000")
+
+main()

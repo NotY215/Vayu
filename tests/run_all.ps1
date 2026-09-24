@@ -27,6 +27,7 @@ if (-not (Test-Path "tools\qbe.exe")) {
 }
 
 $skip = @(
+    "nn.vyu",
     "input.vyu", "native_io.vyu", "type_errors.vyu", "expr.vyu",
     "vlex_test.vyu", "vparse_test.vyu", "vcode_test.vyu",
     "native_collections.vyu"
@@ -52,7 +53,11 @@ $native_only = @(
     "raster_tri.vyu",
     "raster_cube.vyu",
     "raster_lit_cube.vyu",
-    "raster_postfx.vyu"
+    "raster_postfx.vyu",
+    "tensor_basic.vyu",
+    "tensor_autograd.vyu",
+    "nn_mlp.vyu",
+    "onnx_mlp.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )

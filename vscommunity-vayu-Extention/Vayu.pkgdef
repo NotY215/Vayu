@@ -1,0 +1,15 @@
+; Vayu language registration for Visual Studio 2022 Community.
+; References paths relative to $PackageFolder$, which VSIXInstaller sets
+; to the deployed extension folder.
+
+[$RootKey$\TextMate\Repositories\Vayu]
+"Name"="Vayu"
+"Path"="$PackageFolder$\Grammars"
+"CacheFolder"="$PackageFolder$\Grammars\Cache"
+
+[$RootKey$\TextMate\LanguageAssociation\Vayu]
+"Name"="Vayu"
+"Extensions"=".vyu"
+
+[$RootKey$\Languages\File Extensions\.vyu]
+@="Vayu"

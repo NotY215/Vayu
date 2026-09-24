@@ -2,11 +2,11 @@
   "name": "vayu",
   "displayName": "Vayu",
   "description": "Language support for Vayu: syntax highlighting, language server, formatter, linter.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "Fliczo",
   "engines": { "vscode": "^1.75.0" },
   "categories": [ "Programming Languages" ],
-  "icon": "logo.ico",
+  "icon": "Vayu_logo.png",
   "activationEvents": [
     "onLanguage:vayu"
   ],
@@ -23,14 +23,18 @@
         "id": "vayu",
         "aliases": [ "Vayu", "vayu" ],
         "extensions": [ ".vyu" ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./assets/Vyu_Icon.ico",
+          "dark": "./assets/Vyu_Icon_Dark.ico"
+        }
       }
     ],
     "grammars": [
       {
         "language": "vayu",
         "scopeName": "source.vayu",
-        "path": "./syntaxes/vayu.tmLanguage.json"
+        "path": "./vayu.tmLanguage.json"
       }
     ],
     "commands": [
@@ -52,18 +56,18 @@
       "properties": {
         "vayu.vlsPath": {
           "type": "string",
-          "default": "build/x64-debug/bin/vls.exe",
-          "description": "Path to vls.exe (relative to workspace root, or absolute)."
+          "default": "",
+          "description": "Path to vls (vls.exe on Windows).  Leave empty to auto-detect: <workspace>/build/x64-debug/bin/vls[.exe]."
         },
         "vayu.vfmtPath": {
           "type": "string",
-          "default": "build/x64-debug/bin/vfmt.exe",
-          "description": "Path to vfmt.exe."
+          "default": "",
+          "description": "Path to vfmt (vfmt.exe on Windows).  Leave empty to auto-detect."
         },
         "vayu.vlintPath": {
           "type": "string",
-          "default": "build/x64-debug/bin/vlint.exe",
-          "description": "Path to vlint.exe."
+          "default": "",
+          "description": "Path to vlint (vlint.exe on Windows).  Leave empty to auto-detect."
         }
       }
     }

@@ -2,4 +2,3 @@
 .gitignore
 **/*.ts
 **/*.map
-out/**

@@ -168,11 +168,18 @@ namespace vayu {
                 }
                 for (auto& kv : modules_) {
                     std::string prefix = mangle(kv.first) + "_";
+                    currentModuleFnNames_.clear();
+                    for (auto& s : kv.second.stmts) {
+                        if (s->kind == StmtKind::Def)
+                            currentModuleFnNames_.insert(
+                                static_cast<const DefStmt*>(s.get())->name);
+                    }
                     for (auto& s : kv.second.stmts) {
                         if (s->kind != StmtKind::Def) continue;
                         emitFunction(static_cast<const DefStmt*>(s.get()), nullptr, prefix);
                         raw("");
                     }
+                    currentModuleFnNames_.clear();
                 }
 
                 for (auto& kv : classes_) {
@@ -227,6 +234,7 @@ namespace vayu {
             std::unordered_map<std::string, Block>            modules_;
             std::unordered_map<std::string, std::string>      fromImports_;
             std::string                                       currentModulePrefix_;
+            std::unordered_set<std::string>                   currentModuleFnNames_;
 
             void resetFunctionState() {
                 nextTemp_ = 0;
@@ -326,6 +334,7 @@ namespace vayu {
                             n->moduleName != "crypto" && n->moduleName != "random" &&
                             n->moduleName != "os" && n->moduleName != "py" &&
                             n->moduleName != "gui" && n->moduleName != "raster" &&
+                            n->moduleName != "tensor" && n->moduleName != "onnx" &&
                             !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
@@ -388,6 +397,12 @@ namespace vayu {
                     line("storel 0, " + slot);
                 }
 
+                currentModuleFnNames_.clear();
+                for (auto& s : modBlock.stmts) {
+                    if (s->kind == StmtKind::Def)
+                        currentModuleFnNames_.insert(
+                            static_cast<const DefStmt*>(s.get())->name);
+                }
                 currentModulePrefix_ = prefix;
                 for (auto& s : modBlock.stmts) {
                     if (s->kind == StmtKind::Def) continue;
@@ -397,6 +412,7 @@ namespace vayu {
                     emitStmt(s.get());
                 }
                 currentModulePrefix_.clear();
+                currentModuleFnNames_.clear();
             }
 
             std::string internString(const std::string& s) {
@@ -4057,6 +4073,70 @@ namespace vayu {
                 throw std::runtime_error("native: raster has no method '" + m + "'");
             }
 
+            Val emitTensorCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                auto a0 = [&]() { return emitExpr(n->args[0].value.get()); };
+                auto a1 = [&]() { return emitExpr(n->args[1].value.get()); };
+
+                if (m == "new") { Val sh = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_new(l " + sh.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "zeros") { Val sh = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_zeros(l " + sh.ssa + ")");         r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "ones") { Val sh = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_ones(l " + sh.ssa + ")");          r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "from_int_list") { Val sh = a0();Val vl = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_from_int_list(l " + sh.ssa + ", l " + vl.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "copy") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_copy(l " + h.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "free") { Val h = a0();  line("call $vayu_tensor_free(l " + h.ssa + ")");   r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "fill") { Val h = a0();Val v = a1(); line("call $vayu_tensor_fill(l " + h.ssa + ", l " + v.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "ndim") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_ndim(l " + h.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "shape") { Val h = a0();Val i = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_shape(l " + h.ssa + ", l " + i.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "numel") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_numel_h(l " + h.ssa + ")");        r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "get") { Val h = a0();Val i = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_get_flat(l " + h.ssa + ", l " + i.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "set") { Val h = a0();Val i = a1();Val v = emitExpr(n->args[2].value.get()); line("call $vayu_tensor_set_flat(l " + h.ssa + ", l " + i.ssa + ", l " + v.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "add") { Val a = a0();Val b = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_add(l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "sub") { Val a = a0();Val b = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_sub(l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "mul") { Val a = a0();Val b = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_mul(l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "div") { Val a = a0();Val b = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_div(l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "add_scalar") { Val h = a0();Val v = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_add_scalar(l " + h.ssa + ", l " + v.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "mul_scalar") { Val h = a0();Val v = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_mul_scalar(l " + h.ssa + ", l " + v.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "matmul") { Val a = a0();Val b = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_matmul(l " + a.ssa + ", l " + b.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "sum") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_sum(l " + h.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "max") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_max(l " + h.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "argmax") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_argmax(l " + h.ssa + ")");        r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "reshape") { Val h = a0();Val sh = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_reshape(l " + h.ssa + ", l " + sh.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "transpose") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_transpose(l " + h.ssa + ")");      r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "print") { Val h = a0();Val nm = a1(); line("call $vayu_tensor_print(l " + h.ssa + ", l " + nm.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                if (m == "requires_grad") { Val h = a0();Val f = a1(); line("call $vayu_tensor_requires_grad(l " + h.ssa + ", l " + f.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "zero_grad") { Val h = a0(); line("call $vayu_tensor_zero_grad(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "grad") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_grad(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "backward") { Val h = a0(); line("call $vayu_tensor_backward(l " + h.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tape_clear") { line("call $vayu_tensor_tape_clear()"); r.ssa = "0"; r.type = VType::Void; return r; }
+                if (m == "tape_size") { std::string t = newTemp(); line(t + " =l call $vayu_tensor_tape_size()"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "relu") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_relu(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "sigmoid") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_sigmoid(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "tanh") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_tanh(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "exp") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_exp(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "log") { Val h = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_log(l " + h.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "copy_into") { Val d = a0();Val s = a1(); line("call $vayu_tensor_copy_into(l " + d.ssa + ", l " + s.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
+
+                throw std::runtime_error("native: tensor has no method '" + m + "'");
+            }
+
+            Val emitOnnxCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                auto a0 = [&]() { return emitExpr(n->args[0].value.get()); };
+                auto a1 = [&]() { return emitExpr(n->args[1].value.get()); };
+
+                if (m == "run_str") {
+                    Val t = a0(); Val i = a1();
+                    std::string tmp = newTemp();
+                    line(tmp + " =l call $vayu_nn_run_str(l " + t.ssa + ", l " + i.ssa + ")");
+                    r.ssa = tmp; r.type = VType::Int; return r;
+                }
+
+                throw std::runtime_error("native: onnx has no method '" + m + "'");
+            }
+
             Val emitCall(const CallExpr* n) {
                 Val r;
 
@@ -4148,6 +4228,8 @@ namespace vayu {
                             attr->target.get());
                         if (tn0->name == "gui")   return emitGuiCall(n, attr);
                         if (tn0->name == "raster")return emitRasterCall(n, attr);
+                        if (tn0->name == "tensor")return emitTensorCall(n, attr);
+                        if (tn0->name == "onnx")  return emitOnnxCall(n, attr);
                         if (tn0->name == "fs")    return emitFsCall(n, attr);
                         if (tn0->name == "time")  return emitTimeCall(n, attr);
                         if (tn0->name == "json")  return emitJsonCall(n, attr);
@@ -4460,6 +4542,29 @@ namespace vayu {
                             }
                             throw std::runtime_error(
                                 "native: py has no method '" + m + "'");
+                        }
+                    }
+
+                    if (attr->target->kind == ExprKind::NameRef) {
+                        const auto* tn = static_cast<const NameRefExpr*>(attr->target.get());
+                        if (modules_.count(tn->name)) {
+                            std::vector<std::string> args;
+                            for (auto& a : n->args) {
+                                if (!a.name.empty())
+                                    throw std::runtime_error("native: kwargs not supported");
+                                args.push_back(emitExpr(a.value.get()).ssa);
+                            }
+                            std::string argsStr;
+                            for (size_t i = 0; i < args.size(); ++i) {
+                                if (i) argsStr += ", ";
+                                argsStr += "l " + args[i];
+                            }
+                            std::string sym = "$vayu_fn_" + mangle(tn->name)
+                                + "_" + mangle(attr->name);
+                            std::string t = newTemp();
+                            line(t + " =l call " + sym + "(" + argsStr + ")");
+                            r.ssa = t; r.type = VType::Unknown;
+                            return r;
                         }
                     }
 
@@ -4968,11 +5073,19 @@ namespace vayu {
                 }
 
                 auto fi = fromImports_.find(name);
-                std::string fnName = name;
-                if (fi != fromImports_.end())
-                    fnName = mangle(fi->second) + "_" + name;
-
                 auto fit = topFnDecls_.find(name);
+
+                std::string sym;
+                if (fi != fromImports_.end()) {
+                    sym = "$vayu_fn_" + mangle(fi->second) + "_" + mangle(name);
+                }
+                else if (!currentModulePrefix_.empty() &&
+                    currentModuleFnNames_.count(name)) {
+                    sym = "$vayu_fn_" + currentModulePrefix_ + mangle(name);
+                }
+                else {
+                    sym = "$vayu_fn_" + mangle(name);
+                }
 
                 std::vector<std::string> args;
                 for (auto& a : n->args) {
@@ -4986,7 +5099,7 @@ namespace vayu {
                     argsStr += "l " + args[i];
                 }
                 std::string t = newTemp();
-                line(t + " =l call $vayu_fn_" + mangle(fnName) + "(" + argsStr + ")");
+                line(t + " =l call " + sym + "(" + argsStr + ")");
                 r.ssa = t;
                 if (fit != topFnDecls_.end() && fit->second->returnType) {
                     bindTypeParamsFromCall(fit->second, n, r);
@@ -10948,6 +11061,918 @@ int64_t vayu_raster_tex_from_fb(int64_t fbh) {
     return t;
 }
 
+/* ===========================================================================
+ * Phase 22.0 - Tensor core.
+ * All values are Q16.16 fixed-point, stored as int64 (values are small
+ * multiples of 65536).  Row-major, dense, up to 8 dims.
+ * Handle is opaque - callers must only pass it back into tensor.* funcs.
+ * ========================================================================= */
+
+typedef struct {
+    int64_t* data;    /* Q16.16 */
+    int64_t* shape;
+    int64_t* strides;
+    int      ndim;
+    int64_t  numel;
+    int      requires_grad;   /* Phase 22.1 */
+    int64_t  grad;            /* tensor handle, 0 if none */
+    int      tape_idx;        /* index into g_tape, -1 if not on tape */
+} VayuTensor;
+
+/* Phase 22.1 op codes, stored on the tape entry. */
+#define VAYU_OP_ADD        1
+#define VAYU_OP_SUB        2
+#define VAYU_OP_MUL        3
+#define VAYU_OP_DIV        4
+#define VAYU_OP_MATMUL     5
+#define VAYU_OP_SUM        6
+#define VAYU_OP_MUL_SCALAR 7
+#define VAYU_OP_ADD_SCALAR 8
+#define VAYU_OP_RELU       9
+#define VAYU_OP_SIGMOID    10
+#define VAYU_OP_TANH       11
+#define VAYU_OP_EXP        12
+#define VAYU_OP_LOG        13
+#define VAYU_OP_TRANSPOSE  14
+
+/* Backward-recursion guard.  Declared at the top of the tensor block so
+   every tensor op (which appears before the tape-push definition below)
+   can consult it.  The backward loop flips it on/off. */
+static int g_in_backward = 0;
+
+/* Forward decl - full definition lands after tensor_print. */
+static void vayu_tape_push(int op, int64_t out, int64_t a, int64_t b, int64_t scalar);
+
+static int64_t vayu_tensor_numel(const int64_t* shape, int ndim) {
+    int64_t n = 1;
+    for (int i = 0; i < ndim; ++i) n *= shape[i];
+    return n;
+}
+
+static void vayu_tensor_strides(const int64_t* shape, int ndim, int64_t* strides) {
+    if (ndim == 0) return;
+    strides[ndim - 1] = 1;
+    for (int i = ndim - 2; i >= 0; --i)
+        strides[i] = strides[i + 1] * shape[i + 1];
+}
+
+static int64_t vayu_tensor_new_from_shape(const int64_t* shape, int ndim) {
+    if (ndim < 0 || ndim > 8) return 0;
+    VayuTensor* t = (VayuTensor*)malloc(sizeof(VayuTensor));
+    if (!t) return 0;
+    t->ndim = ndim;
+    t->requires_grad = 0;
+    t->grad = 0;
+    t->tape_idx = -1;
+    if (ndim == 0) {
+        t->shape = NULL;
+        t->strides = NULL;
+        t->numel = 1;
+    } else {
+        t->shape   = (int64_t*)malloc(sizeof(int64_t) * (size_t)ndim);
+        t->strides = (int64_t*)malloc(sizeof(int64_t) * (size_t)ndim);
+        if (!t->shape || !t->strides) {
+            free(t->shape); free(t->strides); free(t); return 0;
+        }
+        for (int i = 0; i < ndim; ++i) t->shape[i] = shape[i];
+        vayu_tensor_strides(t->shape, ndim, t->strides);
+        t->numel = vayu_tensor_numel(t->shape, ndim);
+    }
+    t->data = (int64_t*)malloc(sizeof(int64_t) * (size_t)(t->numel > 0 ? t->numel : 1));
+    if (!t->data) {
+        free(t->shape); free(t->strides); free(t);
+        return 0;
+    }
+    memset(t->data, 0, sizeof(int64_t) * (size_t)(t->numel > 0 ? t->numel : 1));
+    return (int64_t)t;
+}
+
+void vayu_tensor_free(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return;
+    if (t->data)    free(t->data);
+    if (t->shape)   free(t->shape);
+    if (t->strides) free(t->strides);
+    free(t);
+}
+
+int64_t vayu_tensor_ndim(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    return t ? (int64_t)t->ndim : 0;
+}
+int64_t vayu_tensor_shape(int64_t h, int64_t i) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || i < 0 || i >= t->ndim) return 0;
+    return t->shape[i];
+}
+int64_t vayu_tensor_numel_h(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    return t ? t->numel : 0;
+}
+int64_t vayu_tensor_get_flat(int64_t h, int64_t i) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || i < 0 || i >= t->numel) return 0;
+    return t->data[i];
+}
+void vayu_tensor_set_flat(int64_t h, int64_t i, int64_t v) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || i < 0 || i >= t->numel) return;
+    t->data[i] = v;
+}
+
+static int vayu_tensor_read_shape(VayuList* lst, int64_t* out_shape, int* out_ndim) {
+    if (!lst || lst->len <= 0 || lst->len > 8) return 0;
+    for (int64_t i = 0; i < lst->len; ++i) {
+        int64_t d = lst->items[i];
+        if (d <= 0) return 0;
+        out_shape[i] = d;
+    }
+    *out_ndim = (int)lst->len;
+    return 1;
+}
+
+int64_t vayu_tensor_new(int64_t shape_list) {
+    int64_t sh[8]; int nd = 0;
+    if (!vayu_tensor_read_shape((VayuList*)shape_list, sh, &nd)) return 0;
+    return vayu_tensor_new_from_shape(sh, nd);
+}
+int64_t vayu_tensor_zeros(int64_t shape_list) {
+    return vayu_tensor_new(shape_list);
+}
+int64_t vayu_tensor_ones(int64_t shape_list) {
+    int64_t h = vayu_tensor_new(shape_list);
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = 65536;
+    return h;
+}
+int64_t vayu_tensor_from_int_list(int64_t shape_list, int64_t values_list) {
+    int64_t sh[8]; int nd = 0;
+    if (!vayu_tensor_read_shape((VayuList*)shape_list, sh, &nd)) return 0;
+    VayuList* vl = (VayuList*)values_list;
+    if (!vl) return 0;
+    int64_t h = vayu_tensor_new_from_shape(sh, nd);
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t n = t->numel < vl->len ? t->numel : vl->len;
+    for (int64_t i = 0; i < n; ++i) t->data[i] = vl->items[i];
+    return h;
+}
+int64_t vayu_tensor_copy(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t nh = vayu_tensor_new_from_shape(t->shape, t->ndim);
+    VayuTensor* nt = (VayuTensor*)nh;
+    if (!nt) return 0;
+    memcpy(nt->data, t->data, sizeof(int64_t) * (size_t)t->numel);
+    return nh;
+}
+void vayu_tensor_fill(int64_t h, int64_t v) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return;
+    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = v;
+}
+
+/* Broadcasting: align right; size-1 dims propagate; matched dims required. */
+static int vayu_tensor_can_broadcast_to(VayuTensor* t, VayuTensor* out) {
+    int off = out->ndim - t->ndim;
+    if (off < 0) return 0;
+    for (int i = 0; i < t->ndim; ++i) {
+        int64_t td = t->shape[i];
+        int64_t od = out->shape[i + off];
+        if (td != 1 && td != od) return 0;
+    }
+    return 1;
+}
+
+static void vayu_tensor_broadcast_shape(VayuTensor* a, VayuTensor* b,
+                                        int64_t* out_shape, int* out_ndim) {
+    int nd = a->ndim > b->ndim ? a->ndim : b->ndim;
+    for (int i = 0; i < nd; ++i) {
+        int ia = a->ndim - nd + i;
+        int ib = b->ndim - nd + i;
+        int64_t da = ia >= 0 ? a->shape[ia] : 1;
+        int64_t db = ib >= 0 ? b->shape[ib] : 1;
+        if (da == db)                     out_shape[i] = da;
+        else if (da == 1)                 out_shape[i] = db;
+        else if (db == 1)                 out_shape[i] = da;
+        else { out_shape[i] = 0; return; }   /* incompatible */
+    }
+    *out_ndim = nd;
+}
+
+static void vayu_tensor_bcast_index(VayuTensor* t, int64_t out_idx,
+                                    int out_ndim, const int64_t* rem,
+                                    int64_t* out_offset) {
+    int off = out_ndim - t->ndim;
+    int64_t idx[8];
+    int64_t r = out_idx;
+    for (int i = out_ndim - 1; i >= 0; --i) {
+        idx[i] = r % rem[i];
+        r /= rem[i];
+    }
+    int64_t flat = 0;
+    for (int i = 0; i < t->ndim; ++i) {
+        int64_t ix = idx[i + off];
+        if (t->shape[i] == 1) ix = 0;
+        flat += ix * t->strides[i];
+    }
+    *out_offset = flat;
+}
+
+static int64_t vayu_tensor_ew(int64_t a_h, int64_t b_h, int op) {
+    /* op: 0=add 1=sub 2=mul 3=div */
+    VayuTensor* a = (VayuTensor*)a_h;
+    VayuTensor* b = (VayuTensor*)b_h;
+    if (!a || !b) return 0;
+    int64_t out_shape[8];
+    int out_ndim = 0;
+    vayu_tensor_broadcast_shape(a, b, out_shape, &out_ndim);
+    for (int i = 0; i < out_ndim; ++i) if (out_shape[i] == 0) return 0;
+    int64_t oh = vayu_tensor_new_from_shape(out_shape, out_ndim);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    if (!vayu_tensor_can_broadcast_to(a, out) ||
+        !vayu_tensor_can_broadcast_to(b, out)) {
+        vayu_tensor_free(oh);
+        return 0;
+    }
+    for (int64_t i = 0; i < out->numel; ++i) {
+        int64_t ao = 0, bo = 0;
+        if (out_ndim > 0) {
+            vayu_tensor_bcast_index(a, i, out_ndim, out_shape, &ao);
+            vayu_tensor_bcast_index(b, i, out_ndim, out_shape, &bo);
+        }
+        int64_t av = a->data[ao], bv = b->data[bo];
+        int64_t r = 0;
+        switch (op) {
+            case 0: r = av + bv; break;
+            case 1: r = av - bv; break;
+            case 2: r = (av * bv) >> 16; break;
+            case 3: {
+                if (bv == 0) { r = 0; break; }
+                double dv = (double)av / (double)bv;
+                r = (int64_t)(dv * 65536.0 + (dv < 0.0 ? -0.5 : 0.5));
+                break;
+            }
+        }
+        out->data[i] = r;
+    }
+    if (a->requires_grad || b->requires_grad) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_ADD + op, oh, a_h, b_h, 0);
+    }
+    return oh;
+}
+
+int64_t vayu_tensor_add(int64_t a, int64_t b) { return vayu_tensor_ew(a, b, 0); }
+int64_t vayu_tensor_sub(int64_t a, int64_t b) { return vayu_tensor_ew(a, b, 1); }
+int64_t vayu_tensor_mul(int64_t a, int64_t b) { return vayu_tensor_ew(a, b, 2); }
+int64_t vayu_tensor_div(int64_t a, int64_t b) { return vayu_tensor_ew(a, b, 3); }
+
+int64_t vayu_tensor_add_scalar(int64_t a_h, int64_t v) {
+    VayuTensor* a = (VayuTensor*)a_h;
+    if (!a) return 0;
+    int64_t oh = vayu_tensor_new_from_shape(a->shape, a->ndim);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    for (int64_t i = 0; i < a->numel; ++i) out->data[i] = a->data[i] + v;
+    if (a->requires_grad) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_ADD_SCALAR, oh, a_h, 0, v);
+    }
+    return oh;
+}
+int64_t vayu_tensor_mul_scalar(int64_t a_h, int64_t v) {
+    VayuTensor* a = (VayuTensor*)a_h;
+    if (!a) return 0;
+    int64_t oh = vayu_tensor_new_from_shape(a->shape, a->ndim);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    for (int64_t i = 0; i < a->numel; ++i)
+        out->data[i] = (a->data[i] * v) >> 16;
+    if (a->requires_grad) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_MUL_SCALAR, oh, a_h, 0, v);
+    }
+    return oh;
+}
+
+int64_t vayu_tensor_matmul(int64_t a_h, int64_t b_h) {
+    VayuTensor* a = (VayuTensor*)a_h;
+    VayuTensor* b = (VayuTensor*)b_h;
+    if (!a || !b) return 0;
+    if (a->ndim != 2 || b->ndim != 2) return 0;
+    if (a->shape[1] != b->shape[0]) return 0;
+    int64_t M = a->shape[0], K = a->shape[1], N = b->shape[1];
+    int64_t out_shape[2] = { M, N };
+    int64_t oh = vayu_tensor_new_from_shape(out_shape, 2);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    const int64_t* A = a->data;
+    const int64_t* B = b->data;
+    int64_t* C = out->data;
+    for (int64_t i = 0; i < M; ++i) {
+        for (int64_t j = 0; j < N; ++j) {
+            int64_t s = 0;
+            for (int64_t k = 0; k < K; ++k) {
+                s += (A[i*K + k] * B[k*N + j]) >> 16;
+            }
+            C[i*N + j] = s;
+        }
+    }
+    if (a->requires_grad || b->requires_grad) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_MATMUL, oh, a_h, b_h, 0);
+    }
+    return oh;
+}
+
+int64_t vayu_tensor_sum(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t s = 0;
+    for (int64_t i = 0; i < t->numel; ++i) s += t->data[i];
+    int64_t sh[1] = { 1 };
+    int64_t oh = vayu_tensor_new_from_shape(sh, 1);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    out->data[0] = s;
+    if (t->requires_grad) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_SUM, oh, h, 0, 0);
+    }
+    return oh;
+}
+int64_t vayu_tensor_max(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || t->numel == 0) return 0;
+    int64_t m = t->data[0];
+    for (int64_t i = 1; i < t->numel; ++i) if (t->data[i] > m) m = t->data[i];
+    int64_t sh[1] = { 1 };
+    int64_t oh = vayu_tensor_new_from_shape(sh, 1);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    out->data[0] = m;
+    return oh;
+}
+int64_t vayu_tensor_argmax(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || t->numel == 0) return -1;
+    int64_t best = 0;
+    for (int64_t i = 1; i < t->numel; ++i)
+        if (t->data[i] > t->data[best]) best = i;
+    return best;
+}
+
+int64_t vayu_tensor_reshape(int64_t h, int64_t shape_list) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t sh[8]; int nd = 0;
+    if (!vayu_tensor_read_shape((VayuList*)shape_list, sh, &nd)) return 0;
+    int64_t n = vayu_tensor_numel(sh, nd);
+    if (n != t->numel) return 0;
+    int64_t oh = vayu_tensor_new_from_shape(sh, nd);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    memcpy(out->data, t->data, sizeof(int64_t) * (size_t)n);
+    return oh;
+}
+
+int64_t vayu_tensor_transpose(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || t->ndim != 2) return 0;
+    int64_t M = t->shape[0], N = t->shape[1];
+    int64_t sh[2] = { N, M };
+    int64_t oh = vayu_tensor_new_from_shape(sh, 2);
+    VayuTensor* out = (VayuTensor*)oh;
+    if (!out) return 0;
+    for (int64_t i = 0; i < M; ++i)
+        for (int64_t j = 0; j < N; ++j)
+            out->data[j*M + i] = t->data[i*N + j];
+    if (t->requires_grad && !g_in_backward) {
+        out->requires_grad = 1;
+        vayu_tape_push(VAYU_OP_TRANSPOSE, oh, h, 0, 0);
+    }
+    return oh;
+}
+
+static void vayu_tensor_print_q16(int64_t v) {
+    int neg = v < 0;
+    int64_t a = neg ? -v : v;
+    int64_t whole = a >> 16;
+    int64_t frac  = ((a & 0xFFFF) * 10000) >> 16;
+    if (neg) putchar('-');
+    printf("%lld.%04lld", (long long)whole, (long long)frac);
+}
+
+void vayu_tensor_print(int64_t h, int64_t name_sp) {
+    VayuTensor* t = (VayuTensor*)h;
+    VayuStr* name = (VayuStr*)name_sp;
+    if (name) fwrite(name->data, 1, (size_t)name->len, stdout);
+    else      printf("tensor");
+    printf(" shape=[");
+    for (int i = 0; i < t->ndim; ++i) {
+        if (i) printf(",");
+        printf("%lld", (long long)t->shape[i]);
+    }
+    printf("] data=[");
+    for (int64_t i = 0; i < t->numel; ++i) {
+        if (i) printf(" ");
+        vayu_tensor_print_q16(t->data[i]);
+    }
+    printf("]\n");
+}
+
+/* ===========================================================================
+ * Phase 22.1 - autodiff tape + transcendentals + reverse-mode backward.
+ * ========================================================================= */
+
+typedef struct {
+    int      op;
+    int64_t  out, a, b;
+    int64_t  scalar;
+} VayuTapeEntry;
+
+static VayuTapeEntry* g_tape = NULL;
+static int g_tape_len = 0;
+static int g_tape_cap = 0;
+
+static void vayu_tape_push(int op, int64_t out, int64_t a, int64_t b, int64_t scalar) {
+    /* Backward runs transient ops on the same tensor handles; without this
+       guard every backward step would grow the tape and realloc g_tape
+       mid-iteration, invalidating the entry pointer in the loop. */
+    if (g_in_backward) return;
+    if (g_tape_len >= g_tape_cap) {
+        g_tape_cap = g_tape_cap == 0 ? 256 : g_tape_cap * 2;
+        g_tape = (VayuTapeEntry*)realloc(g_tape,
+                                         sizeof(VayuTapeEntry) * (size_t)g_tape_cap);
+    }
+    g_tape[g_tape_len].op = op;
+    g_tape[g_tape_len].out = out;
+    g_tape[g_tape_len].a = a;
+    g_tape[g_tape_len].b = b;
+    g_tape[g_tape_len].scalar = scalar;
+    if (out) ((VayuTensor*)out)->tape_idx = g_tape_len;
+    g_tape_len++;
+}
+
+void vayu_tensor_tape_clear(void) { g_tape_len = 0; }
+int64_t vayu_tensor_tape_size(void) { return (int64_t)g_tape_len; }
+
+void vayu_tensor_requires_grad(int64_t h, int64_t flag) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return;
+    t->requires_grad = flag ? 1 : 0;
+}
+void vayu_tensor_zero_grad(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return;
+    t->grad = 0;
+}
+int64_t vayu_tensor_grad(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    return t ? t->grad : 0;
+}
+void vayu_tensor_copy_into(int64_t dst_h, int64_t src_h) {
+    VayuTensor* d = (VayuTensor*)dst_h;
+    VayuTensor* s = (VayuTensor*)src_h;
+    if (!d || !s) return;
+    if (d->numel != s->numel) return;
+    memcpy(d->data, s->data, sizeof(int64_t) * (size_t)d->numel);
+}
+
+/* Q16.16 transcendentals.  Round-trip through double for accuracy. */
+static int64_t vayu_q_mul(int64_t a, int64_t b) { return (a * b) >> 16; }
+static int64_t vayu_q_exp(int64_t x) {
+    double d = exp((double)x / 65536.0);
+    return (int64_t)(d * 65536.0 + 0.5);
+}
+static int64_t vayu_q_log(int64_t x) {
+    if (x <= 0) return -100LL * 65536;
+    double d = log((double)x / 65536.0);
+    return (int64_t)(d * 65536.0);
+}
+static int64_t vayu_q_tanh(int64_t x) {
+    double d = tanh((double)x / 65536.0);
+    return (int64_t)(d * 65536.0 + (d < 0.0 ? -0.5 : 0.5));
+}
+static int64_t vayu_q_sigmoid(int64_t x) {
+    double d = 1.0 / (1.0 + exp(-(double)x / 65536.0));
+    return (int64_t)(d * 65536.0 + 0.5);
+}
+static int64_t vayu_q_relu(int64_t x) { return x > 0 ? x : 0; }
+
+static int64_t vayu_tensor_unary(int64_t h, int op) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t r = vayu_tensor_new_from_shape(t->shape, t->ndim);
+    VayuTensor* o = (VayuTensor*)r;
+    if (!o) return 0;
+    for (int64_t i = 0; i < t->numel; ++i) {
+        int64_t x = t->data[i];
+        int64_t y = 0;
+        switch (op) {
+            case VAYU_OP_RELU:    y = vayu_q_relu(x);    break;
+            case VAYU_OP_SIGMOID: y = vayu_q_sigmoid(x); break;
+            case VAYU_OP_TANH:    y = vayu_q_tanh(x);    break;
+            case VAYU_OP_EXP:     y = vayu_q_exp(x);     break;
+            case VAYU_OP_LOG:     y = vayu_q_log(x);     break;
+        }
+        o->data[i] = y;
+    }
+    if (t->requires_grad) {
+        o->requires_grad = 1;
+        vayu_tape_push(op, r, h, 0, 0);
+    }
+    return r;
+}
+
+int64_t vayu_tensor_relu(int64_t h)    { return vayu_tensor_unary(h, VAYU_OP_RELU); }
+int64_t vayu_tensor_sigmoid(int64_t h) { return vayu_tensor_unary(h, VAYU_OP_SIGMOID); }
+int64_t vayu_tensor_tanh(int64_t h)    { return vayu_tensor_unary(h, VAYU_OP_TANH); }
+int64_t vayu_tensor_exp(int64_t h)     { return vayu_tensor_unary(h, VAYU_OP_EXP); }
+int64_t vayu_tensor_log(int64_t h)     { return vayu_tensor_unary(h, VAYU_OP_LOG); }
+
+/* --- Backward helpers --- */
+
+static int64_t vayu_tensor_ones_like(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t r = vayu_tensor_new_from_shape(t->shape, t->ndim);
+    VayuTensor* o = (VayuTensor*)r;
+    for (int64_t i = 0; i < o->numel; ++i) o->data[i] = 65536;
+    return r;
+}
+
+static int64_t vayu_tensor_neg(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t r = vayu_tensor_new_from_shape(t->shape, t->ndim);
+    VayuTensor* o = (VayuTensor*)r;
+    for (int64_t i = 0; i < t->numel; ++i) o->data[i] = -t->data[i];
+    return r;
+}
+
+static int64_t vayu_tensor_ones_shape(const int64_t* shape, int ndim) {
+    int64_t r = vayu_tensor_new_from_shape(shape, ndim);
+    VayuTensor* o = (VayuTensor*)r;
+    if (!o) return 0;
+    for (int64_t i = 0; i < o->numel; ++i) o->data[i] = 65536;
+    return r;
+}
+
+static int64_t vayu_tensor_reduce_to_shape(int64_t d_h, VayuTensor* target) {
+    VayuTensor* d = (VayuTensor*)d_h;
+    if (!d) return 0;
+    int same = (d->ndim == target->ndim);
+    if (same) {
+        for (int i = 0; i < d->ndim; ++i)
+            if (d->shape[i] != target->shape[i]) { same = 0; break; }
+    }
+    if (same) return vayu_tensor_copy(d_h);
+    int64_t oh = vayu_tensor_new_from_shape(target->shape, target->ndim);
+    VayuTensor* o = (VayuTensor*)oh;
+    if (!o) return 0;
+    int off = d->ndim - target->ndim;
+    if (off < 0) { vayu_tensor_free(oh); return vayu_tensor_copy(d_h); }
+    for (int64_t i = 0; i < d->numel; ++i) {
+        int64_t idx[8];
+        int64_t r = i;
+        for (int k = d->ndim - 1; k >= 0; --k) { idx[k] = r % d->shape[k]; r /= d->shape[k]; }
+        int64_t o_flat = 0;
+        for (int k = 0; k < target->ndim; ++k) {
+            int64_t ix = idx[k + off];
+            if (target->shape[k] == 1) ix = 0;
+            o_flat = o_flat * target->shape[k] + ix;
+        }
+        o->data[o_flat] += d->data[i];
+    }
+    return oh;
+}
+
+static void vayu_grad_accum(int64_t h, int64_t d_h) {
+    if (!h || !d_h) return;
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t->requires_grad) return;
+    VayuTensor* dt = (VayuTensor*)d_h;
+    int mismatch = (dt->ndim != t->ndim);
+    if (!mismatch) {
+        for (int i = 0; i < t->ndim; ++i)
+            if (dt->shape[i] != t->shape[i]) { mismatch = 1; break; }
+    }
+    if (mismatch) {
+        d_h = vayu_tensor_reduce_to_shape(d_h, t);
+        if (!d_h) return;
+    }
+    if (!t->grad) { t->grad = d_h; return; }
+    int64_t sum = vayu_tensor_add(t->grad, d_h);
+    t->grad = sum;
+}
+
+static int64_t vayu_unary_local(int op, VayuTensor* x, VayuTensor* y, int64_t gi) {
+    int64_t xi = x ? 0 : 0, yi = 0;
+    (void)xi;
+    if (x) xi = 0;
+    int64_t d = 0;
+    (void)yi;
+    switch (op) {
+        case VAYU_OP_RELU:    d = (x && x->data[0] > 0) ? 65536 : 0; break;
+        case VAYU_OP_SIGMOID: d = vayu_q_mul(y->data[0], 65536 - y->data[0]); break;
+        case VAYU_OP_TANH:    d = 65536 - vayu_q_mul(y->data[0], y->data[0]); break;
+        case VAYU_OP_EXP:     d = y->data[0]; break;
+        case VAYU_OP_LOG:     d = x->data[0] > 0 ? (int64_t)(65536.0 * 65536.0 / (double)x->data[0]) : 0; break;
+    }
+    return vayu_q_mul(gi, d);
+}
+
+/* ===========================================================================
+ * Phase 22.3 - .vnn model loading + graph execution.
+ * ========================================================================= */
+
+typedef struct {
+    char        name[64];
+    VayuTensor* t;
+} VayuNNBind;
+
+typedef struct {
+    VayuNNBind binds[64];
+    int        n_binds;
+    char       input_name[64];
+} VayuNNModel;
+
+static int vayu_nn_lookup(VayuNNModel* m, const char* name) {
+    for (int i = 0; i < m->n_binds; ++i)
+        if (strcmp(m->binds[i].name, name) == 0) return i;
+    return -1;
+}
+static void vayu_nn_bind(VayuNNModel* m, const char* name, VayuTensor* t) {
+    int idx = vayu_nn_lookup(m, name);
+    if (idx >= 0) { m->binds[idx].t = t; return; }
+    if (m->n_binds >= 64) return;
+    int n = (int)strlen(name);
+    if (n > 63) n = 63;
+    memcpy(m->binds[m->n_binds].name, name, (size_t)n);
+    m->binds[m->n_binds].name[n] = 0;
+    m->binds[m->n_binds].t = t;
+    m->n_binds++;
+}
+static void vayu_nn_skip_ws(const char** p) {
+    while (**p == ' ' || **p == '\t' || **p == '\r') (*p)++;
+}
+static int vayu_nn_read_word(const char** p, char* out, int cap) {
+    vayu_nn_skip_ws(p);
+    int n = 0;
+    while (**p && **p != ' ' && **p != '\t' && **p != '\n' && **p != '\r') {
+        if (n < cap - 1) out[n++] = **p;
+        (*p)++;
+    }
+    out[n] = 0;
+    return n > 0;
+}
+static int64_t vayu_nn_read_int(const char** p) {
+    vayu_nn_skip_ws(p);
+    int neg = 0;
+    if (**p == '-') { neg = 1; (*p)++; }
+    int64_t v = 0;
+    while (**p >= '0' && **p <= '9') { v = v * 10 + (**p - '0'); (*p)++; }
+    return neg ? -v : v;
+}
+
+int64_t vayu_nn_run_str(int64_t text_sp, int64_t input_h) {
+    VayuStr* text = (VayuStr*)text_sp;
+    if (!text) return 0;
+
+    VayuNNModel model;
+    memset(&model, 0, sizeof(model));
+
+    size_t n = (size_t)text->len;
+    char* buf = (char*)malloc(n + 1);
+    memcpy(buf, text->data, n);
+    buf[n] = 0;
+
+    const char* p = buf;
+    char last_dst[64] = {0};
+
+    while (*p) {
+        vayu_nn_skip_ws(&p);
+        if (*p == '#' || *p == '\n' || *p == 0) {
+            while (*p && *p != '\n') p++;
+            if (*p == '\n') p++;
+            continue;
+        }
+        char kw[32];
+        vayu_nn_read_word(&p, kw, sizeof(kw));
+
+        if (strcmp(kw, "input") == 0) {
+            char nm[64];
+            vayu_nn_read_word(&p, nm, sizeof(nm));
+            int k = 0;
+            while (nm[k] && k < 63) { model.input_name[k] = nm[k]; k++; }
+            model.input_name[k] = 0;
+            if (input_h) vayu_nn_bind(&model, nm, (VayuTensor*)input_h);
+        }
+        else if (strcmp(kw, "tensor") == 0) {
+            char nm[64];
+            vayu_nn_read_word(&p, nm, sizeof(nm));
+            int rows = (int)vayu_nn_read_int(&p);
+            int cols = (int)vayu_nn_read_int(&p);
+            if (rows > 0 && cols > 0) {
+                int64_t sh[2] = { rows, cols };
+                int64_t th = vayu_tensor_new_from_shape(sh, 2);
+                VayuTensor* t = (VayuTensor*)th;
+                if (t) {
+                    for (int64_t i = 0; i < t->numel; ++i)
+                        t->data[i] = vayu_nn_read_int(&p);
+                }
+                vayu_nn_bind(&model, nm, t);
+            }
+        }
+        else if (strcmp(kw, "op") == 0) {
+            char op[32], t1[64], t2[64], t3[64];
+            vayu_nn_read_word(&p, op, sizeof(op));
+            vayu_nn_read_word(&p, t1, sizeof(t1));
+            vayu_nn_read_word(&p, t2, sizeof(t2));
+            vayu_nn_read_word(&p, t3, sizeof(t3));
+            char dst[64], a[64], b[64];
+            if (t3[0] != 0) {
+                /* binary: op OP A B DST */
+                int k;
+                for (k = 0; t1[k] && k < 63; k++) a[k] = t1[k];
+                a[k] = 0;
+                for (k = 0; t2[k] && k < 63; k++) b[k] = t2[k];
+                b[k] = 0;
+                for (k = 0; t3[k] && k < 63; k++) dst[k] = t3[k];
+                dst[k] = 0;
+            } else {
+                /* unary:  op OP A DST */
+                int k;
+                for (k = 0; t1[k] && k < 63; k++) a[k] = t1[k];
+                a[k] = 0;
+                b[0] = 0;
+                for (k = 0; t2[k] && k < 63; k++) dst[k] = t2[k];
+                dst[k] = 0;
+            }
+
+            int ia = vayu_nn_lookup(&model, a);
+            int ib = (b[0] != 0) ? vayu_nn_lookup(&model, b) : -1;
+            if (ia >= 0) {
+                int64_t r = 0;
+                int64_t ta = (int64_t)model.binds[ia].t;
+                int64_t tb = (ib >= 0) ? (int64_t)model.binds[ib].t : 0;
+                if (strcmp(op, "matmul") == 0 || strcmp(op, "gemm") == 0) {
+                    if (ib >= 0) r = vayu_tensor_matmul(ta, tb);
+                } else if (strcmp(op, "add") == 0) {
+                    if (ib >= 0) r = vayu_tensor_add(ta, tb);
+                } else if (strcmp(op, "sub") == 0) {
+                    if (ib >= 0) r = vayu_tensor_sub(ta, tb);
+                } else if (strcmp(op, "mul") == 0) {
+                    if (ib >= 0) r = vayu_tensor_mul(ta, tb);
+                } else if (strcmp(op, "div") == 0) {
+                    if (ib >= 0) r = vayu_tensor_div(ta, tb);
+                } else if (strcmp(op, "relu") == 0) {
+                    r = vayu_tensor_relu(ta);
+                } else if (strcmp(op, "sigmoid") == 0) {
+                    r = vayu_tensor_sigmoid(ta);
+                } else if (strcmp(op, "tanh") == 0) {
+                    r = vayu_tensor_tanh(ta);
+                }
+                if (r) {
+                    vayu_nn_bind(&model, dst, (VayuTensor*)r);
+                    int k = 0;
+                    while (dst[k] && k < 63) { last_dst[k] = dst[k]; k++; }
+                    last_dst[k] = 0;
+                }
+            }
+        }
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+    }
+
+    if (model.input_name[0] && input_h) {
+        vayu_nn_bind(&model, model.input_name, (VayuTensor*)input_h);
+    }
+
+    int64_t out = 0;
+    if (last_dst[0]) {
+        int idx = vayu_nn_lookup(&model, last_dst);
+        if (idx >= 0) out = (int64_t)model.binds[idx].t;
+    }
+    free(buf);
+    return out;
+}
+
+void vayu_tensor_backward(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return;
+    if (t->grad) t->grad = 0;
+    t->grad = vayu_tensor_ones_like(h);
+
+    g_in_backward = 1;
+    for (int i = g_tape_len - 1; i >= 0; --i) {
+        VayuTapeEntry* e = &g_tape[i];
+        VayuTensor* out = (VayuTensor*)e->out;
+        if (!out || !out->grad) continue;
+        int64_t g_h = out->grad;
+        VayuTensor* g = (VayuTensor*)g_h;
+
+        switch (e->op) {
+            case VAYU_OP_ADD: {
+                int64_t dA = vayu_tensor_copy(g_h);
+                vayu_grad_accum(e->a, dA);
+                int64_t dB = vayu_tensor_copy(g_h);
+                vayu_grad_accum(e->b, dB);
+                break;
+            }
+            case VAYU_OP_SUB: {
+                int64_t dA = vayu_tensor_copy(g_h);
+                vayu_grad_accum(e->a, dA);
+                int64_t dB = vayu_tensor_neg(g_h);
+                vayu_grad_accum(e->b, dB);
+                break;
+            }
+            case VAYU_OP_MUL: {
+                int64_t dA = vayu_tensor_mul(g_h, e->b);
+                vayu_grad_accum(e->a, dA);
+                int64_t dB = vayu_tensor_mul(g_h, e->a);
+                vayu_grad_accum(e->b, dB);
+                break;
+            }
+            case VAYU_OP_DIV: {
+                /* y = a/b;  dA = g/b;  dB = -g*a/b^2 */
+                int64_t dA = vayu_tensor_div(g_h, e->b);
+                vayu_grad_accum(e->a, dA);
+                int64_t bb = vayu_tensor_mul(e->b, e->b);
+                int64_t ga = vayu_tensor_mul(g_h, e->a);
+                int64_t q = vayu_tensor_div(ga, bb);
+                int64_t dB = vayu_tensor_neg(q);
+                vayu_grad_accum(e->b, dB);
+                break;
+            }
+            case VAYU_OP_MATMUL: {
+                int64_t bT = vayu_tensor_transpose(e->b);
+                int64_t aT = vayu_tensor_transpose(e->a);
+                int64_t dA = vayu_tensor_matmul(g_h, bT);
+                vayu_grad_accum(e->a, dA);
+                int64_t dB = vayu_tensor_matmul(aT, g_h);
+                vayu_grad_accum(e->b, dB);
+                break;
+            }
+            case VAYU_OP_SUM: {
+                VayuTensor* a = (VayuTensor*)e->a;
+                int64_t r = vayu_tensor_new_from_shape(a->shape, a->ndim);
+                VayuTensor* o = (VayuTensor*)r;
+                int64_t gv = g->data[0];
+                for (int64_t k = 0; k < a->numel; ++k) o->data[k] = gv;
+                vayu_grad_accum(e->a, r);
+                break;
+            }
+            case VAYU_OP_MUL_SCALAR: {
+                int64_t dA = vayu_tensor_mul_scalar(g_h, e->scalar);
+                vayu_grad_accum(e->a, dA);
+                break;
+            }
+            case VAYU_OP_ADD_SCALAR: {
+                int64_t dA = vayu_tensor_copy(g_h);
+                vayu_grad_accum(e->a, dA);
+                break;
+            }
+            case VAYU_OP_RELU:
+            case VAYU_OP_SIGMOID:
+            case VAYU_OP_TANH:
+            case VAYU_OP_EXP:
+            case VAYU_OP_LOG: {
+                VayuTensor* x = (VayuTensor*)e->a;
+                VayuTensor* y = out;
+                int64_t r = vayu_tensor_new_from_shape(x->shape, x->ndim);
+                VayuTensor* o = (VayuTensor*)r;
+                for (int64_t k = 0; k < x->numel; ++k) {
+                    int64_t xi = x->data[k], yi = y->data[k], gi = g->data[k];
+                    int64_t d = 0;
+                    switch (e->op) {
+                        case VAYU_OP_RELU:    d = xi > 0 ? 65536 : 0; break;
+                        case VAYU_OP_SIGMOID: d = vayu_q_mul(yi, 65536 - yi); break;
+                        case VAYU_OP_TANH:    d = 65536 - vayu_q_mul(yi, yi); break;
+                        case VAYU_OP_EXP:     d = yi; break;
+                        case VAYU_OP_LOG:     d = xi > 0 ? (int64_t)(65536.0 * 65536.0 / (double)xi) : 0; break;
+                    }
+                    o->data[k] = vayu_q_mul(gi, d);
+                }
+                vayu_grad_accum(e->a, r);
+                break;
+            }
+            case VAYU_OP_TRANSPOSE: {
+                int64_t dA = vayu_tensor_transpose(g_h);
+                vayu_grad_accum(e->a, dA);
+                break;
+            }
+        }
+    }
+    g_in_backward = 0;
+    (void)vayu_unary_local;
+    (void)vayu_tensor_ones_shape;
+}
+
 /* Blit a VayuTexture onto a VayuCanvas.  Unlike gui.draw_bitmap, which
    takes a decoded file bitmap, this wraps the raw level-0 pixel buffer in
    a transient GpBitmap and draws it.  Used by post-processing pipelines
@@ -11214,11 +12239,52 @@ void vayu_raster_light_set(int64_t i, int64_t k, int64_t x, int64_t y, int64_t z
 void vayu_raster_draw_mesh_lit(int64_t fb, int64_t m, int64_t mvp, int64_t mod, int64_t tx, int64_t sm, int64_t tn, int64_t ex, int64_t ey, int64_t ez) { (void)fb;(void)m;(void)mvp;(void)mod;(void)tx;(void)sm;(void)tn;(void)ex;(void)ey;(void)ez; }
 void vayu_raster_post_gamma(int64_t t, int64_t g) { (void)t;(void)g; }
 void vayu_raster_post_invert(int64_t t) { (void)t; }
+void vayu_raster_post_invert(int64_t t) { (void)t; }
 void vayu_raster_post_tint(int64_t t, int64_t c) { (void)t;(void)c; }
 void vayu_raster_post_brightness(int64_t t, int64_t d) { (void)t;(void)d; }
 void vayu_raster_post_threshold(int64_t t, int64_t th) { (void)t;(void)th; }
 int64_t vayu_raster_tex_from_fb(int64_t fb) { (void)fb; return 0; }
 void vayu_raster_tex_present(int64_t t, int64_t c, int64_t x, int64_t y) { (void)t;(void)c;(void)x;(void)y; }
+
+/* ---- Phase 22.0 + 22.1 tensor stubs (non-Windows) ---- */
+int64_t vayu_tensor_new(int64_t s) { (void)s; return 0; }
+int64_t vayu_tensor_zeros(int64_t s) { (void)s; return 0; }
+int64_t vayu_tensor_ones(int64_t s) { (void)s; return 0; }
+int64_t vayu_tensor_from_int_list(int64_t s, int64_t v) { (void)s;(void)v; return 0; }
+int64_t vayu_tensor_copy(int64_t h) { (void)h; return 0; }
+void    vayu_tensor_free(int64_t h) { (void)h; }
+void    vayu_tensor_fill(int64_t h, int64_t v) { (void)h;(void)v; }
+int64_t vayu_tensor_ndim(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_shape(int64_t h, int64_t i) { (void)h;(void)i; return 0; }
+int64_t vayu_tensor_numel_h(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_get_flat(int64_t h, int64_t i) { (void)h;(void)i; return 0; }
+void    vayu_tensor_set_flat(int64_t h, int64_t i, int64_t v) { (void)h;(void)i;(void)v; }
+int64_t vayu_tensor_add(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+int64_t vayu_tensor_sub(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+int64_t vayu_tensor_mul(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+int64_t vayu_tensor_div(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+int64_t vayu_tensor_add_scalar(int64_t a, int64_t v) { (void)a;(void)v; return 0; }
+int64_t vayu_tensor_mul_scalar(int64_t a, int64_t v) { (void)a;(void)v; return 0; }
+int64_t vayu_tensor_matmul(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+int64_t vayu_tensor_sum(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_max(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_argmax(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_reshape(int64_t h, int64_t s) { (void)h;(void)s; return 0; }
+int64_t vayu_tensor_transpose(int64_t h) { (void)h; return 0; }
+void    vayu_tensor_print(int64_t h, int64_t nm) { (void)h;(void)nm; }
+void    vayu_tensor_requires_grad(int64_t h, int64_t f) { (void)h;(void)f; }
+void    vayu_tensor_zero_grad(int64_t h) { (void)h; }
+int64_t vayu_tensor_grad(int64_t h) { (void)h; return 0; }
+void    vayu_tensor_backward(int64_t h) { (void)h; }
+void    vayu_tensor_tape_clear(void) {}
+int64_t vayu_tensor_tape_size(void) { return 0; }
+int64_t vayu_tensor_relu(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_sigmoid(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_tanh(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_exp(int64_t h) { (void)h; return 0; }
+int64_t vayu_tensor_log(int64_t h) { (void)h; return 0; }
+void    vayu_tensor_copy_into(int64_t d, int64_t s) { (void)d;(void)s; }
+int64_t vayu_nn_run_str(int64_t t, int64_t i) { (void)t;(void)i; return 0; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----

@@ -1,0 +1,87 @@
+# examples/nn.vyu -- Phase 22.2 NN primitives.
+# Native-only (uses tensor.*).  Import from a demo as `import nn`.
+
+import tensor
+
+const Q: int = 65536
+
+def _isqrt(n: int) -> int:
+    if n < 2:
+        return n
+    x: int = n
+    y: int = (x + 1) // 2
+    while y < x:
+        x = y
+        y = (x + n // x) // 2
+    return x
+
+def shape_of(t: int) -> list<int>:
+    n: int = tensor.ndim(t)
+    out: list<int> = []
+    i: int = 0
+    while i < n:
+        out.append(tensor.shape(t, i))
+        i = i + 1
+    return out
+
+def linear_init(in_dim: int, out_dim: int, seed: int) -> list<int>:
+    # Returns [W, b].  W shape (out_dim, in_dim), b shape (out_dim,).
+    # Uniform init scaled by 1/sqrt(in_dim), Q16.16.
+    scale_den: int = _isqrt(in_dim)
+    if scale_den < 1:
+        scale_den = 1
+    w_vals: list<int> = []
+    b_vals: list<int> = []
+    total: int = out_dim * in_dim
+    i: int = 0
+    s: int = seed
+    while i < total:
+        s = (s * 1103515245 + 12345) % 2147483647
+        r: int = (s % 2001) - 1000
+        # 4000 not 1000 — with in_dim==1 and x in [1..8], weights in
+        # [-1,1] make h_pre land in [-8,8] and kill half the ReLU units
+        # at init.  4x smaller keeps activations in a live range.
+        v: int = (r * Q) // (4000 * scale_den)
+        w_vals.append(v)
+        i = i + 1
+    i = 0
+    while i < out_dim:
+        b_vals.append(0)
+        i = i + 1
+    W: int = tensor.from_int_list([out_dim, in_dim], w_vals)
+    b: int = tensor.from_int_list([out_dim], b_vals)
+    return [W, b]
+
+def linear_forward(x: int, W: int, b: int) -> int:
+    # x @ W^T + b
+    WT: int = tensor.transpose(W)
+    y: int = tensor.matmul(x, WT)
+    z: int = tensor.add(y, b)
+    return z
+
+def relu(x: int) -> int:
+    return tensor.relu(x)
+
+def sigmoid(x: int) -> int:
+    return tensor.sigmoid(x)
+
+def tanh(x: int) -> int:
+    return tensor.tanh(x)
+
+def mse_loss(pred: int, target: int) -> int:
+    diff: int = tensor.sub(pred, target)
+    sq: int = tensor.mul(diff, diff)
+    total: int = tensor.sum(sq)
+    n: int = tensor.numel(pred)
+    if n < 1:
+        n = 1
+    scale: int = Q // n
+    return tensor.mul_scalar(total, scale)
+
+def sgd_step(param: int, lr: int) -> None:
+    g: int = tensor.grad(param)
+    if g == 0:
+        return
+    d: int = tensor.mul_scalar(g, lr)
+    ng: int = tensor.sub(param, d)
+    tensor.copy_into(param, ng)

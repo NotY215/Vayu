@@ -22,22 +22,35 @@ function log(msg) {
     if (outChannel) outChannel.appendLine(msg);
 }
 
-function findBinary(configKey, defaultRel) {
+function findBinary(configKey, baseName) {
     const ws = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
-    const cfg = vscode.workspace.getConfiguration('vayu').get(configKey) || defaultRel;
-    if (path.isAbsolute(cfg)) return cfg;
-    if (ws) return path.join(ws, cfg);
-    return cfg;
+    const cfg = vscode.workspace.getConfiguration('vayu').get(configKey) || '';
+    const suffix = process.platform === 'win32' ? '.exe' : '';
+    if (cfg && cfg.length > 0) {
+        if (path.isAbsolute(cfg)) return cfg;
+        if (ws) return path.join(ws, cfg);
+        return cfg;
+    }
+    if (ws) {
+        const presets = ['x64-debug', 'x64-release', 'Debug', 'Release'];
+        for (const p of presets) {
+            const cand = path.join(ws, 'build', p, 'bin', baseName + suffix);
+            if (fs.existsSync(cand)) return cand;
+            const alt = path.join(ws, 'build', p, baseName + suffix);
+            if (fs.existsSync(alt)) return alt;
+        }
+    }
+    return baseName + suffix;
 }
 
 function startServer(context) {
     stopServer();
     const ws = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath;
-    const vls = findBinary('vlsPath', 'build/x64-debug/bin/vls.exe');
+    const vls = findBinary('vlsPath', 'vls');
 
     if (!fs.existsSync(vls)) {
         vscode.window.showWarningMessage(
-            `Vayu: vls.exe not found at ${vls}. Set vayu.vlsPath in settings.`);
+            `Vayu: vls not found at ${vls}. Set vayu.vlsPath in settings.`);
         return;
     }
 
@@ -353,11 +366,11 @@ function runTool(binKey, defaultRel, args, doc) {
 }
 
 function runFormatter(doc) {
-    runTool('vfmtPath', 'build/x64-debug/bin/vfmt.exe', [], doc);
+    runTool('vfmtPath', 'vfmt', [], doc);
 }
 
 function runLinter(doc) {
-    runTool('vlintPath', 'build/x64-debug/bin/vlint.exe', [], doc);
+    runTool('vlintPath', 'vlint', [], doc);
 }
 
 function deactivate() {

@@ -1,0 +1,37 @@
+{
+  "name": "vayu-vs-community",
+  "displayName": "Vayu for Visual Studio Community",
+  "description": "Syntax highlighting for Vayu (.vyu) in Visual Studio 2022 Community.",
+  "version": "0.2.0",
+  "publisher": "Fliczo",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": [ "Programming Languages" ],
+  "icon": "Vayu_logo.png",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NotY215/Vayu.git"
+  },
+  "keywords": [ "vayu", "vyu", "language" ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "vayu",
+        "aliases": [ "Vayu", "vayu" ],
+        "extensions": [ ".vyu" ],
+        "configuration": "./Grammars/language-configuration.json",
+        "icon": {
+          "light": "./assets/Vyu_Icon.ico",
+          "dark": "./assets/Vyu_Icon_Dark.ico"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "vayu",
+        "scopeName": "source.vayu",
+        "path": "./Grammars/vayu.tmLanguage.json"
+      }
+    ]
+  }
+}

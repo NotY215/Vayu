@@ -52,7 +52,7 @@ cd vscode-vayu-Extention
 vsce package
 ```
 
-Produces `vayu-0.1.0.vsix`, installable in both VS Code and VS Code - OSS.
+Produces `vayu-%version%.vsix`, installable in both VS Code and VS Code - OSS.
 
 ## Repository
 
