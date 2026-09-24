@@ -10,7 +10,7 @@
     <DisplayName>Vayu Language Support</DisplayName>
     <Description xml:space="preserve">Syntax highlighting for .vyu files.</Description>
     <MoreInfo>https://github.com/NotY215/Vayu</MoreInfo>
-    <License>LICENSE</License>
+    <License>LICENSE.txt</License>
     <Icon>Vayu_logo.png</Icon>
     <Tags>vayu, vyu, language</Tags>
   </Metadata>
