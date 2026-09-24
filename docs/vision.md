@@ -25,7 +25,7 @@ The current source tree demonstrates a substantially expanded language/compiler 
 - native CPython loading and expanded Python value/call interoperability
 - interpreter, bytecode/VM and native execution paths
 
-The current development history places **Phase 17 as completed and Phase 18 as the current/most recently completed developer-tooling phase**. Phase 18 introduced the Vayu Language Server, formatter, linter, VS Code integration, additional LSP capabilities, compiler optimization/runtime options, and related tooling infrastructure.
+The current development history now records **Phase 21 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, while Phase 21 completed the software raster and 3D pipeline. Phase 18 introduced the Vayu Language Server, formatter, linter, VS Code integration, additional LSP capabilities, compiler optimization/runtime options, and related tooling infrastructure.
 
 The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. The long-term native-backend direction is being developed separately through VCB.
 
@@ -52,14 +52,14 @@ The roadmap below records the project's planned development phases. A phase may 
 | **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
 | **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
 | **17** | Self-hosting/compiler-bootstrap work: bring the Vayu implementation toward the C++ `vayuc` feature set and stabilize the bootstrap path. **Completed development phase; the C++ compiler remains the current reference/bootstrap implementation.** |
-| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling improvements. **Current/most recently completed tooling phase.** |
-| **19** | Window / event / widget layer. |
-| **20** | 2D first, then 3D graphics and rendering. |
-| **21** | Tensors · autodiff · ONNX · CUDA/GPU AI infrastructure. |
-| **22** | Package ecosystem: `vayu install` · `vypy install` · public index · dependency resolution · lockfiles · publishing. |
+| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling. **Completed.** |
+| **19** | Native window / event / widget layer and GUI canvas foundation. **Completed.** |
+| **20** | 2D graphics, transforms, text, image/UI primitives and canvas functionality. **Completed foundation.** |
+| **21** | Software raster + 3D pipeline: framebuffers, depth buffers, Q16.16 matrices, meshes, textures, mipmaps, perspective-correct rasterization, lighting and post-processing. **Completed.** |
+| **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Current direction.** |
 | **23** | **Single-binary native toolchain:** retire the existing QBE/GCC backend chain and move toward VCB emitting native machine code directly; Windows-first, then ELF/Mach-O targets. |
 
-### Phase 18 — Developer Tooling
+### Phase 19–21 — GUI, 2D Graphics and 3D Raster
 
 The current tooling layer is now a major part of the repository. It includes:
 
@@ -77,6 +77,29 @@ The official VS Code extension is published as `Fliczo.vayu`.
 **Marketplace:** https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu
 
 **Direct install:** `vscode:extension/Fliczo.vayu`
+
+### Phase 19–21 — GUI, 2D Graphics and 3D Raster
+
+The GUI foundation now provides native windows, events, callbacks, canvas drawing, widgets, text, transforms and image-oriented examples. The graphics layer has been extended with a software/hybrid raster pipeline.
+
+Phase 21 adds:
+
+- framebuffer allocation and presentation
+- optional depth buffering
+- 4x4 Q16.16 matrix operations
+- translation, rotation, perspective and look-at transforms
+- dynamic meshes, UVs and normals
+- texture creation, pixel access and mipmaps
+- nearest, bilinear and trilinear filtering
+- perspective-correct textured triangle rasterization
+- depth-tested 3D mesh rendering
+- ambient and directional lighting
+- per-vertex/Gouraud/Phong-style lighting and specular support
+- render-to-texture through framebuffer snapshots
+- gamma, invert, tint, brightness and threshold post-processing
+- native examples for triangle, textured cube, lit cube and post-processing
+
+The native compiler dispatcher and runtime now expose these APIs through the `raster` module. The GUI layer also caches GDI+ graphics, fonts and pens to reduce repeated paint-time setup.
 
 ### Self-Hosting Direction
 
@@ -156,13 +179,13 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phase 16 is complete, Phase 17 is complete, and Phase 18 is the current/most recently completed tooling phase.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
+**Phase 16 is complete, Phase 17 is complete, Phase 18 is complete, Phase 19 is complete, Phase 20 is complete, and Phase 21 is complete. Phase 22 is the current direction.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
 The project is moving from broad core-language/runtime capability toward a complete development ecosystem. The immediate areas are compiler/bootstrap stabilization, self-hosting, memory/resource correctness, native backend evolution, standard-library growth, package tooling, concurrency, and continued developer-tooling improvements.
 
-Longer-term work expands into GUI/event/widget APIs, graphics, scientific computing, AI/ML, package distribution, and the VCB-based native toolchain.
+The project has now progressed through the GUI/event/widget layer, 2D graphics foundation, and software-raster/3D pipeline. Current work can move toward the Phase 22 package ecosystem and continued runtime/UI optimization, followed by the long-term VCB native backend direction.
 
 ## Architecture Direction
 

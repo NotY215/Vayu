@@ -66,3 +66,12 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 **Phase 16 is complete. Phase 17 is complete. Phase 18 is the current/most recently completed developer-tooling phase.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration.
 
 The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
+
+
+## Current Implementation Status
+
+The compiler/runtime has progressed through Phase 21. The completed Phase 19-21 work is primarily the native application and graphics foundation: GUI windows/events/widgets, 2D canvas functionality, and a software/hybrid raster pipeline with 3D math, meshes, textures, lighting and post-processing.
+
+These graphics capabilities provide useful infrastructure for future scientific and AI/ML visualization, but they should not be described as an implemented tensor/autodiff/ONNX/CUDA stack. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
+
+The current native raster API includes framebuffers, depth buffers, Q16.16 matrices, mesh and texture resources, mipmaps, filtering, perspective-correct rasterization, lighting, render-to-texture and post-processing. These are native graphics APIs rather than AI/ML APIs.

@@ -40,6 +40,12 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
+Vayu has completed the GUI and graphics foundation through Phase 21. The current development direction is Phase 22 package ecosystem work, while the native runtime continues to receive implementation and performance improvements.
+
+The package ecosystem remains a separate concern from the native graphics APIs: `gui` and `raster` are compiler/runtime capabilities, not package-registry features.
+
+
+
 The package ecosystem remains under development. The current repository already provides the language/module foundations needed by packages:
 
 - `.vyu` source modules

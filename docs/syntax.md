@@ -739,3 +739,113 @@ Vayu Source
 ```
 
 For architecture and roadmap information, see `Documentation.md` and `docs/vision.md`.
+
+
+# 26. Native Raster & 3D Graphics
+
+The native compiler exposes a `raster` module for framebuffer and 3D rendering work. Raster functionality is native-only and integrates with the existing `gui` canvas/window layer.
+
+## Framebuffers
+
+```vyu
+import raster
+
+fb: int = raster.fb_new(640, 480)
+raster.fb_enable_depth(fb)
+raster.fb_clear(fb, 0xFF101018)
+raster.fb_clear_depth(fb)
+raster.fb_present(fb, canvas, 0, 0)
+raster.fb_free(fb)
+```
+
+Framebuffer operations include creation/freeing, depth enable/disable/clear, clear, pixel access, and presentation.
+
+## 4x4 Matrices
+
+Matrices use the Q16.16 fixed-point convention:
+
+```vyu
+m: int = raster.mat_new()
+raster.mat_identity(m)
+raster.mat_translate(m, x, y, z)
+raster.mat_rotate_x(m, degrees)
+raster.mat_rotate_y(m, degrees)
+raster.mat_rotate_z(m, degrees)
+raster.mat_perspective(m, fov, aspect, near, far)
+raster.mat_look_at(m, ex, ey, ez, tx, ty, tz, ux, uy, uz)
+raster.mat_mul(dst, a, b)
+raster.mat_free(m)
+```
+
+## Meshes
+
+```vyu
+mesh: int = raster.mesh_new()
+raster.mesh_add_vert(mesh, x, y, z, u, v)
+raster.mesh_add_vert_lit(mesh, x, y, z, nx, ny, nz, u, v)
+raster.mesh_set_normal(mesh, index, nx, ny, nz)
+raster.mesh_add_tri(mesh, i0, i1, i2)
+raster.mesh_clear(mesh)
+raster.mesh_free(mesh)
+```
+
+Meshes support dynamic vertices, normals, UVs and triangle indices.
+
+## Textures
+
+```vyu
+tex: int = raster.tex_new(64, 64)
+raster.tex_set(tex, x, y, 0xFFFFFFFF)
+raster.tex_set_filter(tex, 2)
+raster.tex_gen_mipmaps(tex)
+width: int = raster.tex_width(tex)
+height: int = raster.tex_height(tex)
+raster.tex_free(tex)
+```
+
+The native texture path supports nearest, bilinear and trilinear filtering, mipmap generation and LOD selection. A framebuffer can be converted to a texture with `tex_from_fb`, and a texture can be presented to a GUI canvas with `tex_present`.
+
+## Lighting and 3D Rendering
+
+```vyu
+raster.set_ambient(0xFF202020)
+raster.light_clear()
+raster.light_set(0, kind, x, y, z, color, intensity)
+raster.draw_mesh(fb, mesh, mvp, tex, 0xFFFFFFFF)
+raster.draw_mesh_lit(fb, mesh, mvp, model, tex, shade_mode, tint,
+                     eye_x, eye_y, eye_z)
+```
+
+The rasterizer provides perspective-correct textured triangles, depth testing, ambient/directional lighting, per-vertex normals, Gouraud/Phong-style lighting and specular support.
+
+## Post-processing
+
+```vyu
+raster.post_gamma(tex, gamma)
+raster.post_invert(tex)
+raster.post_tint(tex, color)
+raster.post_brightness(tex, delta)
+raster.post_threshold(tex, threshold)
+```
+
+These effects operate in-place on the level-0 texture.
+
+## GUI Integration
+
+Raster output is displayed through the native GUI canvas:
+
+```vyu
+c: int = gui.canvas_from_window()
+raster.fb_present(fb, c, 0, 0)
+gui.canvas_free(c)
+```
+
+Current examples include `raster_tri.vyu`, `raster_cube.vyu`, `raster_lit_cube.vyu`, and `raster_postfx.vyu`.
+
+## Numeric Convention
+
+Raster matrix, position, normal, UV and lighting values use the native Q16.16/fixed-point conventions. Colors use packed ARGB-style integers. Native resource APIs perform bounds and handle validation.
+
+# 27. Current Syntax Status
+
+Phase 21 expands the native callable API surface without adding a new core-language keyword. The frontend syntax remains shared across the interpreter/VM and native compiler, while `gui` and `raster` are native-oriented modules.
