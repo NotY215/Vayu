@@ -1,0 +1,77 @@
+# examples/dml_matmul.vyu -- Phase 22.4b demo.
+# GPU matmul via D3D11 compute shaders.  Works on any Windows GPU.
+
+import tensor
+import dml
+import cuda
+
+const Q: int = 65536
+
+def fill_ramp(rows: int, cols: int, mult: int) -> int:
+    vals: list<int> = []
+    i: int = 0
+    n: int = rows * cols
+    while i < n:
+        vals.append((i % 16 + 1) * mult * Q)
+        i = i + 1
+    return tensor.from_int_list([rows, cols], vals)
+
+def main() -> None:
+    cpu_ok: bool = true
+    gpu_ok: bool = false
+
+    dml_avail: bool = dml.available()
+    print("dml.available  = " + str(dml_avail))
+    if dml_avail:
+        gpu_ok = true
+
+    cuda_avail: bool = cuda.available()
+    print("cuda.available = " + str(cuda_avail))
+
+    if not dml_avail and not cuda_avail:
+        print("no GPU backend available; CPU only")
+
+    a: int = fill_ramp(256, 256, 1)
+    b: int = fill_ramp(256, 256, 1)
+    cpu: int = tensor.matmul(a, b)
+    print("cpu done")
+
+    if dml_avail:
+        gpu: int = dml.matmul(a, b)
+        if gpu != 0:
+            same: int = 0
+            total: int = 8
+            i: int = 0
+            while i < total:
+                if tensor.get(cpu, i) == tensor.get(gpu, i):
+                    same = same + 1
+                i = i + 1
+            print("dml cpu vs gpu (first 8): " + str(same) + "/" + str(total))
+            tensor.free(gpu)
+        else:
+            print("dml.matmul returned null")
+
+    if cuda_avail:
+        cg: int = cuda.matmul(a, b)
+        if cg != 0:
+            same: int = 0
+            total: int = 8
+            i: int = 0
+            while i < total:
+                if tensor.get(cpu, i) == tensor.get(cg, i):
+                    same = same + 1
+                i = i + 1
+            print("cuda cpu vs gpu (first 8): " + str(same) + "/" + str(total))
+            tensor.free(cg)
+        else:
+            print("cuda.matmul returned null")
+
+    tensor.free(a)
+    tensor.free(b)
+    tensor.free(cpu)
+    dml.shutdown()
+    cuda.shutdown()
+
+    print("dml demo done")
+
+main()

@@ -19,6 +19,128 @@ const LIB_ZIP_URL: str = "https://github.com/NotY215/Vayu/raw/master/tools/Lib.z
 const LIB_DIR: str = "lib"
 const LIB_ZIP: str = "lib.zip"
 
+# ---------------------------------------------------------------------------
+# Phase 23.0 - semantic versioning (parse, compare, match).
+# ---------------------------------------------------------------------------
+
+def _semver_parse(s: str) -> list<int>:
+    # "1.2.3" or "1.2" -> [1, 2, 3].  Pre-release tags (-alpha, +meta)
+    # are trimmed.  Returns [] on any parse failure.
+    parts: list<int> = []
+    cur: str = ""
+    i: int = 0
+    while i < len(s):
+        c: str = s[i]
+        if c == ".":
+            if len(cur) == 0:
+                return []
+            parts.append(int(cur))
+            cur = ""
+        elif c == "-":
+            break
+        elif c == "+":
+            break
+        elif c >= "0" and c <= "9":
+            cur = cur + c
+        else:
+            return []
+        i = i + 1
+    if len(cur) > 0:
+        parts.append(int(cur))
+    while len(parts) < 3:
+        parts.append(0)
+    if len(parts) > 3:
+        return []
+    return parts
+
+def _semver_cmp(a: list<int>, b: list<int>) -> int:
+    i: int = 0
+    while i < 3:
+        if a[i] < b[i]:
+            return 0 - 1
+        if a[i] > b[i]:
+            return 1
+        i = i + 1
+    return 0
+
+def _constraint_matches(version: str, op: str, target: str) -> bool:
+    v: list<int> = _semver_parse(version)
+    t: list<int> = _semver_parse(target)
+    if len(v) == 0 or len(t) == 0:
+        return false
+    c: int = _semver_cmp(v, t)
+    if op == "=":
+        return c == 0
+    if op == ">=":
+        return c >= 0
+    if op == ">":
+        return c > 0
+    if op == "<=":
+        return c <= 0
+    if op == "<":
+        return c < 0
+    return false
+
+def _caret_matches(version: str, base: str) -> bool:
+    # ^1.2.3 -> >= 1.2.3, < 2.0.0
+    v: list<int> = _semver_parse(version)
+    b: list<int> = _semver_parse(base)
+    if len(v) == 0 or len(b) == 0:
+        return false
+    if _semver_cmp(v, b) < 0:
+        return false
+    if b[0] > 0:
+        return v[0] == b[0]
+    if b[1] > 0:
+        return v[0] == 0 and v[1] == b[1]
+    return v[0] == 0 and v[1] == 0 and v[2] == b[2]
+
+def _tilde_matches(version: str, base: str) -> bool:
+    # ~1.2.3 -> >= 1.2.3, < 1.3.0
+    v: list<int> = _semver_parse(version)
+    b: list<int> = _semver_parse(base)
+    if len(v) == 0 or len(b) == 0:
+        return false
+    if _semver_cmp(v, b) < 0:
+        return false
+    return v[0] == b[0] and v[1] == b[1]
+
+def version_matches(range: str, version: str) -> bool:
+    r: str = range.strip()
+    if len(r) == 0 or r == "*":
+        return true
+    if r[0] == "^":
+        return _caret_matches(version, r.substr(1, len(r)))
+    if r[0] == "~":
+        return _tilde_matches(version, r.substr(1, len(r)))
+    if r.starts_with(">="):
+        return _constraint_matches(version, ">=", r.substr(2, len(r)))
+    if r.starts_with("<="):
+        return _constraint_matches(version, "<=", r.substr(2, len(r)))
+    if r.starts_with(">"):
+        return _constraint_matches(version, ">", r.substr(1, len(r)))
+    if r.starts_with("<"):
+        return _constraint_matches(version, "<", r.substr(1, len(r)))
+    if r.starts_with("="):
+        return _constraint_matches(version, "=", r.substr(1, len(r)))
+    return _constraint_matches(version, "=", r)
+
+def best_match(range: str, candidates: list<str>) -> str:
+    # Highest candidate that satisfies the range.  "" if none.
+    best: str = ""
+    best_parts: list<int> = []
+    i: int = 0
+    while i < len(candidates):
+        c: str = candidates[i]
+        if version_matches(range, c):
+            cp: list<int> = _semver_parse(c)
+            if len(cp) > 0:
+                if len(best) == 0 or _semver_cmp(cp, best_parts) > 0:
+                    best = c
+                    best_parts = cp
+        i = i + 1
+    return best
+
 class Dep:
     name: str
     version: str
@@ -564,6 +686,44 @@ def main() -> None:
     if cmd == "clean":
         cmd_clean()
         return
+    if cmd == "semver-test":
+        # Quick self-test of version resolution.  Prints PASS/FAIL lines.
+        okc: int = 0
+        failc: int = 0
+        def check(name: str, got: bool, want: bool) -> None:
+            nonlocal okc
+            nonlocal failc
+            if got == want:
+                print("  PASS  " + name)
+                okc = okc + 1
+            else:
+                print("  FAIL  " + name)
+                failc = failc + 1
+
+        check("^1.2.3 matches 1.5.0", version_matches("^1.2.3", "1.5.0"), true)
+        check("^1.2.3 matches 1.2.3", version_matches("^1.2.3", "1.2.3"), true)
+        check("^1.2.3 rejects 2.0.0", version_matches("^1.2.3", "2.0.0"), false)
+        check("^1.2.3 rejects 1.1.0", version_matches("^1.2.3", "1.1.0"), false)
+        check("^0.3.5 matches 0.3.9", version_matches("^0.3.5", "0.3.9"), true)
+        check("^0.3.5 rejects 0.4.0", version_matches("^0.3.5", "0.4.0"), false)
+        check("~1.2.3 matches 1.2.9", version_matches("~1.2.3", "1.2.9"), true)
+        check("~1.2.3 rejects 1.3.0", version_matches("~1.2.3", "1.3.0"), false)
+        check(">=1.0.0 matches 5.0.0", version_matches(">=1.0.0", "5.0.0"), true)
+        check("<2.0.0 rejects 2.0.0", version_matches("<2.0.0", "2.0.0"), false)
+        check("* matches anything", version_matches("*", "0.0.1"), true)
+        check("exact 1.2.3 matches 1.2.3", version_matches("1.2.3", "1.2.3"), true)
+        check("exact 1.2.3 rejects 1.2.4", version_matches("1.2.3", "1.2.4"), false)
+
+        cands: list<str> = ["1.0.0", "1.2.0", "1.2.5", "1.9.0", "2.0.0"]
+        bm: str = best_match("^1.0.0", cands)
+        check("best_match ^1.0.0 -> 1.9.0", bm == "1.9.0", true)
+
+        print("")
+        print("  " + str(okc) + " passed, " + str(failc) + " failed")
+        if failc > 0:
+            exit(1)
+        return
+
     print("nva: unknown command '" + cmd + "'")
     exit(1)
 

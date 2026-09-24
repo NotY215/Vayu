@@ -1,0 +1,56 @@
+# examples/cuda_matmul.vyu -- Phase 22.4 demo.
+# GPU matmul if NVIDIA + driver + NVRTC are present; CPU otherwise.
+
+import tensor
+import cuda
+
+const Q: int = 65536
+
+def fill_ramp(rows: int, cols: int, mult: int) -> int:
+    vals: list<int> = []
+    i: int = 0
+    n: int = rows * cols
+    while i < n:
+        vals.append((i % 16 + 1) * mult * Q)
+        i = i + 1
+    return tensor.from_int_list([rows, cols], vals)
+
+def main() -> None:
+    avail: bool = cuda.available()
+    print("cuda.available = " + str(avail))
+    if avail:
+        print("cuda.device_count = " + str(cuda.device_count()))
+
+    a: int = fill_ramp(128, 128, 1)
+    b: int = fill_ramp(128, 128, 1)
+
+    # Reference CPU result
+    cpu: int = tensor.matmul(a, b)
+
+    if avail:
+        gpu: int = cuda.matmul(a, b)
+        if gpu != 0:
+            tensor.print(cpu, "cpu")
+            tensor.print(gpu, "gpu")
+            # Sample 4 elements for equality check
+            i: int = 0
+            same: int = 0
+            total: int = 4
+            while i < total:
+                if tensor.get(cpu, i) == tensor.get(gpu, i):
+                    same = same + 1
+                i = i + 1
+            print("cpu vs gpu matching (first 4): " + str(same) + "/" + str(total))
+            tensor.free(gpu)
+        else:
+            print("cuda.matmul returned null, CPU fallback only")
+    else:
+        tensor.print(cpu, "cpu")
+        print("no CUDA device; CPU result shown")
+
+    tensor.free(a)
+    tensor.free(b)
+    tensor.free(cpu)
+    cuda.shutdown()
+
+main()

@@ -335,6 +335,7 @@ namespace vayu {
                             n->moduleName != "os" && n->moduleName != "py" &&
                             n->moduleName != "gui" && n->moduleName != "raster" &&
                             n->moduleName != "tensor" && n->moduleName != "onnx" &&
+                            n->moduleName != "cuda" && n->moduleName != "dml" &&
                             !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
@@ -4133,8 +4134,86 @@ namespace vayu {
                     line(tmp + " =l call $vayu_nn_run_str(l " + t.ssa + ", l " + i.ssa + ")");
                     r.ssa = tmp; r.type = VType::Int; return r;
                 }
+                if (m == "load") {
+                    Val p = a0(); std::string t = newTemp();
+                    line(t + " =l call $vayu_onnx_load(l " + p.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+                if (m == "free") {
+                    Val h = a0(); line("call $vayu_onnx_free(l " + h.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                if (m == "run") {
+                    Val mh = a0(); Val ih = a1(); std::string t = newTemp();
+                    line(t + " =l call $vayu_onnx_run(l " + mh.ssa + ", l " + ih.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+                if (m == "input_name") {
+                    Val h = a0(); std::string t = newTemp();
+                    line(t + " =l call $vayu_onnx_input_name(l " + h.ssa + ")");
+                    r.ssa = t; r.type = VType::Str; return r;
+                }
+                if (m == "output_name") {
+                    Val h = a0(); std::string t = newTemp();
+                    line(t + " =l call $vayu_onnx_output_name(l " + h.ssa + ")");
+                    r.ssa = t; r.type = VType::Str; return r;
+                }
+                if (m == "debug") {
+                    Val h = a0();
+                    line("call $vayu_onnx_debug(l " + h.ssa + ")");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
 
                 throw std::runtime_error("native: onnx has no method '" + m + "'");
+            }
+
+            Val emitCudaCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                if (m == "available") {
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_cuda_available()");
+                    r.ssa = t; r.type = VType::Bool; return r;
+                }
+                if (m == "device_count") {
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_cuda_device_count()");
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+                if (m == "matmul") {
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_cuda_matmul(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+                if (m == "shutdown") {
+                    line("call $vayu_cuda_shutdown()");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                throw std::runtime_error("native: cuda has no method '" + m + "'");
+            }
+
+            Val emitDmlCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+                if (m == "available") {
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_dml_available()");
+                    r.ssa = t; r.type = VType::Bool; return r;
+                }
+                if (m == "matmul") {
+                    Val a = emitExpr(n->args[0].value.get());
+                    Val b = emitExpr(n->args[1].value.get());
+                    std::string t = newTemp();
+                    line(t + " =l call $vayu_dml_matmul(l " + a.ssa + ", l " + b.ssa + ")");
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+                if (m == "shutdown") {
+                    line("call $vayu_dml_shutdown()");
+                    r.ssa = "0"; r.type = VType::Void; return r;
+                }
+                throw std::runtime_error("native: dml has no method '" + m + "'");
             }
 
             Val emitCall(const CallExpr* n) {
@@ -4230,6 +4309,8 @@ namespace vayu {
                         if (tn0->name == "raster")return emitRasterCall(n, attr);
                         if (tn0->name == "tensor")return emitTensorCall(n, attr);
                         if (tn0->name == "onnx")  return emitOnnxCall(n, attr);
+                        if (tn0->name == "cuda")  return emitCudaCall(n, attr);
+                        if (tn0->name == "dml")   return emitDmlCall(n, attr);
                         if (tn0->name == "fs")    return emitFsCall(n, attr);
                         if (tn0->name == "time")  return emitTimeCall(n, attr);
                         if (tn0->name == "json")  return emitJsonCall(n, attr);
@@ -6206,6 +6287,8 @@ namespace vayu {
 #  include <gdiplus.h>
 #  include <wincodec.h>
 #  include <objbase.h>
+#  include <d3d11.h>
+#  include <d3dcompiler.h>
 #else
 #  include <pthread.h>
 #  include <unistd.h>
@@ -11739,6 +11822,998 @@ static int64_t vayu_nn_read_int(const char** p) {
     return neg ? -v : v;
 }
 
+/* ===========================================================================
+ * Phase 22.3b - ONNX protobuf decoder + graph executor.
+ * Minimal wire decoder (no libprotobuf).  Handles the ONNX subset needed
+ * for MLP-scale inference: Gemm, MatMul, Add, Mul, Sub, Div, Relu,
+ * Sigmoid, Tanh, Softmax, Flatten, Transpose.
+ * ========================================================================= */
+
+typedef struct { const uint8_t* p; const uint8_t* end; } PbReader;
+
+static int pb_read_byte(PbReader* r, uint8_t* out) {
+    if (r->p >= r->end) return 0;
+    *out = *r->p++;
+    return 1;
+}
+static int pb_read_varint(PbReader* r, uint64_t* out) {
+    uint64_t v = 0;
+    int shift = 0;
+    while (shift < 64) {
+        uint8_t b;
+        if (!pb_read_byte(r, &b)) return 0;
+        v |= ((uint64_t)(b & 0x7F)) << shift;
+        if ((b & 0x80) == 0) { *out = v; return 1; }
+        shift += 7;
+    }
+    return 0;
+}
+static int pb_read_tag(PbReader* r, int* field, int* wire) {
+    uint64_t k;
+    if (!pb_read_varint(r, &k)) return 0;
+    *field = (int)(k >> 3);
+    *wire  = (int)(k & 7);
+    return 1;
+}
+static int pb_skip(PbReader* r, int wire) {
+    uint64_t v;
+    switch (wire) {
+        case 0: return pb_read_varint(r, &v);
+        case 1: r->p += 8; return r->p <= r->end;
+        case 2: if (!pb_read_varint(r, &v)) return 0;
+                r->p += v; return r->p <= r->end;
+        case 5: r->p += 4; return r->p <= r->end;
+    }
+    return 0;
+}
+static int pb_read_len(PbReader* r, const uint8_t** out, size_t* len) {
+    uint64_t v;
+    if (!pb_read_varint(r, &v)) return 0;
+    if (r->p + v > r->end) return 0;
+    *out = r->p;
+    *len = (size_t)v;
+    r->p += v;
+    return 1;
+}
+
+/* ---------- Model representation ---------- */
+
+#define ONNX_MAX_BIND   128
+#define ONNX_MAX_NODE   128
+#define ONNX_MAX_IN      4
+#define ONNX_MAX_OUT     1
+#define ONNX_NAME_CAP   64
+
+typedef struct { char name[ONNX_NAME_CAP]; int64_t t; } OnnxBind;
+
+typedef struct {
+    char    op[24];
+    char    inputs[ONNX_MAX_IN][ONNX_NAME_CAP];
+    int     n_inputs;
+    char    output[ONNX_NAME_CAP];
+    int64_t alpha_q;   /* Gemm default 1.0 */
+    int64_t beta_q;    /* Gemm default 1.0 */
+    int     transA;
+    int     transB;
+    int     axis;      /* Flatten default 1 */
+} OnnxNode;
+
+typedef struct {
+    OnnxBind binds[ONNX_MAX_BIND];
+    int      n_binds;
+    OnnxNode nodes[ONNX_MAX_NODE];
+    int      n_nodes;
+    char     inputs[ONNX_MAX_IN][ONNX_NAME_CAP];
+    int      n_inputs;
+    char     outputs[ONNX_MAX_OUT][ONNX_NAME_CAP];
+    int      n_outputs;
+} VayuOnnx;
+
+static int onnx_bind_find(VayuOnnx* m, const char* name) {
+    for (int i = 0; i < m->n_binds; ++i)
+        if (strcmp(m->binds[i].name, name) == 0) return i;
+    return -1;
+}
+static void onnx_bind_set(VayuOnnx* m, const char* name, int64_t t) {
+    int idx = onnx_bind_find(m, name);
+    if (idx >= 0) { m->binds[idx].t = t; return; }
+    if (m->n_binds >= ONNX_MAX_BIND) return;
+    int n = (int)strlen(name);
+    if (n > ONNX_NAME_CAP - 1) n = ONNX_NAME_CAP - 1;
+    memcpy(m->binds[m->n_binds].name, name, (size_t)n);
+    m->binds[m->n_binds].name[n] = 0;
+    m->binds[m->n_binds].t = t;
+    m->n_binds++;
+}
+static int64_t onnx_bind_get(VayuOnnx* m, const char* name) {
+    int idx = onnx_bind_find(m, name);
+    return idx >= 0 ? m->binds[idx].t : 0;
+}
+
+/* ---------- TensorProto ---------- */
+static void onnx_parse_tensor(const uint8_t* data, size_t len, VayuOnnx* m) {
+    PbReader r = { data, data + len };
+    int64_t dims[8]; int ndim = 0;
+    int dtype = 0;
+    char name[ONNX_NAME_CAP]; name[0] = 0;
+    const uint8_t* raw = NULL; size_t raw_len = 0;
+    const uint8_t* fpacked = NULL; size_t fpacked_len = 0;
+    const uint8_t* ipacked = NULL; size_t ipacked_len = 0;
+
+    while (r.p < r.end) {
+        int f, w;
+        if (!pb_read_tag(&r, &f, &w)) break;
+        if (f == 1 && w == 0) { uint64_t v; if (!pb_read_varint(&r, &v)) break;
+                                 if (ndim < 8) dims[ndim++] = (int64_t)v; }
+        else if (f == 1 && w == 2) {
+            const uint8_t* b; size_t bl; if (!pb_read_len(&r, &b, &bl)) break;
+            PbReader rr = { b, b + bl };
+            while (rr.p < rr.end) { uint64_t v; if (!pb_read_varint(&rr, &v)) break;
+                                    if (ndim < 8) dims[ndim++] = (int64_t)v; }
+        }
+        else if (f == 2 && w == 0) { uint64_t v; if (!pb_read_varint(&r, &v)) break;
+                                     dtype = (int)v; }
+        else if (f == 4 && w == 2) { if (!pb_read_len(&r, &fpacked, &fpacked_len)) break; }
+        else if (f == 7 && w == 2) { if (!pb_read_len(&r, &ipacked, &ipacked_len)) break; }
+        else if (f == 8 && w == 2) {
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            int cp = (int)(bl < ONNX_NAME_CAP - 1 ? bl : ONNX_NAME_CAP - 1);
+            memcpy(name, b, (size_t)cp); name[cp] = 0;
+        }
+        else if (f == 9 && w == 2) { if (!pb_read_len(&r, &raw, &raw_len)) break; }
+        else if (!pb_skip(&r, w)) break;
+    }
+
+    if (ndim == 0 || name[0] == 0) return;
+    int64_t sh[8];
+    for (int i = 0; i < ndim; ++i) sh[i] = dims[i];
+    int64_t th = vayu_tensor_new_from_shape(sh, ndim);
+    VayuTensor* t = (VayuTensor*)th;
+    if (!t) return;
+
+    if (dtype == 1) {  /* FLOAT */
+        const uint8_t* src = raw ? raw : fpacked;
+        size_t slen = raw ? raw_len : fpacked_len;
+        if (src && slen >= (size_t)t->numel * 4) {
+            for (int64_t i = 0; i < t->numel; ++i) {
+                float fv; memcpy(&fv, src + i * 4, 4);
+                t->data[i] = (int64_t)((double)fv * 65536.0 + (fv < 0 ? -0.5 : 0.5));
+            }
+        }
+    } else if (dtype == 7) {  /* INT64 */
+        if (raw && raw_len >= (size_t)t->numel * 8) {
+            for (int64_t i = 0; i < t->numel; ++i) {
+                int64_t iv; memcpy(&iv, raw + i * 8, 8);
+                t->data[i] = iv << 16;
+            }
+        } else if (ipacked && ipacked_len >= (size_t)t->numel * 8) {
+            for (int64_t i = 0; i < t->numel; ++i) {
+                int64_t iv; memcpy(&iv, ipacked + i * 8, 8);
+                t->data[i] = iv << 16;
+            }
+        }
+    }
+    onnx_bind_set(m, name, (int64_t)t);
+}
+
+/* ---------- AttributeProto ---------- */
+static void onnx_parse_attr(const uint8_t* data, size_t len,
+                            char* name_out, int* type_out,
+                            int64_t* i_out, int64_t* f_out)
+{
+    PbReader r = { data, data + len };
+    *type_out = 0; *i_out = 0; *f_out = 0;
+    name_out[0] = 0;
+    while (r.p < r.end) {
+        int f, w;
+        if (!pb_read_tag(&r, &f, &w)) break;
+        if (f == 1 && w == 2) {
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            int cp = (int)(bl < ONNX_NAME_CAP - 1 ? bl : ONNX_NAME_CAP - 1);
+            memcpy(name_out, b, (size_t)cp); name_out[cp] = 0;
+        } else if (f == 2 && w == 5) {   /* f (float, fixed32) */
+            float fv; memcpy(&fv, r.p, 4); r.p += 4;
+            *f_out = (int64_t)((double)fv * 65536.0);
+        } else if (f == 3 && w == 0) {   /* i (int64 varint) */
+            uint64_t v; if (!pb_read_varint(&r, &v)) break;
+            *i_out = (int64_t)v;
+        } else if (f == 20 && w == 0) {  /* type */
+            uint64_t v; if (!pb_read_varint(&r, &v)) break;
+            *type_out = (int)v;
+        } else if (!pb_skip(&r, w)) break;
+    }
+}
+
+/* ---------- NodeProto ---------- */
+static void onnx_parse_node(const uint8_t* data, size_t len, VayuOnnx* m) {
+    if (m->n_nodes >= ONNX_MAX_NODE) return;
+    OnnxNode* nd = &m->nodes[m->n_nodes];
+    memset(nd, 0, sizeof(*nd));
+    nd->alpha_q = 65536;
+    nd->beta_q  = 65536;
+    nd->axis    = 1;
+
+    PbReader r = { data, data + len };
+    while (r.p < r.end) {
+        int f, w;
+        if (!pb_read_tag(&r, &f, &w)) break;
+        if (f == 1 && w == 2) {          /* input */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            if (nd->n_inputs < ONNX_MAX_IN) {
+                int cp = (int)(bl < ONNX_NAME_CAP - 1 ? bl : ONNX_NAME_CAP - 1);
+                memcpy(nd->inputs[nd->n_inputs], b, (size_t)cp);
+                nd->inputs[nd->n_inputs][cp] = 0;
+                nd->n_inputs++;
+            }
+        } else if (f == 2 && w == 2) {   /* output */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            int cp = (int)(bl < ONNX_NAME_CAP - 1 ? bl : ONNX_NAME_CAP - 1);
+            memcpy(nd->output, b, (size_t)cp);
+            nd->output[cp] = 0;
+        } else if (f == 4 && w == 2) {   /* op_type */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            int cp = (int)(bl < 23 ? bl : 23);
+            memcpy(nd->op, b, (size_t)cp);
+            nd->op[cp] = 0;
+        } else if (f == 5 && w == 2) {   /* attribute */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            char an[64]; int at; int64_t ai, af;
+            onnx_parse_attr(b, bl, an, &at, &ai, &af);
+            /* AttributeType: UNDEFINED=0 FLOAT=1 INT=2 STRING=3 TENSOR=4
+               GRAPH=5 FLOATS=6 INTS=7 STRINGS=8 TENSORS=9 GRAPHS=10
+               SPARSE_TENSOR=11 SPARSE_TENSORS=12 TYPE_PROTO=13 TYPE_PROTOS=14 */
+            if      (strcmp(an, "alpha")  == 0 && at == 1) nd->alpha_q = af;
+            else if (strcmp(an, "beta")   == 0 && at == 1) nd->beta_q  = af;
+            else if (strcmp(an, "transA") == 0 && at == 2) nd->transA  = (int)ai;
+            else if (strcmp(an, "transB") == 0 && at == 2) nd->transB  = (int)ai;
+            else if (strcmp(an, "axis")   == 0 && at == 2) nd->axis    = (int)ai;
+        } else if (!pb_skip(&r, w)) break;
+    }
+    if (nd->op[0] == 0 || nd->output[0] == 0) return;
+    m->n_nodes++;
+}
+
+/* ---------- ValueInfoProto (only name matters for shape inference) ---------- */
+static void onnx_parse_value_info(const uint8_t* data, size_t len,
+                                  char* name_out, int cap)
+{
+    PbReader r = { data, data + len };
+    name_out[0] = 0;
+    while (r.p < r.end) {
+        int f, w;
+        if (!pb_read_tag(&r, &f, &w)) break;
+        if (f == 1 && w == 2) {
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            int cp = (int)(bl < (size_t)(cap - 1) ? bl : (size_t)(cap - 1));
+            memcpy(name_out, b, (size_t)cp); name_out[cp] = 0;
+        } else if (!pb_skip(&r, w)) break;
+    }
+}
+
+/* ---------- GraphProto ---------- */
+static void onnx_parse_graph(const uint8_t* data, size_t len, VayuOnnx* m) {
+    PbReader r = { data, data + len };
+    while (r.p < r.end) {
+        int f, w;
+        if (!pb_read_tag(&r, &f, &w)) break;
+        if (f == 1 && w == 2) {          /* node */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            onnx_parse_node(b, bl, m);
+        } else if (f == 5 && w == 2) {   /* initializer */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            onnx_parse_tensor(b, bl, m);
+        } else if (f == 11 && w == 2) {  /* input */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            if (m->n_inputs < ONNX_MAX_IN) {
+                onnx_parse_value_info(b, bl,
+                    m->inputs[m->n_inputs], ONNX_NAME_CAP);
+                if (m->inputs[m->n_inputs][0]) m->n_inputs++;
+            }
+        } else if (f == 12 && w == 2) {  /* output */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            if (m->n_outputs < ONNX_MAX_OUT) {
+                onnx_parse_value_info(b, bl,
+                    m->outputs[m->n_outputs], ONNX_NAME_CAP);
+                if (m->outputs[m->n_outputs][0]) m->n_outputs++;
+            }
+        } else if (!pb_skip(&r, w)) break;
+    }
+}
+
+/* ---------- Softmax (numerically stabilised) ---------- */
+static int64_t vayu_tensor_softmax(int64_t h) {
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t || t->numel == 0) return 0;
+    int64_t mx = t->data[0];
+    for (int64_t i = 1; i < t->numel; ++i) if (t->data[i] > mx) mx = t->data[i];
+    int64_t oh = vayu_tensor_new_from_shape(t->shape, t->ndim);
+    VayuTensor* o = (VayuTensor*)oh;
+    if (!o) return 0;
+    double sum = 0.0;
+    for (int64_t i = 0; i < t->numel; ++i) {
+        double e = exp((double)(t->data[i] - mx) / 65536.0);
+        o->data[i] = (int64_t)(e * 65536.0 + 0.5);
+        sum += (double)o->data[i];
+    }
+    if (sum <= 0.0) return oh;
+    for (int64_t i = 0; i < t->numel; ++i) {
+        double v = (double)o->data[i] / sum;
+        o->data[i] = (int64_t)(v * 65536.0 + 0.5);
+    }
+    return oh;
+}
+
+/* ---------- Executor ---------- */
+static int64_t vayu_onnx_execute(VayuOnnx* m, int64_t input_h) {
+    if (m->n_inputs > 0 && input_h) onnx_bind_set(m, m->inputs[0], input_h);
+    for (int i = 0; i < m->n_nodes; ++i) {
+        OnnxNode* nd = &m->nodes[i];
+        int64_t A = nd->n_inputs >= 1 ? onnx_bind_get(m, nd->inputs[0]) : 0;
+        int64_t B = nd->n_inputs >= 2 ? onnx_bind_get(m, nd->inputs[1]) : 0;
+        int64_t C = nd->n_inputs >= 3 ? onnx_bind_get(m, nd->inputs[2]) : 0;
+        if (!A) return 0;
+
+        int64_t r = 0;
+        if      (strcmp(nd->op, "MatMul")   == 0) r = vayu_tensor_matmul(A, B);
+        else if (strcmp(nd->op, "Gemm")     == 0) {
+            int64_t A2 = nd->transA ? vayu_tensor_transpose(A) : A;
+            int64_t B2 = nd->transB ? vayu_tensor_transpose(B) : B;
+            int64_t mm = vayu_tensor_matmul(A2, B2);
+            r = mm;
+            if (nd->n_inputs >= 3 && C) {
+                int64_t ba = vayu_tensor_mul_scalar(mm, nd->alpha_q);
+                int64_t bb = vayu_tensor_mul_scalar(C,  nd->beta_q);
+                r = vayu_tensor_add(ba, bb);
+            }
+        }
+        else if (strcmp(nd->op, "Add")      == 0) r = vayu_tensor_add(A, B);
+        else if (strcmp(nd->op, "Sub")      == 0) r = vayu_tensor_sub(A, B);
+        else if (strcmp(nd->op, "Mul")      == 0) r = vayu_tensor_mul(A, B);
+        else if (strcmp(nd->op, "Div")      == 0) r = vayu_tensor_div(A, B);
+        else if (strcmp(nd->op, "Relu")     == 0) r = vayu_tensor_relu(A);
+        else if (strcmp(nd->op, "Sigmoid")  == 0) r = vayu_tensor_sigmoid(A);
+        else if (strcmp(nd->op, "Tanh")     == 0) r = vayu_tensor_tanh(A);
+        else if (strcmp(nd->op, "Softmax")  == 0) r = vayu_tensor_softmax(A);
+        else if (strcmp(nd->op, "Transpose")== 0) r = vayu_tensor_transpose(A);
+        else if (strcmp(nd->op, "Flatten")  == 0) {
+            VayuTensor* t = (VayuTensor*)A;
+            if (t->ndim != 2) { r = A; }
+            else {
+                int64_t sh[2] = { t->shape[0], t->shape[1] };
+                r = vayu_tensor_reshape(A, (int64_t)&(VayuList){0});
+                /* simple 2D flatten is identity; reshape to [batch, prod] */
+                int64_t nsh[8]; int nn = 0;
+                nsh[nn++] = t->shape[0];
+                int64_t rest = 1;
+                for (int d = 1; d < t->ndim; ++d) rest *= t->shape[d];
+                nsh[nn++] = rest;
+                int64_t fl = vayu_tensor_new_from_shape(nsh, 2);
+                memcpy(((VayuTensor*)fl)->data, t->data,
+                       sizeof(int64_t) * (size_t)t->numel);
+                r = fl;
+                (void)sh;
+            }
+        }
+        if (!r) return 0;
+        onnx_bind_set(m, nd->output, r);
+    }
+    if (m->n_outputs > 0) return onnx_bind_get(m, m->outputs[0]);
+    if (m->n_nodes > 0)   return onnx_bind_get(m, m->nodes[m->n_nodes-1].output);
+    return 0;
+}
+
+/* ---------- Public API ---------- */
+
+int64_t vayu_onnx_load(int64_t path_sp) {
+    VayuStr* path = (VayuStr*)path_sp;
+    FILE* f = fopen(path->data, "rb");
+    if (!f) return 0;
+    fseek(f, 0, SEEK_END);
+    long long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz <= 0) { fclose(f); return 0; }
+    uint8_t* buf = (uint8_t*)malloc((size_t)sz);
+    fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+
+    VayuOnnx* m = (VayuOnnx*)malloc(sizeof(VayuOnnx));
+    memset(m, 0, sizeof(*m));
+
+    PbReader r = { buf, buf + sz };
+    while (r.p < r.end) {
+        int f2, w;
+        if (!pb_read_tag(&r, &f2, &w)) break;
+        if (f2 == 7 && w == 2) {  /* ModelProto.graph */
+            const uint8_t* b; size_t bl;
+            if (!pb_read_len(&r, &b, &bl)) break;
+            onnx_parse_graph(b, bl, m);
+        } else if (!pb_skip(&r, w)) break;
+    }
+    free(buf);
+    return (int64_t)m;
+}
+
+void vayu_onnx_free(int64_t h) {
+    VayuOnnx* m = (VayuOnnx*)h;
+    if (!m) return;
+    free(m);
+}
+
+int64_t vayu_onnx_run(int64_t model_h, int64_t input_h) {
+    VayuOnnx* m = (VayuOnnx*)model_h;
+    if (!m) return 0;
+    return vayu_onnx_execute(m, input_h);
+}
+
+int64_t vayu_onnx_input_name(int64_t h) {
+    VayuOnnx* m = (VayuOnnx*)h;
+    if (!m || m->n_inputs == 0) return (int64_t)vayu_mkstr("", 0);
+    return (int64_t)vayu_mkstr_c(m->inputs[0]);
+}
+int64_t vayu_onnx_output_name(int64_t h) {
+    VayuOnnx* m = (VayuOnnx*)h;
+    if (!m || m->n_outputs == 0) return (int64_t)vayu_mkstr("", 0);
+    return (int64_t)vayu_mkstr_c(m->outputs[0]);
+}
+
+void vayu_onnx_debug(int64_t h) {
+    VayuOnnx* m = (VayuOnnx*)h;
+    if (!m) { printf("[onnx] null model\n"); return; }
+    printf("[onnx] binds=%d nodes=%d inputs=%d outputs=%d\n",
+           m->n_binds, m->n_nodes, m->n_inputs, m->n_outputs);
+    for (int i = 0; i < m->n_inputs; ++i)
+        printf("[onnx]   in  %s\n", m->inputs[i]);
+    for (int i = 0; i < m->n_outputs; ++i)
+        printf("[onnx]   out %s\n", m->outputs[i]);
+    for (int i = 0; i < m->n_binds; ++i) {
+        VayuTensor* t = (VayuTensor*)m->binds[i].t;
+        if (!t) { printf("[onnx]   bind %s = NULL\n", m->binds[i].name); continue; }
+        printf("[onnx]   bind %s shape=[", m->binds[i].name);
+        for (int k = 0; k < t->ndim; ++k)
+            printf("%s%lld", k ? "," : "", (long long)t->shape[k]);
+        printf("]\n");
+    }
+    for (int i = 0; i < m->n_nodes; ++i) {
+        OnnxNode* nd = &m->nodes[i];
+        printf("[onnx]   node %d: %s  in=[", i, nd->op);
+        for (int k = 0; k < nd->n_inputs; ++k)
+            printf("%s%s", k ? "," : "", nd->inputs[k]);
+        printf("] out=%s transB=%d\n", nd->output, nd->transB);
+    }
+}
+
+/* ===========================================================================
+ * Phase 22.4 - CUDA matmul via runtime NVRTC compilation.
+ * Loads nvcuda + nvrtc lazily.  If either is missing, cuda.available()
+ * returns 0 and every op is a no-op.  CPU fallback is the caller's job.
+ * ========================================================================= */
+
+#ifdef _WIN32
+
+typedef void* VayuCUcontext;
+typedef void* VayuCUmodule;
+typedef void* VayuCUfunction;
+typedef int   VayuCUresult;
+
+typedef struct {
+    void* lib_nvcuda;
+    void* lib_nvrtc;
+    int   inited;
+    int   device_count;
+
+    /* nvcuda driver API */
+    int (*cuInit)(unsigned int);
+    int (*cuDeviceGetCount)(int*);
+    int (*cuDeviceGet)(int*, int);
+    int (*cuCtxCreate)(VayuCUcontext*, unsigned int, int);
+    int (*cuCtxDestroy)(VayuCUcontext);
+    int (*cuMemAlloc)(void**, size_t);
+    int (*cuMemFree)(void*);
+    int (*cuMemcpyHtoD)(void*, const void*, size_t);
+    int (*cuMemcpyDtoH)(void*, const void*, size_t);
+    int (*cuModuleLoadData)(VayuCUmodule*, const void*);
+    int (*cuModuleGetFunction)(VayuCUfunction*, VayuCUmodule, const char*);
+    int (*cuLaunchKernel)(VayuCUfunction,
+                          unsigned, unsigned, unsigned,
+                          unsigned, unsigned, unsigned,
+                          unsigned, void*, void**, void**);
+    int (*cuCtxSynchronize)(void);
+
+    /* nvrtc */
+    int    (*nvrtcCreateProgram)(void**, const char*, const char*, int,
+                                 const char**, const char**);
+    int    (*nvrtcCompileProgram)(void*, int, const char**);
+    int    (*nvrtcGetPTXSize)(void*, size_t*);
+    int    (*nvrtcGetPTX)(void*, char*);
+    int    (*nvrtcDestroyProgram)(void**);
+
+    /* cached kernel */
+    VayuCUfunction matmul_kernel;
+    VayuCUcontext  ctx;
+} VayuCuda;
+
+static VayuCuda g_cuda;
+static int     g_cuda_state = -1;   /* -1 = uninit, 0 = unavailable, 1 = ready */
+
+static const char* VAYU_CUDA_KERNEL_SRC =
+    "extern \"C\" __global__ void vayu_q16_matmul(\n"
+    "    const long long* __restrict__ A,\n"
+    "    const long long* __restrict__ B,\n"
+    "    long long* __restrict__ C,\n"
+    "    int M, int K, int N)\n"
+    "{\n"
+    "    int i = blockIdx.y * blockDim.y + threadIdx.y;\n"
+    "    int j = blockIdx.x * blockDim.x + threadIdx.x;\n"
+    "    if (i >= M || j >= N) return;\n"
+    "    double s = 0.0;\n"
+    "    for (int k = 0; k < K; ++k) {\n"
+    "        s += ((double)A[(long long)i * K + k]\n"
+    "             *(double)B[(long long)k * N + j]) / 65536.0;\n"
+    "    }\n"
+    "    C[(long long)i * N + j] = (long long)(s + (s < 0 ? -0.5 : 0.5));\n"
+    "}\n";
+
+static void* vayu_try_load(const char* const* names, int n) {
+    for (int i = 0; i < n; ++i) {
+        HMODULE h = LoadLibraryA(names[i]);
+        if (h) return (void*)h;
+    }
+    return NULL;
+}
+
+static int vayu_cuda_init(void) {
+    if (g_cuda_state >= 0) return g_cuda_state;
+    memset(&g_cuda, 0, sizeof(g_cuda));
+
+    const char* nvcuda_names[] = { "nvcuda.dll" };
+    g_cuda.lib_nvcuda = vayu_try_load(nvcuda_names, 1);
+    if (!g_cuda.lib_nvcuda) { g_cuda_state = 0; return 0; }
+
+    const char* nvrtc_names[] = {
+        "nvrtc.dll",
+        "nvrtc64_120_0.dll", "nvrtc64_112_0.dll", "nvrtc64_111_0.dll",
+        "nvrtc64_110_0.dll", "nvrtc64_102_0.dll", "nvrtc64_101_0.dll",
+        "nvrtc64_100_0.dll"
+    };
+    g_cuda.lib_nvrtc = vayu_try_load(nvrtc_names,
+        (int)(sizeof(nvrtc_names) / sizeof(nvrtc_names[0])));
+    if (!g_cuda.lib_nvrtc) { g_cuda_state = 0; return 0; }
+
+    #define GET(lib, name) do { \
+        g_cuda.name = (void*)GetProcAddress((HMODULE)(lib), #name); \
+        if (!g_cuda.name) { g_cuda_state = 0; return 0; } \
+    } while (0)
+
+    GET(g_cuda.lib_nvcuda, cuInit);
+    GET(g_cuda.lib_nvcuda, cuDeviceGetCount);
+    GET(g_cuda.lib_nvcuda, cuDeviceGet);
+    GET(g_cuda.lib_nvcuda, cuCtxCreate);
+    GET(g_cuda.lib_nvcuda, cuCtxDestroy);
+    GET(g_cuda.lib_nvcuda, cuMemAlloc);
+    GET(g_cuda.lib_nvcuda, cuMemFree);
+    GET(g_cuda.lib_nvcuda, cuMemcpyHtoD);
+    GET(g_cuda.lib_nvcuda, cuMemcpyDtoH);
+    GET(g_cuda.lib_nvcuda, cuModuleLoadData);
+    GET(g_cuda.lib_nvcuda, cuModuleGetFunction);
+    GET(g_cuda.lib_nvcuda, cuLaunchKernel);
+    GET(g_cuda.lib_nvcuda, cuCtxSynchronize);
+
+    GET(g_cuda.lib_nvrtc, nvrtcCreateProgram);
+    GET(g_cuda.lib_nvrtc, nvrtcCompileProgram);
+    GET(g_cuda.lib_nvrtc, nvrtcGetPTXSize);
+    GET(g_cuda.lib_nvrtc, nvrtcGetPTX);
+    GET(g_cuda.lib_nvrtc, nvrtcDestroyProgram);
+    #undef GET
+
+    if (g_cuda.cuInit(0) != 0) { g_cuda_state = 0; return 0; }
+    if (g_cuda.cuDeviceGetCount(&g_cuda.device_count) != 0 ||
+        g_cuda.device_count <= 0) { g_cuda_state = 0; return 0; }
+
+    int dev = 0;
+    if (g_cuda.cuDeviceGet(&dev, 0) != 0) { g_cuda_state = 0; return 0; }
+    if (g_cuda.cuCtxCreate(&g_cuda.ctx, 0, dev) != 0) { g_cuda_state = 0; return 0; }
+
+    /* Compile the kernel to PTX. */
+    const char* opts[] = { "--gpu-architecture=compute_60",
+                           "--std=c++11" };
+    void* prog = NULL;
+    if (g_cuda.nvrtcCreateProgram(&prog, VAYU_CUDA_KERNEL_SRC,
+                                  "vayu_q16.cu", 0, NULL, NULL) != 0) {
+        g_cuda_state = 0; return 0;
+    }
+    if (g_cuda.nvrtcCompileProgram(prog, 2, opts) != 0) {
+        g_cuda.nvrtcDestroyProgram(&prog);
+        g_cuda_state = 0; return 0;
+    }
+    size_t ptx_size = 0;
+    if (g_cuda.nvrtcGetPTXSize(prog, &ptx_size) != 0) {
+        g_cuda.nvrtcDestroyProgram(&prog);
+        g_cuda_state = 0; return 0;
+    }
+    char* ptx = (char*)malloc(ptx_size);
+    if (g_cuda.nvrtcGetPTX(prog, ptx) != 0) {
+        free(ptx); g_cuda.nvrtcDestroyProgram(&prog);
+        g_cuda_state = 0; return 0;
+    }
+    g_cuda.nvrtcDestroyProgram(&prog);
+
+    VayuCUmodule mod = NULL;
+    if (g_cuda.cuModuleLoadData(&mod, ptx) != 0) {
+        free(ptx); g_cuda_state = 0; return 0;
+    }
+    free(ptx);
+
+    if (g_cuda.cuModuleGetFunction(&g_cuda.matmul_kernel, mod,
+                                   "vayu_q16_matmul") != 0) {
+        g_cuda_state = 0; return 0;
+    }
+
+    g_cuda.inited = 1;
+    g_cuda_state = 1;
+    return 1;
+}
+
+int64_t vayu_cuda_available(void) {
+    return vayu_cuda_init() ? 1 : 0;
+}
+int64_t vayu_cuda_device_count(void) {
+    if (!vayu_cuda_init()) return 0;
+    return (int64_t)g_cuda.device_count;
+}
+
+int64_t vayu_cuda_matmul(int64_t a_h, int64_t b_h) {
+    VayuTensor* a = (VayuTensor*)a_h;
+    VayuTensor* b = (VayuTensor*)b_h;
+    if (!a || !b || a->ndim != 2 || b->ndim != 2) return 0;
+    if (a->shape[1] != b->shape[0]) return 0;
+    if (!vayu_cuda_init()) return 0;
+
+    int M = (int)a->shape[0];
+    int K = (int)a->shape[1];
+    int N = (int)b->shape[1];
+
+    size_t aBytes = (size_t)M * (size_t)K * sizeof(int64_t);
+    size_t bBytes = (size_t)K * (size_t)N * sizeof(int64_t);
+    size_t cBytes = (size_t)M * (size_t)N * sizeof(int64_t);
+
+    void *dA = NULL, *dB = NULL, *dC = NULL;
+    if (g_cuda.cuMemAlloc(&dA, aBytes) != 0) return 0;
+    if (g_cuda.cuMemAlloc(&dB, bBytes) != 0) { g_cuda.cuMemFree(dA); return 0; }
+    if (g_cuda.cuMemAlloc(&dC, cBytes) != 0) {
+        g_cuda.cuMemFree(dA); g_cuda.cuMemFree(dB); return 0;
+    }
+
+    g_cuda.cuMemcpyHtoD(dA, a->data, aBytes);
+    g_cuda.cuMemcpyHtoD(dB, b->data, bBytes);
+
+    unsigned bx = 16, by = 16;
+    unsigned gx = (unsigned)((N + bx - 1) / bx);
+    unsigned gy = (unsigned)((M + by - 1) / by);
+
+    void* args[] = { (void*)&dA, (void*)&dB, (void*)&dC,
+                     (void*)&M, (void*)&K, (void*)&N };
+    if (g_cuda.cuLaunchKernel(g_cuda.matmul_kernel,
+                              gx, gy, 1, bx, by, 1, 0, NULL, args, NULL) != 0) {
+        g_cuda.cuMemFree(dA); g_cuda.cuMemFree(dB); g_cuda.cuMemFree(dC);
+        return 0;
+    }
+    g_cuda.cuCtxSynchronize();
+
+    int64_t sh[2] = { M, N };
+    int64_t oh = vayu_tensor_new_from_shape(sh, 2);
+    VayuTensor* o = (VayuTensor*)oh;
+    if (o) g_cuda.cuMemcpyDtoH(o->data, dC, cBytes);
+
+    g_cuda.cuMemFree(dA); g_cuda.cuMemFree(dB); g_cuda.cuMemFree(dC);
+    return oh;
+}
+
+void vayu_cuda_shutdown(void) {
+    if (g_cuda_state == 1 && g_cuda.ctx && g_cuda.cuCtxDestroy) {
+        g_cuda.cuCtxDestroy(g_cuda.ctx);
+    }
+    if (g_cuda.lib_nvrtc) FreeLibrary((HMODULE)g_cuda.lib_nvrtc);
+    if (g_cuda.lib_nvcuda) FreeLibrary((HMODULE)g_cuda.lib_nvcuda);
+    g_cuda.lib_nvrtc = NULL;
+    g_cuda.lib_nvcuda = NULL;
+    g_cuda_state = -1;
+}
+
+#else /* !_WIN32 */
+
+int64_t vayu_cuda_available(void) { return 0; }
+int64_t vayu_cuda_device_count(void) { return 0; }
+int64_t vayu_cuda_matmul(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+void    vayu_cuda_shutdown(void) {}
+int64_t vayu_dml_available(void) { return 0; }
+int64_t vayu_dml_matmul(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+void    vayu_dml_shutdown(void) {}
+void    vayu_cuda_shutdown(void) {}
+
+#endif
+
+/* ===========================================================================
+ * Phase 22.4b - D3D11 compute-shader matmul.  Runs on any Windows GPU.
+ * No CUDA toolkit required.  "DML" here means "GPU compute via the OS
+ * graphics stack", not the DirectML.dll ML API (that needs D3D12 and
+ * ships only as a redistributable).
+ * ========================================================================= */
+
+#ifdef _WIN32
+
+typedef struct {
+    ID3D11Device*        device;
+    ID3D11DeviceContext* ctx;
+    ID3D11ComputeShader* cs;
+    ID3D11Buffer*        cb;
+    int                  ok;
+} VayuDML;
+
+static VayuDML g_dml;
+static int     g_dml_state = -1;
+
+static const char* VAYU_DML_HLSL =
+    "StructuredBuffer<float> A : register(t0);\n"
+    "StructuredBuffer<float> B : register(t1);\n"
+    "RWStructuredBuffer<float> C : register(u0);\n"
+    "cbuffer P : register(b0) { int M; int K; int N; int pad; };\n"
+    "[numthreads(16,16,1)]\n"
+    "void CSMain(uint3 id : SV_DispatchThreadID) {\n"
+    "  int i = (int)id.y; int j = (int)id.x;\n"
+    "  if (i >= M || j >= N) return;\n"
+    "  float s = 0.0f;\n"
+    "  for (int k = 0; k < K; ++k)\n"
+    "    s += A[i*K + k] * B[k*N + j];\n"
+    "  C[i*N + j] = s;\n"
+    "}\n";
+
+static int vayu_dml_init(void) {
+    if (g_dml_state >= 0) return g_dml_state;
+    memset(&g_dml, 0, sizeof(g_dml));
+    const int dbg = (getenv("VAYU_DML_DEBUG") != NULL);
+    if (dbg) fprintf(stderr, "[dml] init starting\n");
+
+    D3D_FEATURE_LEVEL want[3] = {
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0
+    };
+    D3D_FEATURE_LEVEL got;
+    HRESULT hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0,
+                                   want, 3, D3D11_SDK_VERSION,
+                                   &g_dml.device, &got, &g_dml.ctx);
+    if (FAILED(hr) || !g_dml.device) {
+        if (dbg) fprintf(stderr, "[dml] D3D11CreateDevice failed hr=0x%08lx\n",
+                         (unsigned long)hr);
+        g_dml_state = 0; return 0;
+    }
+    if (dbg) fprintf(stderr, "[dml] device created, feature level=0x%x\n",
+                     (unsigned)got);
+
+    ID3DBlob* blob = NULL; ID3DBlob* err = NULL;
+    hr = D3DCompile(VAYU_DML_HLSL, strlen(VAYU_DML_HLSL),
+                    "vayu_matmul", NULL, NULL, "CSMain", "cs_5_0", 0, 0,
+                    &blob, &err);
+    if (dbg && err) {
+        const char* msg = (const char*)err->lpVtbl->GetBufferPointer(err);
+        fprintf(stderr, "[dml] HLSL compile error:\n%s\n", msg);
+    }
+    if (err) err->lpVtbl->Release(err);
+    if (FAILED(hr) || !blob) {
+        if (dbg) fprintf(stderr, "[dml] HLSL compile failed hr=0x%08lx\n",
+                         (unsigned long)hr);
+        g_dml.ctx->lpVtbl->Release(g_dml.ctx);
+        g_dml.device->lpVtbl->Release(g_dml.device);
+        g_dml_state = 0; return 0;
+    }
+    if (dbg) fprintf(stderr, "[dml] HLSL compiled, %zu bytes\n",
+                     (size_t)blob->lpVtbl->GetBufferSize(blob));
+    hr = g_dml.device->lpVtbl->CreateComputeShader(g_dml.device,
+        blob->lpVtbl->GetBufferPointer(blob),
+        blob->lpVtbl->GetBufferSize(blob),
+        NULL, &g_dml.cs);
+    blob->lpVtbl->Release(blob);
+    if (FAILED(hr) || !g_dml.cs) {
+        if (dbg) fprintf(stderr, "[dml] CreateComputeShader failed hr=0x%08lx\n",
+                         (unsigned long)hr);
+        g_dml.ctx->lpVtbl->Release(g_dml.ctx);
+        g_dml.device->lpVtbl->Release(g_dml.device);
+        g_dml_state = 0; return 0;
+    }
+
+    D3D11_BUFFER_DESC cbd;
+    memset(&cbd, 0, sizeof(cbd));
+    cbd.ByteWidth = 16;
+    cbd.Usage = D3D11_USAGE_DYNAMIC;
+    cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    hr = g_dml.device->lpVtbl->CreateBuffer(g_dml.device, &cbd, NULL, &g_dml.cb);
+    if (FAILED(hr)) {
+        g_dml.cs->lpVtbl->Release(g_dml.cs);
+        g_dml.ctx->lpVtbl->Release(g_dml.ctx);
+        g_dml.device->lpVtbl->Release(g_dml.device);
+        g_dml_state = 0; return 0;
+    }
+
+    g_dml.ok = 1;
+    g_dml_state = 1;
+    return 1;
+}
+
+int64_t vayu_dml_available(void) { return vayu_dml_init() ? 1 : 0; }
+
+int64_t vayu_dml_matmul(int64_t a_h, int64_t b_h) {
+    VayuTensor* a = (VayuTensor*)a_h;
+    VayuTensor* b = (VayuTensor*)b_h;
+    if (!a || !b || a->ndim != 2 || b->ndim != 2) return 0;
+    if (a->shape[1] != b->shape[0]) return 0;
+    if (!vayu_dml_init()) return 0;
+
+    int M = (int)a->shape[0], K = (int)a->shape[1], N = (int)b->shape[1];
+
+    /* Convert Q16.16 -> float.  The GPU kernel works in float FMA;
+       float is what every Windows GPU of the last 15 years accelerates. */
+    float* aF = (float*)malloc(sizeof(float) * (size_t)(M * K));
+    float* bF = (float*)malloc(sizeof(float) * (size_t)(K * N));
+    float* cF = (float*)malloc(sizeof(float) * (size_t)(M * N));
+    if (!aF || !bF || !cF) { free(aF); free(bF); free(cF); return 0; }
+
+    for (int64_t i = 0; i < (int64_t)M * K; ++i)
+        aF[i] = (float)((double)a->data[i] / 65536.0);
+    for (int64_t i = 0; i < (int64_t)K * N; ++i)
+        bF[i] = (float)((double)b->data[i] / 65536.0);
+
+    size_t aB = (size_t)M * K * 4;
+    size_t bB = (size_t)K * N * 4;
+    size_t cB = (size_t)M * N * 4;
+
+    D3D11_BUFFER_DESC bd;
+    D3D11_SUBRESOURCE_DATA sd;
+    ID3D11Buffer* bufA = NULL; ID3D11Buffer* bufB = NULL; ID3D11Buffer* bufC = NULL;
+    ID3D11ShaderResourceView* srvA = NULL; ID3D11ShaderResourceView* srvB = NULL;
+    ID3D11UnorderedAccessView* uavC = NULL;
+    ID3D11Buffer* stage = NULL;
+
+    memset(&bd, 0, sizeof(bd));
+    bd.Usage = D3D11_USAGE_DEFAULT;
+    bd.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    bd.StructureByteStride = 4;
+
+    bd.ByteWidth = (UINT)aB;
+    memset(&sd, 0, sizeof(sd)); sd.pSysMem = aF;
+    if (FAILED(g_dml.device->lpVtbl->CreateBuffer(g_dml.device, &bd, &sd, &bufA))) goto done;
+    bd.ByteWidth = (UINT)bB;
+    sd.pSysMem = bF;
+    if (FAILED(g_dml.device->lpVtbl->CreateBuffer(g_dml.device, &bd, &sd, &bufB))) goto done;
+
+    memset(&bd, 0, sizeof(bd));
+    bd.Usage = D3D11_USAGE_DEFAULT;
+    bd.ByteWidth = (UINT)cB;
+    bd.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
+    bd.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    bd.StructureByteStride = 4;
+    if (FAILED(g_dml.device->lpVtbl->CreateBuffer(g_dml.device, &bd, NULL, &bufC))) goto done;
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvd;
+    memset(&srvd, 0, sizeof(srvd));
+    srvd.Format = DXGI_FORMAT_UNKNOWN;
+    srvd.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+    srvd.Buffer.FirstElement = 0;
+    srvd.Buffer.NumElements = (UINT)(M * K);
+    if (FAILED(g_dml.device->lpVtbl->CreateShaderResourceView(
+        g_dml.device, (ID3D11Resource*)bufA, &srvd, &srvA))) goto done;
+    srvd.Buffer.NumElements = (UINT)(K * N);
+    if (FAILED(g_dml.device->lpVtbl->CreateShaderResourceView(
+        g_dml.device, (ID3D11Resource*)bufB, &srvd, &srvB))) goto done;
+
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uavd;
+    memset(&uavd, 0, sizeof(uavd));
+    uavd.Format = DXGI_FORMAT_UNKNOWN;
+    uavd.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+    uavd.Buffer.FirstElement = 0;
+    uavd.Buffer.NumElements = (UINT)(M * N);
+    if (FAILED(g_dml.device->lpVtbl->CreateUnorderedAccessView(
+        g_dml.device, (ID3D11Resource*)bufC, &uavd, &uavC))) goto done;
+
+    D3D11_MAPPED_SUBRESOURCE ms;
+    if (FAILED(g_dml.ctx->lpVtbl->Map(g_dml.ctx, (ID3D11Resource*)g_dml.cb,
+                                      0, D3D11_MAP_WRITE_DISCARD, 0, &ms))) goto done;
+    ((int*)ms.pData)[0] = M;
+    ((int*)ms.pData)[1] = K;
+    ((int*)ms.pData)[2] = N;
+    ((int*)ms.pData)[3] = 0;
+    g_dml.ctx->lpVtbl->Unmap(g_dml.ctx, (ID3D11Resource*)g_dml.cb, 0);
+
+    ID3D11ShaderResourceView* srvs[2] = { srvA, srvB };
+    ID3D11UnorderedAccessView* uavs[1] = { uavC };
+    ID3D11Buffer* cbs[1] = { g_dml.cb };
+    g_dml.ctx->lpVtbl->CSSetShader(g_dml.ctx, g_dml.cs, NULL, 0);
+    g_dml.ctx->lpVtbl->CSSetShaderResources(g_dml.ctx, 0, 2, srvs);
+    g_dml.ctx->lpVtbl->CSSetUnorderedAccessViews(g_dml.ctx, 0, 1, uavs, NULL);
+    g_dml.ctx->lpVtbl->CSSetConstantBuffers(g_dml.ctx, 0, 1, cbs);
+    g_dml.ctx->lpVtbl->Dispatch(g_dml.ctx, (UINT)((M + 15) / 16),
+                                         (UINT)((N + 15) / 16), 1);
+
+    ID3D11UnorderedAccessView* nullUav[1] = { NULL };
+    ID3D11ShaderResourceView* nullSrv[2] = { NULL, NULL };
+    g_dml.ctx->lpVtbl->CSSetUnorderedAccessViews(g_dml.ctx, 0, 1, nullUav, NULL);
+    g_dml.ctx->lpVtbl->CSSetShaderResources(g_dml.ctx, 0, 2, nullSrv);
+
+    memset(&bd, 0, sizeof(bd));
+    bd.Usage = D3D11_USAGE_STAGING;
+    bd.ByteWidth = (UINT)cB;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    if (FAILED(g_dml.device->lpVtbl->CreateBuffer(g_dml.device, &bd, NULL, &stage))) goto done;
+    g_dml.ctx->lpVtbl->CopyResource(g_dml.ctx, (ID3D11Resource*)stage,
+                                             (ID3D11Resource*)bufC);
+    if (FAILED(g_dml.ctx->lpVtbl->Map(g_dml.ctx, (ID3D11Resource*)stage,
+                                      0, D3D11_MAP_READ, 0, &ms))) goto done;
+
+    memcpy(cF, ms.pData, cB);
+    g_dml.ctx->lpVtbl->Unmap(g_dml.ctx, (ID3D11Resource*)stage, 0);
+
+    {
+        int64_t sh[2] = { M, N };
+        int64_t oh = vayu_tensor_new_from_shape(sh, 2);
+        VayuTensor* o = (VayuTensor*)oh;
+        if (o) {
+            for (int64_t i = 0; i < (int64_t)M * N; ++i) {
+                double dv = (double)cF[i];
+                o->data[i] = (int64_t)(dv * 65536.0 + (dv < 0.0 ? -0.5 : 0.5));
+            }
+        }
+        free(aF); free(bF); free(cF);
+        if (stage) stage->lpVtbl->Release(stage);
+        if (uavC)  uavC->lpVtbl->Release(uavC);
+        if (srvA)  srvA->lpVtbl->Release(srvA);
+        if (srvB)  srvB->lpVtbl->Release(srvB);
+        if (bufA)  bufA->lpVtbl->Release(bufA);
+        if (bufB)  bufB->lpVtbl->Release(bufB);
+        if (bufC)  bufC->lpVtbl->Release(bufC);
+        return oh;
+    }
+
+done:
+    free(aF); free(bF); free(cF);
+    if (stage) stage->lpVtbl->Release(stage);
+    if (uavC)  uavC->lpVtbl->Release(uavC);
+    if (srvA)  srvA->lpVtbl->Release(srvA);
+    if (srvB)  srvB->lpVtbl->Release(srvB);
+    if (bufA)  bufA->lpVtbl->Release(bufA);
+    if (bufB)  bufB->lpVtbl->Release(bufB);
+    if (bufC)  bufC->lpVtbl->Release(bufC);
+    return 0;
+}
+
+void vayu_dml_shutdown(void) {
+    if (g_dml_state == 1) {
+        if (g_dml.cb)     g_dml.cb->lpVtbl->Release(g_dml.cb);
+        if (g_dml.cs)     g_dml.cs->lpVtbl->Release(g_dml.cs);
+        if (g_dml.ctx)    g_dml.ctx->lpVtbl->Release(g_dml.ctx);
+        if (g_dml.device) g_dml.device->lpVtbl->Release(g_dml.device);
+    }
+    memset(&g_dml, 0, sizeof(g_dml));
+    g_dml_state = -1;
+}
+
+#else
+int64_t vayu_dml_available(void) { return 0; }
+int64_t vayu_dml_matmul(int64_t a, int64_t b) { (void)a;(void)b; return 0; }
+void    vayu_dml_shutdown(void) {}
+#endif
+
 int64_t vayu_nn_run_str(int64_t text_sp, int64_t input_h) {
     VayuStr* text = (VayuStr*)text_sp;
     if (!text) return 0;
@@ -12285,6 +13360,12 @@ int64_t vayu_tensor_exp(int64_t h) { (void)h; return 0; }
 int64_t vayu_tensor_log(int64_t h) { (void)h; return 0; }
 void    vayu_tensor_copy_into(int64_t d, int64_t s) { (void)d;(void)s; }
 int64_t vayu_nn_run_str(int64_t t, int64_t i) { (void)t;(void)i; return 0; }
+int64_t vayu_onnx_load(int64_t p) { (void)p; return 0; }
+void    vayu_onnx_free(int64_t h) { (void)h; }
+int64_t vayu_onnx_run(int64_t m, int64_t i) { (void)m;(void)i; return 0; }
+int64_t vayu_onnx_input_name(int64_t h) { (void)h; return 0; }
+int64_t vayu_onnx_output_name(int64_t h) { (void)h; return 0; }
+void    vayu_onnx_debug(int64_t h) { (void)h; }
 
 #endif
 // ---- try/except (thread-local for generator workers) ----
@@ -14153,7 +15234,7 @@ int main(int argc, char** argv) {
         {
             std::string linkLibs;
 #ifdef _WIN32
-            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32 -lgdiplus -lole32 -luuid -lwindowscodecs";
+            linkLibs = " -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32 -lgdiplus -lole32 -luuid -lwindowscodecs -ld3d11 -ld3dcompiler";
 #endif
             // Phase 15.1: extra link libraries for extern "C" functions.
             // Space-separated list; usually `-lfoo -lbar` or `.lib` paths.

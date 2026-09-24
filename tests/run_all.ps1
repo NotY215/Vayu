@@ -57,7 +57,10 @@ $native_only = @(
     "tensor_basic.vyu",
     "tensor_autograd.vyu",
     "nn_mlp.vyu",
-    "onnx_mlp.vyu"
+    "onnx_mlp.vyu",
+    "onnx_mlp_real.vyu",
+    "cuda_matmul.vyu",
+    "dml_matmul.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )
