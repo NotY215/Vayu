@@ -655,7 +655,7 @@ It provided substantial assistance with:
 ## ChatGPT
 
 <a href="https://chatgpt.com/">
-<img src="blob:https://hugeicons.com/c193e5ac-6762-48cb-a422-5eb286139961" alt="OpenAI / ChatGPT" width="80">
+<img src="(https://upload.wikimedia.org/wikipedia/commons/e/ef/ChatGPT-Logo.svg)" alt="OpenAI / ChatGPT" width="80">
 </a>
 
 **ChatGPT provided a smaller supporting role**, mainly helping with:
