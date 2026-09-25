@@ -7,7 +7,7 @@
     <GeneratePkgDefFile>false</GeneratePkgDefFile>
     <TargetName>vayu-vs-community-0.2.0</TargetName>
     <VsixVersion>0.2.0</VsixVersion>
-    <VsixPublisherName>Fliczo</VsixPublisherName>
+    <VsixPublisherName>NotY215</VsixPublisherName>
   </PropertyGroup>
 
   <ItemGroup>
