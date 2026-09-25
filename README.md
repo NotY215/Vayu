@@ -381,6 +381,7 @@ The official language name is **Vayu** and the official source extension is **`.
 | [`docs/ai.md`](docs/ai.md) | AI/ML direction and ecosystem |
 | [`docs/vision.md`](docs/vision.md) | Long-term vision, phased roadmap, and current development status |
 | [`CODE OF CONDUCT.md`](CODE%20OF%20CONDUCT.md) | Community standards and contributor conduct |
+| [`REPORTING_GUIDELINES.md`](REPORTING_GUIDELINES.md) | Guidelines for reporting and handling unacceptable behavior |
 
 ---
 
@@ -654,7 +655,7 @@ It provided substantial assistance with:
 ## ChatGPT
 
 <a href="https://chatgpt.com/">
-<img src="https://cdn.simpleicons.org/openai" alt="OpenAI / ChatGPT" width="80">
+<img src="blob:https://hugeicons.com/c193e5ac-6762-48cb-a422-5eb286139961" alt="OpenAI / ChatGPT" width="80">
 </a>
 
 **ChatGPT provided a smaller supporting role**, mainly helping with:
