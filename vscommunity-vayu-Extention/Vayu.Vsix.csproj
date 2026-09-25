@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <Nullable>enable</Nullable>
+    <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
+    <VsixDeployOnDebug>false</VsixDeployOnDebug>
+    <GeneratePkgDefFile>false</GeneratePkgDefFile>
+    <TargetName>vayu-vs-community-0.3.0</TargetName>
+    <VsixVersion>0.3.0</VsixVersion>
+    <VsixPublisherName>NotY215</VsixPublisherName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectCapability Include="CreateVsixContainer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="18.5.40034" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="extension.vsixmanifest" />
+    <Content Include="Vayu.pkgdef" IncludeInVSIX="true" />
+    <Content Include="Vayu_logo.png" IncludeInVSIX="true" />
+    <Content Include="LICENSE.txt" IncludeInVSIX="true" />
+    <Content Include="README.md" IncludeInVSIX="true" />
+    <Content Include="Grammarsayu.tmLanguage.json" IncludeInVSIX="true" />
+    <Content Include="Grammarslanguage-configuration.json" IncludeInVSIX="true" />
+    <Content Include="assetsVyu_Icon.ico" IncludeInVSIX="true" />
+    <Content Include="assetsVyu_Icon_Dark.ico" IncludeInVSIX="true" />
+  </ItemGroup>
+
+</Project>
