@@ -20,19 +20,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="extension.vsixmanifest" />
+    <None Include="source.extension.vsixmanifest" />
     <Content Include="Vayu.pkgdef" IncludeInVSIX="true" />
     <Content Include="Vayu_logo.png" IncludeInVSIX="true" />
-    <Content Include="LICENSE.txt" IncludeInVSIX="true" />
+    <Content Include="LICENSE" IncludeInVSIX="true" />
     <Content Include="README.md" IncludeInVSIX="true" />
     <Content Include="Grammars\vayu.tmLanguage.json" IncludeInVSIX="true" />
     <Content Include="Grammars\language-configuration.json" IncludeInVSIX="true" />
     <Content Include="assets\Vyu_Icon.ico" IncludeInVSIX="true" />
     <Content Include="assets\Vyu_Icon_Dark.ico" IncludeInVSIX="true" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <VsixManifest Include="extension.vsixmanifest" />
   </ItemGroup>
 
 </Project>
