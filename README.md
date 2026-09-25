@@ -12,8 +12,9 @@
 
 <p>
   <a href="https://vayu.gt.tc"><img src="https://img.shields.io/badge/Website-vayu.gt.tc-111827?style=for-the-badge" alt="Vayu Website"></a>
+  <a href="https://vayu.gt.tc/faq"><img src="https://img.shields.io/badge/FAQ-vayu.gt.tc/faq-111827?style=for-the-badge" alt="Vayu FAQ"></a>
   <a href="docs/syntax.md"><img src="https://img.shields.io/badge/Syntax-.vyu-111827?style=for-the-badge" alt="Vayu Syntax"></a>
-  <a href="https://vayu.gt.tc"><img src="https://img.shields.io/badge/Benchmarks-View-111827?style=for-the-badge" alt="Vayu Benchmarks"></a>
+  <a href="https://vayu.gt.tc/speed"><img src="https://img.shields.io/badge/Benchmarks-View-111827?style=for-the-badge" alt="Vayu Benchmarks"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu"><img src="https://img.shields.io/badge/VS%20Code-Extension-111827?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Vayu VS Code Extension"></a>
 </p>
 
@@ -631,9 +632,11 @@ Vayu is an independent project, but AI tools played an important role during its
 
 ## DeepSeek
 
+<div align="center">
 <a href="https://www.deepseek.com/">
 <img src="https://www.deepseek.com/favicon.ico" alt="DeepSeek" width="80">
 </a>
+</div>
 
 **DeepSeek played the larger supporting role in the development process.**
 
@@ -654,9 +657,13 @@ It provided substantial assistance with:
 
 ## ChatGPT
 
+<div align="center">
+
 <a href="https://chatgpt.com/">
-<img src="(https://upload.wikimedia.org/wikipedia/commons/e/ef/ChatGPT-Logo.svg)" alt="OpenAI / ChatGPT" width="80">
+<img src="https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ef/ChatGPT-Logo.svg/960px-ChatGPT-Logo.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail&_=20240214002031" alt="OpenAI / ChatGPT" width="80">
 </a>
+
+</div>
 
 **ChatGPT provided a smaller supporting role**, mainly helping with:
 
