@@ -1,5 +1,5 @@
 # examples/nva_git_test.vyu -- Phase 23.3 + 23.4 demo.
-# Creates two local git repos, wires them as deps, and exercises
+# Creates two local git repos, wires them as deps, exercises
 # `nva tree`, `nva update`, `nva add-git`.
 # Skips gracefully if git is not on PATH.
 
@@ -9,11 +9,14 @@ import os
 const ROOT: str = "_nva_git_test"
 
 NVA: str = ""
+START_CWD: str = ""
 
 def rmtree(p: str) -> None:
     if os.platform() == "windows":
-        run_command("rmdir /s /q \"" + p + "\" >nul 2>nul")
+        run_command("attrib -r -h -s \"" + p + "\" /s /d >nul 2>nul")
+        run_command("cmd /c rmdir /s /q \"" + p + "\" >nul 2>nul")
     else:
+        run_command("chmod -R u+w \"" + p + "\" >/dev/null 2>&1")
         run_command("rm -rf \"" + p + "\" >/dev/null 2>&1")
 
 def mkdirs(p: str) -> None:
@@ -32,15 +35,17 @@ def git_init_repo(path: str) -> None:
     run_command("git -C \"" + path + "\" config user.email \"test@vayu\"")
     run_command("git -C \"" + path + "\" config user.name \"test\"")
     run_command("git -C \"" + path + "\" config core.autocrlf false")
+    run_command("git -C \"" + path + "\" config core.safecrlf false")
 
 def git_commit(path: str, msg: str) -> None:
-    run_command("git -C \"" + path + "\" -c core.autocrlf=false add .")
-    run_command("git -C \"" + path + "\" -c core.autocrlf=false commit -q -m \"" + msg + "\"")
+    run_command("git -C \"" + path + "\" add -A")
+    run_command("git -C \"" + path + "\" commit -q -m \"" + msg + "\"")
 
 def git_tag(path: str, tag: str) -> None:
     run_command("git -C \"" + path + "\" tag \"" + tag + "\"")
 
 def main() -> None:
+    START_CWD = fs.cwd()
     NVA = fs.abs("nva.exe")
     if not fs.exists(NVA):
         print("nva.exe not found at " + NVA)
@@ -58,8 +63,12 @@ def main() -> None:
     rmtree(ROOT)
     mkdirs(ROOT)
 
+    # Resolve every path absolute BEFORE any chdir.
+    leaf: str = fs.abs(ROOT + "/leaf")
+    parent: str = fs.abs(ROOT + "/parent")
+    consumer: str = fs.abs(ROOT + "/consumer")
+
     # leaf pkg
-    leaf: str = ROOT + "/leaf"
     mkdirs(leaf + "/src")
     write(leaf + "/nova.toml",
         "[package]\n" +
@@ -73,7 +82,6 @@ def main() -> None:
     git_tag(leaf, "v0.1.0")
 
     # parent pkg depends on leaf via git
-    parent: str = ROOT + "/parent"
     mkdirs(parent + "/src")
     write(parent + "/nova.toml",
         "[package]\n" +
@@ -81,14 +89,13 @@ def main() -> None:
         "version = \"0.1.0\"\n" +
         "entry = \"src/main.vyu\"\n" +
         "\n[dependencies]\n" +
-        "leaf = { git = \"" + fs.abs(leaf) + "\", tag = \"v0.1.0\" }\n")
+        "leaf = { git = \"" + leaf + "\", tag = \"v0.1.0\" }\n")
     write(parent + "/src/main.vyu", "def parent_id() -> int:\n    return 2\n")
     git_init_repo(parent)
     git_commit(parent, "init parent")
     git_tag(parent, "v0.1.0")
 
-    # consumer project
-    consumer: str = ROOT + "/consumer"
+    # consumer project depends on parent
     mkdirs(consumer + "/src")
     write(consumer + "/nova.toml",
         "[package]\n" +
@@ -96,38 +103,40 @@ def main() -> None:
         "version = \"0.1.0\"\n" +
         "entry = \"src/main.vyu\"\n" +
         "\n[dependencies]\n" +
-        "parent = { git = \"" + fs.abs(parent) + "\", tag = \"v0.1.0\" }\n")
+        "parent = { git = \"" + parent + "\", tag = \"v0.1.0\" }\n")
     write(consumer + "/src/main.vyu", "def main() -> None:\n    print(\"consumer\")\n")
 
     print("")
     print("== nva tree ==")
     os.chdir(consumer)
     nva("tree")
-    os.chdir("../..")
+    os.chdir(START_CWD)
 
     print("")
     print("== nva update ==")
     os.chdir(consumer)
     nva("update")
-    os.chdir("../..")
+    os.chdir(START_CWD)
 
     print("")
     print("== nva add-git ==")
     os.chdir(consumer)
-    nva("add-git leaf \"" + fs.abs(leaf) + "\" --tag v0.1.0")
-    os.chdir("../..")
+    nva("add-git leaf \"" + leaf + "\" --tag v0.1.0")
+    os.chdir(START_CWD)
 
     print("")
     print("== verify ==")
     failed: bool = false
+
     if fs.exists(consumer + "/nova_modules/parent/nova.toml"):
         print("OK: parent installed")
     else:
         print("FAIL: parent missing")
         failed = true
 
-    if fs.exists(consumer + "/nova_modules/leaf/nova.toml"):
-        print("OK: leaf (transitive) installed")
+    # Transitive dep lives in the parent's nova_modules, not the root's.
+    if fs.exists(consumer + "/nova_modules/parent/nova_modules/leaf/nova.toml"):
+        print("OK: leaf (transitive) installed under parent/nova_modules")
     else:
         print("FAIL: leaf (transitive) missing")
         failed = true

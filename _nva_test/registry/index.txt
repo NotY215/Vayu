@@ -1,2 +1,0 @@
-# nva-registry-index v1
-greet 0.1.0

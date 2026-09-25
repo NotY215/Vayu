@@ -1,4 +1,4 @@
-# nva.vyu — Vayu package manager, v1.
+# nva.vyu -- Vayu package manager, v1.
 #
 # Usage:
 #   nva new <name>
@@ -9,6 +9,17 @@
 #   nva build
 #   nva run
 #   nva clean
+#   nva registry [--set <path>]
+#   nva registry-remote [--set <url>]
+#   nva publish-local [--registry <path>]
+#   nva publish [--remote <url>]
+#   nva install <name> [range] [--registry <path>]
+#   nva search <query> [--registry <path>]
+#   nva search-remote <query> [--remote <url>]
+#   nva add-git <name> <url> [--tag|--branch|--rev <value>]
+#   nva tree
+#   nva update
+#   nva semver-test
 #
 # lib/ is resolved as follows (first hit wins):
 #   1. ./lib/         exists -> use it
@@ -24,8 +35,8 @@ const LIB_ZIP: str = "lib.zip"
 # ---------------------------------------------------------------------------
 
 def _semver_parse(s: str) -> list<int>:
-    # "1.2.3" or "1.2" -> [1, 2, 3].  Pre-release tags (-alpha, +meta)
-    # are trimmed.  Returns [] on any parse failure.
+    # "1.2.3" or "1.2" -> [1, 2, 3].  Pre-release (-alpha) and build (+meta)
+    # tags are trimmed.  Returns [] on any parse failure.
     parts: list<int> = []
     cur: str = ""
     i: int = 0
@@ -40,7 +51,7 @@ def _semver_parse(s: str) -> list<int>:
             break
         elif c == "+":
             break
-        elif c >= "0" and c <= "9":
+        elif c.is_digit():
             cur = cur + c
         else:
             return []
@@ -127,6 +138,8 @@ def version_matches(range: str, version: str) -> bool:
 
 def best_match(range: str, candidates: list<str>) -> str:
     # Highest candidate that satisfies the range.  "" if none.
+    # Explicit if/else instead of `or` guard so we don't depend on
+    # short-circuit evaluation.
     best: str = ""
     best_parts: list<int> = []
     i: int = 0
@@ -135,14 +148,20 @@ def best_match(range: str, candidates: list<str>) -> str:
         if version_matches(range, c):
             cp: list<int> = _semver_parse(c)
             if len(cp) > 0:
-                if len(best) == 0 or _semver_cmp(cp, best_parts) > 0:
+                use: bool = false
+                if len(best) == 0:
+                    use = true
+                else:
+                    if _semver_cmp(cp, best_parts) > 0:
+                        use = true
+                if use:
                     best = c
                     best_parts = cp
         i = i + 1
     return best
 
 # ---------------------------------------------------------------------------
-# Phase 23.3 + 23.4 - git dependencies + transitive solver.
+# Phase 23.3 + 23.4 - git dependencies + transitive solver helpers.
 #
 # nova.toml dependency forms:
 #   name = "1.0.0"                                          -- registry
@@ -151,28 +170,8 @@ def best_match(range: str, candidates: list<str>) -> str:
 #   name = { git = "URL", branch = "main" }                 -- branch
 #   name = { git = "URL", rev = "abc123" }                  -- commit
 #
-# Git deps are cloned into <project>/nova_modules/<name>.  When a
-# transitive dep comes from a git source, the same rule applies to its
-# own nova_modules/.
+# Git deps are cloned into <project>/nova_modules/<name>.
 # ---------------------------------------------------------------------------
-
-class DepNode:
-    name: str
-    version: str
-    git: str
-    git_ref_kind: str
-    git_ref_value: str
-    depth: int
-    dir: str
-
-    def __init__(self) -> None:
-        self.name = ""
-        self.version = ""
-        self.git = ""
-        self.git_ref_kind = ""
-        self.git_ref_value = ""
-        self.depth = 0
-        self.dir = ""
 
 def _git_available() -> bool:
     rc: int = run_command("git --version >nul 2>nul")
@@ -190,30 +189,28 @@ def _git_clone(url: str, ref_kind: str, ref_val: str, dst: str) -> int:
     quiet: str = " -q"
     na: str = " -c advice.detachedHead=false"
     if ref_kind == "tag":
-        # Tags: full clone then checkout.  --depth 1 --branch <tag> is
-        # unreliable for tags on local repos.
+        # Full clone then checkout.  --depth 1 --branch <tag> is unreliable
+        # for tags on local repos.  -q suppresses the "HEAD is now at ..."
+        # banner, which otherwise leaks into `nva tree` output.
         rc = run_command("git clone" + quiet + " \"" + url + "\" \"" + dst + "\"")
         if rc == 0:
-            rc = run_command("git -C \"" + dst + "\"" + na + " checkout \"" + ref_val + "\"")
+            rc = run_command("git -C \"" + dst + "\"" + na + " checkout -q \"" + ref_val + "\"")
     elif ref_kind == "branch":
         rc = run_command("git clone" + quiet + " --depth 1 --branch \"" + ref_val + "\" \"" + url + "\" \"" + dst + "\"")
     elif ref_kind == "rev":
         rc = run_command("git clone" + quiet + " \"" + url + "\" \"" + dst + "\"")
         if rc == 0:
-            rc = run_command("git -C \"" + dst + "\"" + na + " checkout \"" + ref_val + "\"")
+            rc = run_command("git -C \"" + dst + "\"" + na + " checkout -q \"" + ref_val + "\"")
     else:
         rc = run_command("git clone" + quiet + " --depth 1 \"" + url + "\" \"" + dst + "\"")
     return rc
 
 def _dep_dir_for(d: Dep, base_dir: str) -> str:
-    # Already-installed dep in nova_modules?
+    # Only nova_modules/ counts.  Sibling-dir fallbacks caused destructive
+    # behaviour during update.
     p1: str = base_dir + "/nova_modules/" + d.name
     if fs.exists(p1):
         return p1
-    # Sibling directory (development layout)?
-    p2: str = fs.dirname(fs.abs(base_dir)) + "/" + d.name
-    if fs.exists(p2):
-        return p2
     return ""
 
 def collect_graph(m: Manifest, base_dir: str, visited: list<str>, depth: int, out: list<DepNode>) -> None:
@@ -232,7 +229,6 @@ def collect_graph(m: Manifest, base_dir: str, visited: list<str>, depth: int, ou
                 rc: int = _git_clone(d.git, d.git_ref_kind, d.git_ref_value, dep_dir)
                 if rc != 0:
                     print("nva: git clone failed for '" + d.name + "' (" + d.git + ")")
-                    return
 
         # Recurse into sub-manifest first (post-order visit).
         sub_toml: str = dep_dir + "/nova.toml"
@@ -295,7 +291,6 @@ def resolve_modules_full(m: Manifest, root_dir: str) -> str:
     visited: list<str> = []
     nodes: list<DepNode> = []
     collect_graph(m, root_dir, visited, 0, nodes)
-    # VAYU_MODULE_PATH: direct deps first, then transitive in post-order.
     parts: list<str> = []
     i: int = len(nodes) - 1
     while i >= 0:
@@ -313,92 +308,10 @@ def resolve_modules_full(m: Manifest, root_dir: str) -> str:
     return out
 
 # ---------------------------------------------------------------------------
-# toml_add_git_dep: insert an inline-table git dependency line.
+# Registry paths, config, and helpers (Phase 23.1 + 23.2).
 # ---------------------------------------------------------------------------
-
-def toml_add_git_dep(path: str, name: str, url: str, ref_kind: str, ref_val: str) -> None:
-    src: str = read_file(path)
-    lines: list<str> = src.split("\n")
-    dep_start: int = -1
-    dep_end: int = -1
-    i: int = 0
-    while i < len(lines):
-        t: str = trim(lines[i])
-        if t == "[dependencies]":
-            dep_start = i
-            j: int = i + 1
-            while j < len(lines):
-                u: str = trim(lines[j])
-                if u.starts_with("[") and u.ends_with("]"):
-                    break
-                if len(u) > 0:
-                    dep_end = j
-                j = j + 1
-            break
-        i = i + 1
-
-    new_line: str = name + " = { git = \"" + url + "\""
-    if ref_kind == "tag":
-        new_line = new_line + ", tag = \"" + ref_val + "\""
-    elif ref_kind == "branch":
-        new_line = new_line + ", branch = \"" + ref_val + "\""
-    elif ref_kind == "rev":
-        new_line = new_line + ", rev = \"" + ref_val + "\""
-    new_line = new_line + " }"
-
-    new_lines: list<str> = []
-    if dep_start < 0:
-        k: int = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            k = k + 1
-        new_lines.append("")
-        new_lines.append("[dependencies]")
-        new_lines.append(new_line)
-    elif dep_end < 0:
-        k = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            if k == dep_start:
-                new_lines.append(new_line)
-            k = k + 1
-    else:
-        k = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            if k == dep_end:
-                new_lines.append(new_line)
-            k = k + 1
-    write_file(path, join_lines(new_lines))
-
-# ---------------------------------------------------------------------------
-# Phase 23.1 + 23.2 - local + remote registry.
-#
-# Layout under a registry root:
-#   <root>/index.txt                          -- "<name> <version>" per line
-#   <root>/packages/<name>/<version>/         -- unpacked package tree
-#
-# Discovery order for the registry root:
-#   1. NVA_REGISTRY env var
-#   2. .nva/config in cwd
-#   3. ~/.nva/config
-# Remote base URL uses the same three-tier lookup with NVA_REGISTRY_REMOTE.
-# Remote layout over HTTP:
-#   GET <base>/index.txt
-#   GET <base>/packages/<name>/<version>.tar
-#   POST <base>/publish   (body: package tar)
-# ---------------------------------------------------------------------------
-
-class NvaConfig:
-    registry: str
-    registry_remote: str
-
-    def __init__(self) -> None:
-        self.registry = ""
-        self.registry_remote = ""
 
 def _mkdirs(path: str) -> None:
-    # Recursive mkdir.  Vayu stdlib only has single-level fs.mkdir.
     if len(path) == 0:
         return
     norm: str = path.replace("\\", "/")
@@ -520,22 +433,6 @@ def _index_add(root: str, name: str, version: str) -> None:
     lines.append(entry)
     _index_write(root, lines)
 
-class SemverTest:
-    passes: int
-    fails: int
-
-    def __init__(self) -> None:
-        self.passes = 0
-        self.fails = 0
-
-    def check(self, name: str, got: bool, want: bool) -> None:
-        if got == want:
-            print("  PASS  " + name)
-            self.passes = self.passes + 1
-        else:
-            print("  FAIL  " + name)
-            self.fails = self.fails + 1
-
 def _pkg_versions(root: str, name: str) -> list<str>:
     lines: list<str> = _index_read(root)
     out: list<str> = []
@@ -593,6 +490,591 @@ def _flag_value(a: list<str>, flag: str) -> str:
             return a[i + 1]
         i = i + 1
     return ""
+
+# ---------------------------------------------------------------------------
+# Classes
+# ---------------------------------------------------------------------------
+
+class Dep:
+    name: str
+    version: str
+    git: str
+    git_ref_kind: str
+    git_ref_value: str
+
+    def __init__(self, name: str, version: str) -> None:
+        self.name = name
+        self.version = version
+        self.git = ""
+        self.git_ref_kind = ""
+        self.git_ref_value = ""
+
+class Manifest:
+    name: str
+    version: str
+    author: str
+    description: str
+    entry: str
+    deps: list<Dep>
+    root_dir: str
+
+    def __init__(self) -> None:
+        self.name = ""
+        self.version = "0.1.0"
+        self.author = ""
+        self.description = ""
+        self.entry = "src/main.vyu"
+        self.deps = []
+        self.root_dir = ""
+
+class NvaConfig:
+    registry: str
+    registry_remote: str
+
+    def __init__(self) -> None:
+        self.registry = ""
+        self.registry_remote = ""
+
+class DepNode:
+    name: str
+    version: str
+    git: str
+    git_ref_kind: str
+    git_ref_value: str
+    depth: int
+    dir: str
+
+    def __init__(self) -> None:
+        self.name = ""
+        self.version = ""
+        self.git = ""
+        self.git_ref_kind = ""
+        self.git_ref_value = ""
+        self.depth = 0
+        self.dir = ""
+
+class SemverTest:
+    passes: int
+    fails: int
+
+    def __init__(self) -> None:
+        self.passes = 0
+        self.fails = 0
+
+    def check(self, name: str, got: bool, want: bool) -> None:
+        if got == want:
+            print("  PASS  " + name)
+            self.passes = self.passes + 1
+        else:
+            print("  FAIL  " + name)
+            self.fails = self.fails + 1
+
+# ---------------------------------------------------------------------------
+# Generic utilities
+# ---------------------------------------------------------------------------
+
+def trim(s: str) -> str:
+    return s.strip()
+
+def is_blank_or_comment(line: str) -> bool:
+    t = trim(line)
+    if len(t) == 0:
+        return true
+    if t.starts_with("#"):
+        return true
+    return false
+
+def join_lines(lines: list<str>) -> str:
+    out = ""
+    i = 0
+    while i < len(lines):
+        if i > 0:
+            out = out + "\n"
+        out = out + lines[i]
+        i = i + 1
+    return out
+
+def str_in_list(s: str, lst: list<str>) -> bool:
+    i = 0
+    while i < len(lst):
+        if lst[i] == s:
+            return true
+        i = i + 1
+    return false
+
+def parse_manifest(path: str) -> Manifest:
+    src = read_file(path)
+    lines = src.split("\n")
+    m = Manifest()
+    section = ""
+    i = 0
+    while i < len(lines):
+        raw = lines[i]
+        line = trim(raw)
+        i = i + 1
+        if is_blank_or_comment(line):
+            continue
+        if line.starts_with("[") and line.ends_with("]"):
+            section = line.substr(1, len(line) - 1)
+            continue
+        eq = line.find("=")
+        if eq < 0:
+            continue
+        key = trim(line.substr(0, eq))
+        val = trim(line.substr(eq + 1, len(line)))
+        if val.starts_with("\"") and val.ends_with("\"") and len(val) >= 2:
+            val = val.substr(1, len(val) - 1)
+        if section == "package":
+            if key == "name":
+                m.name = val
+            if key == "version":
+                m.version = val
+            if key == "author":
+                m.author = val
+            if key == "description":
+                m.description = val
+            if key == "entry":
+                m.entry = val
+        if section == "dependencies":
+            # Two forms:
+            #   name = "1.0.0"
+            #   name = { git = "url", tag = "v1", branch = "main", rev = "abc" }
+            if val.starts_with("{"):
+                d: Dep = Dep(key, "")
+                inner: str = val.substr(1, len(val) - 1)
+                if inner.ends_with("}"):
+                    inner = inner.substr(0, len(inner) - 1)
+                fields: list<str> = inner.split(",")
+                j: int = 0
+                while j < len(fields):
+                    f: str = trim(fields[j])
+                    if len(f) > 0:
+                        eq2: int = f.find("=")
+                        if eq2 > 0:
+                            k2: str = trim(f.substr(0, eq2))
+                            v2: str = trim(f.substr(eq2 + 1, len(f)))
+                            if v2.starts_with("\"") and v2.ends_with("\"") and len(v2) >= 2:
+                                v2 = v2.substr(1, len(v2) - 1)
+                            if k2 == "git":
+                                d.git = v2
+                            elif k2 == "version":
+                                d.version = v2
+                            elif k2 == "tag":
+                                d.git_ref_kind = "tag"
+                                d.git_ref_value = v2
+                            elif k2 == "branch":
+                                d.git_ref_kind = "branch"
+                                d.git_ref_value = v2
+                            elif k2 == "rev":
+                                d.git_ref_kind = "rev"
+                                d.git_ref_value = v2
+                    j = j + 1
+                m.deps.append(d)
+            else:
+                m.deps.append(Dep(key, val))
+    return m
+
+def join_path(a: str, b: str) -> str:
+    if len(a) == 0:
+        return b
+    if a.ends_with("/") or a.ends_with("\\"):
+        return a + b
+    return a + "/" + b
+
+def dir_exists(p: str) -> bool:
+    rc = run_command("dir \"" + p + "\" /ad /b >nul 2>nul")
+    if rc == 0:
+        return true
+    return false
+
+def mkdir(p: str) -> None:
+    run_command("mkdir \"" + p + "\" 2>nul")
+
+def find_up(rel_path: str) -> str:
+    if file_exists(rel_path):
+        return rel_path
+    p1 = "..\\" + rel_path
+    if file_exists(p1):
+        return p1
+    p2 = "..\\..\\" + rel_path
+    if file_exists(p2):
+        return p2
+    p3 = "..\\..\\..\\" + rel_path
+    if file_exists(p3):
+        return p3
+    p4 = "..\\..\\..\\..\\" + rel_path
+    if file_exists(p4):
+        return p4
+    p5 = "..\\..\\..\\..\\..\\" + rel_path
+    if file_exists(p5):
+        return p5
+    p6 = "..\\..\\..\\..\\..\\..\\" + rel_path
+    if file_exists(p6):
+        return p6
+    return ""
+
+def find_vayuc() -> str:
+    p = find_up("build\\x64-debug\\bin\\vayuc.exe")
+    if p == "":
+        return "vayuc.exe"
+    return p
+
+def find_qbe() -> str:
+    return find_up("tools\\qbe.exe")
+
+def find_dep_dir(name: str, root: str) -> str:
+    p1 = join_path(join_path(root, "nova_modules"), name)
+    if dir_exists(p1):
+        return p1
+    p2 = join_path(join_path(root, ".."), name)
+    if dir_exists(p2):
+        return p2
+    return ""
+
+def resolve_modules(m: Manifest) -> str:
+    parts: list<str> = []
+    i = 0
+    while i < len(m.deps):
+        d = m.deps[i]
+        ddir = find_dep_dir(d.name, m.root_dir)
+        if ddir == "":
+            print("nva: missing dependency '" + d.name + "'")
+            exit(1)
+        parts.append(ddir)
+        sub_toml = join_path(ddir, "nova.toml")
+        if file_exists(sub_toml):
+            sub = parse_manifest(sub_toml)
+            sub.root_dir = ddir
+            j = 0
+            while j < len(sub.deps):
+                sd = sub.deps[j]
+                sdir = find_dep_dir(sd.name, ddir)
+                if sdir != "":
+                    parts.append(sdir)
+                j = j + 1
+        i = i + 1
+    out = ""
+    k = 0
+    while k < len(parts):
+        if k > 0:
+            out = out + ";"
+        out = out + parts[k]
+        k = k + 1
+    return out
+
+# ---------------------------------------------------------------------------
+# lib folder / lib.zip management
+# ---------------------------------------------------------------------------
+
+def extract_lib_zip() -> None:
+    print("nva: extracting " + LIB_ZIP + " ...")
+    cmd = "powershell -NoProfile -Command \"Expand-Archive -Path '" + LIB_ZIP + "' -DestinationPath '.' -Force\""
+    rc = run_command(cmd)
+    if rc != 0:
+        print("nva: failed to extract " + LIB_ZIP)
+        exit(1)
+
+def download_lib_zip() -> bool:
+    print("nva: downloading " + LIB_ZIP + " ...")
+    rc = run_command("curl -L -s -o " + LIB_ZIP + " \"" + LIB_ZIP_URL + "\"")
+    if rc != 0:
+        cmd = "powershell -NoProfile -Command \"Invoke-WebRequest -UseBasicParsing -Uri '" + LIB_ZIP_URL + "' -OutFile '" + LIB_ZIP + "'\""
+        rc = run_command(cmd)
+    return rc == 0
+
+def ensure_lib() -> None:
+    if dir_exists(LIB_DIR):
+        return
+    if file_exists(LIB_ZIP):
+        extract_lib_zip()
+        return
+    print("nva: lib/ is missing and lib.zip was not found.")
+    print("nva: download lib.zip from GitHub? (Y/N)")
+    ans = read_line().strip()
+    if ans == "Y" or ans == "y":
+        if not download_lib_zip():
+            print("nva: download failed.")
+            exit(1)
+        extract_lib_zip()
+    else:
+        print("nva: cancelled -- lib/ is required to build.")
+        exit(1)
+
+# ---------------------------------------------------------------------------
+# toml editing
+# ---------------------------------------------------------------------------
+
+def toml_add_dep(path: str, name: str, version: str) -> None:
+    src = read_file(path)
+    lines = src.split("\n")
+    dep_start = -1
+    dep_end = -1
+    i = 0
+    while i < len(lines):
+        t = trim(lines[i])
+        if t == "[dependencies]":
+            dep_start = i
+            j = i + 1
+            while j < len(lines):
+                u = trim(lines[j])
+                if u.starts_with("[") and u.ends_with("]"):
+                    break
+                if len(u) > 0:
+                    dep_end = j
+                j = j + 1
+            break
+        i = i + 1
+
+    new_line = name + " = \"" + version + "\""
+    new_lines: list<str> = []
+    if dep_start < 0:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            k = k + 1
+        new_lines.append("")
+        new_lines.append("[dependencies]")
+        new_lines.append(new_line)
+    elif dep_end < 0:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_start:
+                new_lines.append(new_line)
+            k = k + 1
+    else:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_end:
+                new_lines.append(new_line)
+            k = k + 1
+    write_file(path, join_lines(new_lines))
+
+def toml_remove_dep(path: str, name: str) -> None:
+    src = read_file(path)
+    lines = src.split("\n")
+    in_deps = false
+    out_lines: list<str> = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        t = trim(line)
+        if t == "[dependencies]":
+            in_deps = true
+            out_lines.append(line)
+            i = i + 1
+            continue
+        if in_deps and t.starts_with("[") and t.ends_with("]"):
+            in_deps = false
+        if in_deps and len(t) > 0:
+            eq = t.find("=")
+            if eq >= 0:
+                key = trim(t.substr(0, eq))
+                if key == name:
+                    i = i + 1
+                    continue
+        out_lines.append(line)
+        i = i + 1
+    write_file(path, join_lines(out_lines))
+
+def toml_add_git_dep(path: str, name: str, url: str, ref_kind: str, ref_val: str) -> None:
+    src: str = read_file(path)
+    lines: list<str> = src.split("\n")
+    dep_start: int = -1
+    dep_end: int = -1
+    i: int = 0
+    while i < len(lines):
+        t: str = trim(lines[i])
+        if t == "[dependencies]":
+            dep_start = i
+            j: int = i + 1
+            while j < len(lines):
+                u: str = trim(lines[j])
+                if u.starts_with("[") and u.ends_with("]"):
+                    break
+                if len(u) > 0:
+                    dep_end = j
+                j = j + 1
+            break
+        i = i + 1
+
+    new_line: str = name + " = { git = \"" + url + "\""
+    if ref_kind == "tag":
+        new_line = new_line + ", tag = \"" + ref_val + "\""
+    elif ref_kind == "branch":
+        new_line = new_line + ", branch = \"" + ref_val + "\""
+    elif ref_kind == "rev":
+        new_line = new_line + ", rev = \"" + ref_val + "\""
+    new_line = new_line + " }"
+
+    new_lines: list<str> = []
+    if dep_start < 0:
+        k: int = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            k = k + 1
+        new_lines.append("")
+        new_lines.append("[dependencies]")
+        new_lines.append(new_line)
+    elif dep_end < 0:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_start:
+                new_lines.append(new_line)
+            k = k + 1
+    else:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_end:
+                new_lines.append(new_line)
+            k = k + 1
+    write_file(path, join_lines(new_lines))
+
+# ---------------------------------------------------------------------------
+# lock file
+# ---------------------------------------------------------------------------
+
+def collect_lock_entries(m: Manifest, out: list<str>, visited: list<str>) -> None:
+    i = 0
+    while i < len(m.deps):
+        d = m.deps[i]
+        if not str_in_list(d.name, visited):
+            visited.append(d.name)
+            ddir = find_dep_dir(d.name, m.root_dir)
+            out.append(d.name + " " + d.version + " " + ddir)
+            sub_toml = join_path(ddir, "nova.toml")
+            if file_exists(sub_toml):
+                sub = parse_manifest(sub_toml)
+                sub.root_dir = ddir
+                collect_lock_entries(sub, out, visited)
+        i = i + 1
+
+def write_lock(m: Manifest) -> None:
+    lines: list<str> = []
+    lines.append("# nva lock file, format v1")
+    lines.append("# do not edit by hand; regenerate with 'nva build'")
+    lines.append("# fields: name version path")
+    visited: list<str> = []
+    collect_lock_entries(m, lines, visited)
+    write_file("nova.lock", join_lines(lines) + "\n")
+
+# ---------------------------------------------------------------------------
+# basic commands
+# ---------------------------------------------------------------------------
+
+def cmd_new(name: str) -> None:
+    root = name
+    mkdir(root)
+    mkdir(join_path(root, "src"))
+    toml = "[package]\n"
+    toml = toml + "name = \"" + name + "\"\n"
+    toml = toml + "version = \"0.1.0\"\n"
+    toml = toml + "author = \"\"\n"
+    toml = toml + "description = \"\"\n"
+    toml = toml + "entry = \"src/main.vyu\"\n"
+    toml = toml + "\n"
+    toml = toml + "[dependencies]\n"
+    write_file(join_path(root, "nova.toml"), toml)
+    main_src = "print(\"Hello from " + name + "!\")\n"
+    write_file(join_path(root, "src/main.vyu"), main_src)
+    print("nva: created project '" + name + "'")
+    print("     cd " + name)
+    print("     nva run")
+
+def cmd_init() -> None:
+    toml = "[package]\n"
+    toml = toml + "name = \"app\"\n"
+    toml = toml + "version = \"0.1.0\"\n"
+    toml = toml + "author = \"\"\n"
+    toml = toml + "description = \"\"\n"
+    toml = toml + "entry = \"src/main.vyu\"\n"
+    toml = toml + "\n"
+    toml = toml + "[dependencies]\n"
+    write_file("nova.toml", toml)
+    mkdir("src")
+    if not file_exists("src/main.vyu"):
+        write_file("src/main.vyu", "print(\"Hello, Vayu!\")\n")
+    print("nva: initialized nova.toml")
+
+def cmd_add(name: str, version: str) -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m = parse_manifest("nova.toml")
+    i = 0
+    while i < len(m.deps):
+        if m.deps[i].name == name:
+            print("nva: '" + name + "' is already a dependency")
+            exit(1)
+        i = i + 1
+    toml_add_dep("nova.toml", name, version)
+    print("nva: added " + name + " = \"" + version + "\"")
+
+def cmd_remove(name: str) -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m = parse_manifest("nova.toml")
+    found = false
+    i = 0
+    while i < len(m.deps):
+        if m.deps[i].name == name:
+            found = true
+        i = i + 1
+    toml_remove_dep("nova.toml", name)
+    if found:
+        print("nva: removed " + name)
+    else:
+        print("nva: '" + name + "' was not a dependency")
+
+def print_dep_tree(m: Manifest, indent: int, visited: list<str>) -> None:
+    pad = ""
+    k = 0
+    while k < indent:
+        pad = pad + "  "
+        k = k + 1
+    i = 0
+    while i < len(m.deps):
+        d = m.deps[i]
+        if str_in_list(d.name, visited):
+            print(pad + d.name + " " + d.version + " (already shown)")
+            i = i + 1
+            continue
+        visited.append(d.name)
+        ddir = find_dep_dir(d.name, m.root_dir)
+        if ddir == "":
+            print(pad + d.name + " " + d.version + " (MISSING)")
+        else:
+            print(pad + d.name + " " + d.version + " -> " + ddir)
+            sub_toml = join_path(ddir, "nova.toml")
+            if file_exists(sub_toml):
+                sub = parse_manifest(sub_toml)
+                sub.root_dir = ddir
+                print_dep_tree(sub, indent + 1, visited)
+        i = i + 1
+
+def cmd_list() -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m = parse_manifest("nova.toml")
+    m.root_dir = ""
+    if m.name == "":
+        print("nva: nova.toml has no package.name")
+        exit(1)
+    print(m.name + " " + m.version)
+    if len(m.deps) == 0:
+        print("  (no dependencies)")
+        return
+    visited: list<str> = []
+    print_dep_tree(m, 1, visited)
+
+# ---------------------------------------------------------------------------
+# registry commands (Phase 23.1 + 23.2)
+# ---------------------------------------------------------------------------
 
 def cmd_registry(path: str) -> None:
     c: NvaConfig = _config_read()
@@ -830,7 +1312,7 @@ def cmd_search_remote(query: str, remote: str) -> None:
     print("nva: " + str(count) + " remote version(s)")
 
 # ---------------------------------------------------------------------------
-# Phase 23.3 + 23.4 commands.
+# git + solver commands (Phase 23.3 + 23.4)
 # ---------------------------------------------------------------------------
 
 def cmd_tree() -> None:
@@ -844,10 +1326,12 @@ def cmd_tree() -> None:
     collect_graph(m, fs.cwd(), visited, 1, nodes)
 
     print(m.name + " " + m.version)
-    i: int = 0
-    while i < len(nodes):
+    # collect_graph appends in post-order (children first).  Reverse for a
+    # top-down display: parent above its children.
+    i: int = len(nodes) - 1
+    while i >= 0:
         print_tree_node(nodes[i])
-        i = i + 1
+        i = i - 1
 
     conflicts: list<str> = detect_conflicts(nodes)
     if len(conflicts) > 0:
@@ -863,7 +1347,7 @@ def cmd_add_git(name: str, url: str, ref_kind: str, ref_val: str) -> None:
         print("nva: no nova.toml in this directory")
         exit(1)
     if len(name) == 0 or len(url) == 0:
-        print("nva: add --git requires a name and a URL")
+        print("nva: add-git requires a name and a URL")
         exit(1)
     m: Manifest = parse_manifest("nova.toml")
     i: int = 0
@@ -882,518 +1366,51 @@ def cmd_add_git(name: str, url: str, ref_kind: str, ref_val: str) -> None:
         suffix = " rev " + ref_val
     print("nva: added " + name + " from git " + url + suffix)
 
+def _install_git_recursive(url: str, ref_kind: str, ref_val: str, dst: str) -> int:
+    rc: int = _git_clone(url, ref_kind, ref_val, dst)
+    if rc != 0:
+        return rc
+    # Recurse into the newly cloned repo's own git deps.  Without this,
+    # update wipes transitive deps when it replaces a git-sourced parent.
+    sub_toml: str = dst + "/nova.toml"
+    if file_exists(sub_toml):
+        sub: Manifest = parse_manifest(sub_toml)
+        j: int = 0
+        while j < len(sub.deps):
+            sd: Dep = sub.deps[j]
+            j = j + 1
+            if len(sd.git) > 0:
+                sub_dst: str = dst + "/nova_modules/" + sd.name
+                _install_git_recursive(sd.git, sd.git_ref_kind, sd.git_ref_value, sub_dst)
+    return 0
+
 def cmd_update() -> None:
     if not file_exists("nova.toml"):
         print("nva: no nova.toml in this directory")
         exit(1)
     m: Manifest = parse_manifest("nova.toml")
     m.root_dir = ""
-    visited: list<str> = []
-    nodes: list<DepNode> = []
-    collect_graph(m, fs.cwd(), visited, 0, nodes)
-    # collect_graph already re-fetches missing git deps.  Force a refresh
-    # of every git-sourced dep.
+    # Update always clones into <cwd>/nova_modules/<name>.  Never into a
+    # sibling source repo -- that destroys the source.
     count: int = 0
     i: int = 0
-    while i < len(nodes):
-        n: DepNode = nodes[i]
+    while i < len(m.deps):
+        d: Dep = m.deps[i]
         i = i + 1
-        if len(n.git) == 0:
+        if len(d.git) == 0:
             continue
-        dst: str = ""
-        if len(n.dir) > 0:
-            dst = n.dir
-        else:
-            dst = "nova_modules/" + n.name
-        rc: int = _git_clone(n.git, n.git_ref_kind, n.git_ref_value, dst)
+        dst: str = "nova_modules/" + d.name
+        rc: int = _install_git_recursive(d.git, d.git_ref_kind, d.git_ref_value, dst)
         if rc == 0:
-            print("nva: updated " + n.name + "  (" + _depnode_ref_str(n) + ")")
+            print("nva: updated " + d.name + "  (git)")
             count = count + 1
         else:
-            print("nva: failed to update " + n.name)
+            print("nva: failed to update " + d.name)
     print("nva: " + str(count) + " git dep(s) refreshed")
 
-class Dep:
-    name: str
-    version: str
-    git: str
-    git_ref_kind: str
-    git_ref_value: str
-
-    def __init__(self, name: str, version: str) -> None:
-        self.name = name
-        self.version = version
-        self.git = ""
-        self.git_ref_kind = ""
-        self.git_ref_value = ""
-
-class Manifest:
-    name: str
-    version: str
-    author: str
-    description: str
-    entry: str
-    deps: list<Dep>
-    root_dir: str
-    def __init__(self) -> None:
-        self.name = ""
-        self.version = "0.1.0"
-        self.author = ""
-        self.description = ""
-        self.entry = "src/main.vyu"
-        self.deps = []
-        self.root_dir = ""
-
-def trim(s: str) -> str:
-    return s.strip()
-
-def is_blank_or_comment(line: str) -> bool:
-    t = trim(line)
-    if len(t) == 0:
-        return true
-    if t.starts_with("#"):
-        return true
-    return false
-
-def join_lines(lines: list<str>) -> str:
-    out = ""
-    i = 0
-    while i < len(lines):
-        if i > 0:
-            out = out + "\n"
-        out = out + lines[i]
-        i = i + 1
-    return out
-
-def str_in_list(s: str, lst: list<str>) -> bool:
-    i = 0
-    while i < len(lst):
-        if lst[i] == s:
-            return true
-        i = i + 1
-    return false
-
-def parse_manifest(path: str) -> Manifest:
-    src = read_file(path)
-    lines = src.split("\n")
-    m = Manifest()
-    section = ""
-    i = 0
-    while i < len(lines):
-        raw = lines[i]
-        line = trim(raw)
-        i = i + 1
-        if is_blank_or_comment(line):
-            continue
-        if line.starts_with("[") and line.ends_with("]"):
-            section = line.substr(1, len(line) - 1)
-            continue
-        eq = line.find("=")
-        if eq < 0:
-            continue
-        key = trim(line.substr(0, eq))
-        val = trim(line.substr(eq + 1, len(line)))
-        if val.starts_with("\"") and val.ends_with("\"") and len(val) >= 2:
-            val = val.substr(1, len(val) - 1)
-        if section == "package":
-            if key == "name":
-                m.name = val
-            if key == "version":
-                m.version = val
-            if key == "author":
-                m.author = val
-            if key == "description":
-                m.description = val
-            if key == "entry":
-                m.entry = val
-        if section == "dependencies":
-            # Two forms:
-            #   name = "1.0.0"
-            #   name = { git = "url", tag = "v1", branch = "main", rev = "abc" }
-            if val.starts_with("{"):
-                d: Dep = Dep(key, "")
-                inner: str = val.substr(1, len(val) - 1)
-                if inner.ends_with("}"):
-                    inner = inner.substr(0, len(inner) - 1)
-                fields: list<str> = inner.split(",")
-                j: int = 0
-                while j < len(fields):
-                    f: str = trim(fields[j])
-                    if len(f) > 0:
-                        eq2: int = f.find("=")
-                        if eq2 > 0:
-                            k2: str = trim(f.substr(0, eq2))
-                            v2: str = trim(f.substr(eq2 + 1, len(f)))
-                            if v2.starts_with("\"") and v2.ends_with("\"") and len(v2) >= 2:
-                                v2 = v2.substr(1, len(v2) - 1)
-                            if k2 == "git":
-                                d.git = v2
-                            elif k2 == "version":
-                                d.version = v2
-                            elif k2 == "tag":
-                                d.git_ref_kind = "tag"
-                                d.git_ref_value = v2
-                            elif k2 == "branch":
-                                d.git_ref_kind = "branch"
-                                d.git_ref_value = v2
-                            elif k2 == "rev":
-                                d.git_ref_kind = "rev"
-                                d.git_ref_value = v2
-                    j = j + 1
-                m.deps.append(d)
-            else:
-                m.deps.append(Dep(key, val))
-    return m
-
-def join_path(a: str, b: str) -> str:
-    if len(a) == 0:
-        return b
-    if a.ends_with("/") or a.ends_with("\\"):
-        return a + b
-    return a + "/" + b
-
-def dir_exists(p: str) -> bool:
-    rc = run_command("dir \"" + p + "\" /ad /b >nul 2>nul")
-    if rc == 0:
-        return true
-    return false
-
-def mkdir(p: str) -> None:
-    run_command("mkdir \"" + p + "\" 2>nul")
-
-def find_up(rel_path: str) -> str:
-    if file_exists(rel_path):
-        return rel_path
-    p1 = "..\\" + rel_path
-    if file_exists(p1):
-        return p1
-    p2 = "..\\..\\" + rel_path
-    if file_exists(p2):
-        return p2
-    p3 = "..\\..\\..\\" + rel_path
-    if file_exists(p3):
-        return p3
-    p4 = "..\\..\\..\\..\\" + rel_path
-    if file_exists(p4):
-        return p4
-    p5 = "..\\..\\..\\..\\..\\" + rel_path
-    if file_exists(p5):
-        return p5
-    p6 = "..\\..\\..\\..\\..\\..\\" + rel_path
-    if file_exists(p6):
-        return p6
-    return ""
-
-def find_vayuc() -> str:
-    p = find_up("build\\x64-debug\\bin\\vayuc.exe")
-    if p == "":
-        return "vayuc.exe"
-    return p
-
-def find_qbe() -> str:
-    return find_up("tools\\qbe.exe")
-
-def find_dep_dir(name: str, root: str) -> str:
-    p1 = join_path(join_path(root, "nova_modules"), name)
-    if dir_exists(p1):
-        return p1
-    p2 = join_path(join_path(root, ".."), name)
-    if dir_exists(p2):
-        return p2
-    return ""
-
-def resolve_modules(m: Manifest) -> str:
-    parts: list<str> = []
-    i = 0
-    while i < len(m.deps):
-        d = m.deps[i]
-        ddir = find_dep_dir(d.name, m.root_dir)
-        if ddir == "":
-            print("nva: missing dependency '" + d.name + "'")
-            exit(1)
-        parts.append(ddir)
-        sub_toml = join_path(ddir, "nova.toml")
-        if file_exists(sub_toml):
-            sub = parse_manifest(sub_toml)
-            sub.root_dir = ddir
-            j = 0
-            while j < len(sub.deps):
-                sd = sub.deps[j]
-                sdir = find_dep_dir(sd.name, ddir)
-                if sdir != "":
-                    parts.append(sdir)
-                j = j + 1
-        i = i + 1
-    out = ""
-    k = 0
-    while k < len(parts):
-        if k > 0:
-            out = out + ";"
-        out = out + parts[k]
-        k = k + 1
-    return out
-
 # ---------------------------------------------------------------------------
-# lib folder / lib.zip management
+# build / run / clean
 # ---------------------------------------------------------------------------
-
-def extract_lib_zip() -> None:
-    print("nva: extracting " + LIB_ZIP + " ...")
-    # Expand-Archive requires PowerShell 5+; DestinationPath '.' puts
-    # the top-level folder (lib/) back in the current directory.
-    cmd = "powershell -NoProfile -Command \"Expand-Archive -Path '" + LIB_ZIP + "' -DestinationPath '.' -Force\""
-    rc = run_command(cmd)
-    if rc != 0:
-        print("nva: failed to extract " + LIB_ZIP)
-        exit(1)
-
-def download_lib_zip() -> bool:
-    print("nva: downloading " + LIB_ZIP + " ...")
-    # Prefer curl.exe (ships with Windows 10+).
-    rc = run_command("curl -L -s -o " + LIB_ZIP + " \"" + LIB_ZIP_URL + "\"")
-    if rc != 0:
-        # Fallback: PowerShell Invoke-WebRequest.
-        cmd = "powershell -NoProfile -Command \"Invoke-WebRequest -UseBasicParsing -Uri '" + LIB_ZIP_URL + "' -OutFile '" + LIB_ZIP + "'\""
-        rc = run_command(cmd)
-    return rc == 0
-
-def ensure_lib() -> None:
-    # Fast path — lib/ already present, nothing to do.
-    if dir_exists(LIB_DIR):
-        return
-    # lib.zip present — extract and go.
-    if file_exists(LIB_ZIP):
-        extract_lib_zip()
-        return
-    # Neither present — ask.
-    print("nva: lib/ is missing and lib.zip was not found.")
-    print("nva: download lib.zip from GitHub? (Y/N)")
-    ans = read_line().strip()
-    if ans == "Y" or ans == "y":
-        if not download_lib_zip():
-            print("nva: download failed.")
-            exit(1)
-        extract_lib_zip()
-    else:
-        print("nva: cancelled — lib/ is required to build.")
-        exit(1)
-
-# ---------------------------------------------------------------------------
-# toml editing
-# ---------------------------------------------------------------------------
-
-def toml_add_dep(path: str, name: str, version: str) -> None:
-    src = read_file(path)
-    lines = src.split("\n")
-    dep_start = -1
-    dep_end = -1
-    i = 0
-    while i < len(lines):
-        t = trim(lines[i])
-        if t == "[dependencies]":
-            dep_start = i
-            j = i + 1
-            while j < len(lines):
-                u = trim(lines[j])
-                if u.starts_with("[") and u.ends_with("]"):
-                    break
-                if len(u) > 0:
-                    dep_end = j
-                j = j + 1
-            break
-        i = i + 1
-
-    new_line = name + " = \"" + version + "\""
-    new_lines: list<str> = []
-    if dep_start < 0:
-        k = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            k = k + 1
-        new_lines.append("")
-        new_lines.append("[dependencies]")
-        new_lines.append(new_line)
-    elif dep_end < 0:
-        k = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            if k == dep_start:
-                new_lines.append(new_line)
-            k = k + 1
-    else:
-        k = 0
-        while k < len(lines):
-            new_lines.append(lines[k])
-            if k == dep_end:
-                new_lines.append(new_line)
-            k = k + 1
-    write_file(path, join_lines(new_lines))
-
-def toml_remove_dep(path: str, name: str) -> None:
-    src = read_file(path)
-    lines = src.split("\n")
-    in_deps = false
-    out_lines: list<str> = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        t = trim(line)
-        if t == "[dependencies]":
-            in_deps = true
-            out_lines.append(line)
-            i = i + 1
-            continue
-        if in_deps and t.starts_with("[") and t.ends_with("]"):
-            in_deps = false
-        if in_deps and len(t) > 0:
-            eq = t.find("=")
-            if eq >= 0:
-                key = trim(t.substr(0, eq))
-                if key == name:
-                    i = i + 1
-                    continue
-        out_lines.append(line)
-        i = i + 1
-    write_file(path, join_lines(out_lines))
-
-# ---------------------------------------------------------------------------
-# lock file
-# ---------------------------------------------------------------------------
-
-def collect_lock_entries(m: Manifest, out: list<str>, visited: list<str>) -> None:
-    i = 0
-    while i < len(m.deps):
-        d = m.deps[i]
-        if not str_in_list(d.name, visited):
-            visited.append(d.name)
-            ddir = find_dep_dir(d.name, m.root_dir)
-            out.append(d.name + " " + d.version + " " + ddir)
-            sub_toml = join_path(ddir, "nova.toml")
-            if file_exists(sub_toml):
-                sub = parse_manifest(sub_toml)
-                sub.root_dir = ddir
-                collect_lock_entries(sub, out, visited)
-        i = i + 1
-
-def write_lock(m: Manifest) -> None:
-    lines: list<str> = []
-    lines.append("# nva lock file, format v1")
-    lines.append("# do not edit by hand; regenerate with 'nva build'")
-    lines.append("# fields: name version path")
-    visited: list<str> = []
-    collect_lock_entries(m, lines, visited)
-    write_file("nova.lock", join_lines(lines) + "\n")
-
-# ---------------------------------------------------------------------------
-# commands
-# ---------------------------------------------------------------------------
-
-def cmd_new(name: str) -> None:
-    root = name
-    mkdir(root)
-    mkdir(join_path(root, "src"))
-    toml = "[package]\n"
-    toml = toml + "name = \"" + name + "\"\n"
-    toml = toml + "version = \"0.1.0\"\n"
-    toml = toml + "author = \"\"\n"
-    toml = toml + "description = \"\"\n"
-    toml = toml + "entry = \"src/main.vyu\"\n"
-    toml = toml + "\n"
-    toml = toml + "[dependencies]\n"
-    write_file(join_path(root, "nova.toml"), toml)
-    main_src = "print(\"Hello from " + name + "!\")\n"
-    write_file(join_path(root, "src/main.vyu"), main_src)
-    print("nva: created project '" + name + "'")
-    print("     cd " + name)
-    print("     nva run")
-
-def cmd_init() -> None:
-    toml = "[package]\n"
-    toml = toml + "name = \"app\"\n"
-    toml = toml + "version = \"0.1.0\"\n"
-    toml = toml + "author = \"\"\n"
-    toml = toml + "description = \"\"\n"
-    toml = toml + "entry = \"src/main.vyu\"\n"
-    toml = toml + "\n"
-    toml = toml + "[dependencies]\n"
-    write_file("nova.toml", toml)
-    mkdir("src")
-    if not file_exists("src/main.vyu"):
-        write_file("src/main.vyu", "print(\"Hello, Vayu!\")\n")
-    print("nva: initialized nova.toml")
-
-def cmd_add(name: str, version: str) -> None:
-    if not file_exists("nova.toml"):
-        print("nva: no nova.toml in this directory")
-        exit(1)
-    m = parse_manifest("nova.toml")
-    i = 0
-    while i < len(m.deps):
-        if m.deps[i].name == name:
-            print("nva: '" + name + "' is already a dependency")
-            exit(1)
-        i = i + 1
-    toml_add_dep("nova.toml", name, version)
-    print("nva: added " + name + " = \"" + version + "\"")
-
-def cmd_remove(name: str) -> None:
-    if not file_exists("nova.toml"):
-        print("nva: no nova.toml in this directory")
-        exit(1)
-    m = parse_manifest("nova.toml")
-    found = false
-    i = 0
-    while i < len(m.deps):
-        if m.deps[i].name == name:
-            found = true
-        i = i + 1
-    toml_remove_dep("nova.toml", name)
-    if found:
-        print("nva: removed " + name)
-    else:
-        print("nva: '" + name + "' was not a dependency")
-
-def print_dep_tree(m: Manifest, indent: int, visited: list<str>) -> None:
-    pad = ""
-    k = 0
-    while k < indent:
-        pad = pad + "  "
-        k = k + 1
-    i = 0
-    while i < len(m.deps):
-        d = m.deps[i]
-        if str_in_list(d.name, visited):
-            print(pad + d.name + " " + d.version + " (already shown)")
-            i = i + 1
-            continue
-        visited.append(d.name)
-        ddir = find_dep_dir(d.name, m.root_dir)
-        if ddir == "":
-            print(pad + d.name + " " + d.version + " (MISSING)")
-        else:
-            print(pad + d.name + " " + d.version + " -> " + ddir)
-            sub_toml = join_path(ddir, "nova.toml")
-            if file_exists(sub_toml):
-                sub = parse_manifest(sub_toml)
-                sub.root_dir = ddir
-                print_dep_tree(sub, indent + 1, visited)
-        i = i + 1
-
-def cmd_list() -> None:
-    if not file_exists("nova.toml"):
-        print("nva: no nova.toml in this directory")
-        exit(1)
-    m = parse_manifest("nova.toml")
-    m.root_dir = ""
-    if m.name == "":
-        print("nva: nova.toml has no package.name")
-        exit(1)
-    print(m.name + " " + m.version)
-    if len(m.deps) == 0:
-        print("  (no dependencies)")
-        return
-    visited: list<str> = []
-    print_dep_tree(m, 1, visited)
 
 def cmd_build() -> str:
     ensure_lib()
@@ -1449,6 +1466,10 @@ def cmd_clean() -> None:
     if file_exists("nova.lock"):
         print("nva: kept nova.lock (regenerated on next build)")
     print("nva: cleaned")
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     a = args()
@@ -1518,7 +1539,6 @@ def main() -> None:
         cmd_clean()
         return
     if cmd == "semver-test":
-        # Quick self-test of version resolution.  Prints PASS/FAIL lines.
         tc: SemverTest = SemverTest()
 
         tc.check("^1.2.3 matches 1.5.0", version_matches("^1.2.3", "1.5.0"), true)
@@ -1544,7 +1564,6 @@ def main() -> None:
         if tc.fails > 0:
             exit(1)
         return
-
     if cmd == "registry":
         cmd_registry(_flag_value(a, "--set"))
         return

@@ -33,6 +33,7 @@ def nva(args_str: str) -> int:
     return run_command("\"" + NVA + "\" " + args_str)
 
 def main() -> None:
+    START_CWD: str = fs.cwd()
     NVA = fs.abs("nva.exe")
     if not fs.exists(NVA):
         print("nva.exe not found at " + NVA)
@@ -67,7 +68,7 @@ def main() -> None:
     os.chdir(PKG_SRC)
     rc: int = nva("publish-local --registry \"" + reg_abs + "\"")
     print("  rc=" + str(rc))
-    os.chdir("../..")
+    os.chdir(START_CWD)
     if rc != 0:
         print("FAIL: publish-local")
         exit(1)
@@ -81,7 +82,7 @@ def main() -> None:
     os.chdir(CONSUMER)
     rc = nva("install greet --registry \"" + reg_abs + "\"")
     print("  rc=" + str(rc))
-    os.chdir("../..")
+    os.chdir(START_CWD)
     if rc != 0:
         print("FAIL: install")
         exit(1)

@@ -1638,16 +1638,40 @@ namespace vayu {
                     auto* n = static_cast<const BinaryExpr*>(e);
 
                     if (n->op == BinOp::And || n->op == BinOp::Or) {
+                        /* Real short-circuit.  The old code emitted rhs
+                           unconditionally, so a truthy lhs never protected
+                           an unsafe rhs (e.g. `ok(x) or crash(x)`). */
+                        bool isAnd = (n->op == BinOp::And);
                         Val a = emitExpr(n->lhs.get());
+                        std::string aw = newTemp();
+                        line(aw + " =w cnel " + a.ssa + ", 0");
+
+                        std::string slot = newTemp();
+                        line(slot + " =l alloc8 8");
+
+                        std::string lShort = newLabel(isAnd ? "and_short_" : "or_short_");
+                        std::string lFall = newLabel(isAnd ? "and_fall_" : "or_fall_");
+                        std::string lEnd = newLabel(isAnd ? "and_end_" : "or_end_");
+
+                        if (isAnd) line("jnz " + aw + ", " + lFall + ", " + lShort);
+                        else       line("jnz " + aw + ", " + lShort + ", " + lFall);
+
+                        raw(lShort);
+                        line("storel " + std::string(isAnd ? "0" : "1") + ", " + slot);
+                        line("jmp " + lEnd);
+
+                        raw(lFall);
                         Val b = emitExpr(n->rhs.get());
-                        std::string ab = newTemp(); line(ab + " =w cnel " + a.ssa + ", 0");
-                        std::string bb = newTemp(); line(bb + " =w cnel " + b.ssa + ", 0");
-                        std::string w = newTemp();
-                        line(w + " =w " + (n->op == BinOp::And ? "and" : "or") +
-                            " " + ab + ", " + bb);
+                        std::string bw = newTemp();
+                        line(bw + " =w cnel " + b.ssa + ", 0");
                         std::string ext = newTemp();
-                        line(ext + " =l extsw " + w);
-                        r.ssa = ext; r.type = VType::Bool; return r;
+                        line(ext + " =l extsw " + bw);
+                        line("storel " + ext + ", " + slot);
+
+                        raw(lEnd);
+                        std::string result = newTemp();
+                        line(result + " =l loadl " + slot);
+                        r.ssa = result; r.type = VType::Bool; return r;
                     }
 
                     Val a = emitExpr(n->lhs.get());
@@ -6163,17 +6187,49 @@ namespace vayu {
 
                     case BinOp::And: {
                         std::string w1 = emitCond(b->lhs.get());
+                        std::string slot = newTemp();
+                        line(slot + " =l alloc8 8");
+                        std::string lShort = newLabel("andc_short_");
+                        std::string lFall = newLabel("andc_fall_");
+                        std::string lEnd = newLabel("andc_end_");
+                        line("jnz " + w1 + ", " + lFall + ", " + lShort);
+                        raw(lShort);
+                        line("storel 0, " + slot);
+                        line("jmp " + lEnd);
+                        raw(lFall);
                         std::string w2 = emitCond(b->rhs.get());
-                        std::string w = newTemp();
-                        line(w + " =w and " + w1 + ", " + w2);
-                        return w;
+                        std::string e2 = newTemp();
+                        line(e2 + " =l extsw " + w2);
+                        line("storel " + e2 + ", " + slot);
+                        raw(lEnd);
+                        std::string res = newTemp();
+                        line(res + " =l loadl " + slot);
+                        std::string rw = newTemp();
+                        line(rw + " =w copy " + res);
+                        return rw;
                     }
                     case BinOp::Or: {
                         std::string w1 = emitCond(b->lhs.get());
+                        std::string slot = newTemp();
+                        line(slot + " =l alloc8 8");
+                        std::string lShort = newLabel("orc_short_");
+                        std::string lFall = newLabel("orc_fall_");
+                        std::string lEnd = newLabel("orc_end_");
+                        line("jnz " + w1 + ", " + lShort + ", " + lFall);
+                        raw(lShort);
+                        line("storel 1, " + slot);
+                        line("jmp " + lEnd);
+                        raw(lFall);
                         std::string w2 = emitCond(b->rhs.get());
-                        std::string w = newTemp();
-                        line(w + " =w or " + w1 + ", " + w2);
-                        return w;
+                        std::string e2 = newTemp();
+                        line(e2 + " =l extsw " + w2);
+                        line("storel " + e2 + ", " + slot);
+                        raw(lEnd);
+                        std::string res = newTemp();
+                        line(res + " =l loadl " + slot);
+                        std::string rw = newTemp();
+                        line(rw + " =w copy " + res);
+                        return rw;
                     }
                     default: break;
                     }

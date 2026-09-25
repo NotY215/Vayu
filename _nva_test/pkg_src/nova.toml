@@ -1,8 +1,0 @@
-[package]
-name = "greet"
-version = "0.1.0"
-author = "test"
-description = "a test package"
-entry = "src/main.vyu"
-
-[dependencies]
