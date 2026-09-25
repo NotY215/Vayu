@@ -31,4 +31,8 @@
     <Content Include="assets\Vyu_Icon_Dark.ico" IncludeInVSIX="true" />
   </ItemGroup>
 
+  <ItemGroup>
+    <VsixManifest Include="extension.vsixmanifest" />
+  </ItemGroup>
+
 </Project>
