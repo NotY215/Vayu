@@ -4,7 +4,7 @@
     xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="Vayu.Language.Community"
-              Version="0.2.0"
+              Version="0.3.0"
               Language="en-US"
               Publisher="NotY215" />
     <DisplayName>Vayu Language Support</DisplayName>
@@ -16,7 +16,7 @@
   </Metadata>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                   Version="[17.0,)"
+                   Version="[18.0,)"
                    DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Installation>
