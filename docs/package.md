@@ -40,7 +40,7 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
-Vayu has completed the GUI and graphics foundation through Phase 21. The current development direction is Phase 22 package ecosystem work, while the native runtime continues to receive implementation and performance improvements.
+Vayu has completed the GUI and graphics foundation through Phase 21. The Phase 22 package-ecosystem direction is now a completed development phase. The current direction is Phase 24 native floats, with benchmarking and the VCB transition following afterward.
 
 The package ecosystem remains a separate concern from the native graphics APIs: `gui` and `raster` are compiler/runtime capabilities, not package-registry features.
 
@@ -110,7 +110,7 @@ Vayu compiler + native toolchain
 Executable / library
 ```
 
-The future package system must also account for native dependencies, compiler versions, target platforms, and the native backend transition toward VCB.
+The future package system must also account for native dependencies, compiler versions, target platforms, and the native backend transition toward VCB. The package workflow is part of the release and single-binary goals in Phases 26–29, rather than a replacement for the compiler backend.
 
 ## VS Code and Developer Tooling
 
