@@ -4,9 +4,9 @@
     xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="Vayu.Language.Community"
-              Version="0.3.0"
+              Version="0.2.0"
               Language="en-US"
-              Publisher="NotY215" />
+              Publisher="Fliczo" />
     <DisplayName>Vayu Language Support</DisplayName>
     <Description xml:space="preserve">Syntax highlighting for .vyu files.</Description>
     <MoreInfo>https://github.com/NotY215/Vayu</MoreInfo>

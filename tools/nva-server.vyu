@@ -1,0 +1,124 @@
+# tools/nva-server.vyu -- Phase 23.5.
+# Read-only reference NVA registry server.  Speaks the same HTTP protocol
+# the nva client expects:
+#   GET  /index.txt                       -> text/plain
+#   GET  /packages/<name>/<version>.tar   -> application/octet-stream
+#   POST /publish                         -> 501 (use nva publish-local on
+#                                            the host instead)
+#
+# Usage:  nva-server [port] [registry-root]
+#         defaults:  port 8090,  root "registry"
+
+import net
+import fs
+import os
+
+const DEFAULT_PORT: int = 8090
+const DEFAULT_ROOT: str = "registry"
+
+def send_response(conn: int, code: int, ctype: str, body: str) -> None:
+    hdr: str = "HTTP/1.1 " + str(code) + " OK\r\n"
+    hdr = hdr + "Content-Type: " + ctype + "\r\n"
+    hdr = hdr + "Content-Length: " + str(len(body)) + "\r\n"
+    hdr = hdr + "Connection: close\r\n\r\n"
+    net.send(conn, hdr)
+    net.send(conn, body)
+
+def not_found(conn: int) -> None:
+    send_response(conn, 404, "text/plain", "not found\n")
+
+def serve_index(conn: int, root: str) -> None:
+    p: str = root + "/index.txt"
+    if not fs.exists(p):
+        not_found(conn)
+        return
+    send_response(conn, 200, "text/plain", read_file(p))
+
+def serve_package(conn: int, root: str, path: str) -> None:
+    rel: str = path.substr(1, len(path))
+    full: str = root + "/" + rel
+    if not fs.exists(full):
+        not_found(conn)
+        return
+    send_response(conn, 200, "application/octet-stream", read_file(full))
+
+def handle_get(conn: int, root: str, path: str) -> None:
+    if path == "/" or path == "/index.txt":
+        serve_index(conn, root)
+        return
+    if path.starts_with("/packages/"):
+        serve_package(conn, root, path)
+        return
+    not_found(conn)
+
+def drain_headers(conn: int) -> int:
+    # consume header lines; return Content-Length value or 0 if absent
+    content_length: int = 0
+    while true:
+        h: str = net.recv_line(conn)
+        if len(h) == 0:
+            break
+        low: str = h.lower()
+        if low.starts_with("content-length:"):
+            raw: str = h.substr(15, len(h)).strip()
+            content_length = int(raw)
+    return content_length
+
+def handle_conn(conn: int, root: str) -> None:
+    req: str = net.recv_line(conn)
+    if len(req) == 0:
+        return
+    parts: list<str> = req.split(" ")
+    method: str = ""
+    path: str = ""
+    if len(parts) >= 2:
+        method = parts[0]
+        path = parts[1]
+
+    if method == "GET":
+        drain_headers(conn)
+        handle_get(conn, root, path)
+        return
+
+    if method == "POST":
+        drain_headers(conn)
+        send_response(conn, 501, "text/plain", "publish not supported on this server\n")
+        return
+
+    drain_headers(conn)
+    send_response(conn, 405, "text/plain", "method not allowed\n")
+
+def main() -> None:
+    a: list<str> = args()
+    port: int = DEFAULT_PORT
+    root: str = DEFAULT_ROOT
+    if len(a) >= 1:
+        port = int(a[0])
+    if len(a) >= 2:
+        root = a[1]
+
+    if not fs.exists(root):
+        fs.mkdir(root)
+    if not fs.exists(root + "/packages"):
+        fs.mkdir(root + "/packages")
+    if not fs.exists(root + "/index.txt"):
+        write_file(root + "/index.txt", "# nva-registry-index v1\n")
+
+    srv: int = net.listen(port)
+    if srv == 0:
+        print("nva-server: cannot listen on port " + str(port))
+        exit(1)
+
+    actual: int = net.server_port(srv)
+    print("nva-server: root = " + root)
+    print("nva-server: listening on http://127.0.0.1:" + str(actual))
+    print("nva-server: press Ctrl+C to stop")
+
+    while true:
+        c: int = net.accept(srv)
+        if c == 0:
+            continue
+        handle_conn(c, root)
+        net.close(c)
+
+main()

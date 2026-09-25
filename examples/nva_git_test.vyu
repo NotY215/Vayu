@@ -1,0 +1,142 @@
+# examples/nva_git_test.vyu -- Phase 23.3 + 23.4 demo.
+# Creates two local git repos, wires them as deps, and exercises
+# `nva tree`, `nva update`, `nva add-git`.
+# Skips gracefully if git is not on PATH.
+
+import fs
+import os
+
+const ROOT: str = "_nva_git_test"
+
+NVA: str = ""
+
+def rmtree(p: str) -> None:
+    if os.platform() == "windows":
+        run_command("rmdir /s /q \"" + p + "\" >nul 2>nul")
+    else:
+        run_command("rm -rf \"" + p + "\" >/dev/null 2>&1")
+
+def mkdirs(p: str) -> None:
+    if not fs.exists(p):
+        fs.mkdir(p)
+
+def write(p: str, c: str) -> None:
+    write_file(p, c)
+
+def nva(a: str) -> int:
+    return run_command("\"" + NVA + "\" " + a)
+
+def git_init_repo(path: str) -> None:
+    mkdirs(path)
+    run_command("git -C \"" + path + "\" init -q")
+    run_command("git -C \"" + path + "\" config user.email \"test@vayu\"")
+    run_command("git -C \"" + path + "\" config user.name \"test\"")
+    run_command("git -C \"" + path + "\" config core.autocrlf false")
+
+def git_commit(path: str, msg: str) -> None:
+    run_command("git -C \"" + path + "\" -c core.autocrlf=false add .")
+    run_command("git -C \"" + path + "\" -c core.autocrlf=false commit -q -m \"" + msg + "\"")
+
+def git_tag(path: str, tag: str) -> None:
+    run_command("git -C \"" + path + "\" tag \"" + tag + "\"")
+
+def main() -> None:
+    NVA = fs.abs("nva.exe")
+    if not fs.exists(NVA):
+        print("nva.exe not found at " + NVA)
+        print("build it with:")
+        print("  .\\build\\x64-debug\\bin\\vayuc.exe tools\\nva.vyu --native-out nva.exe")
+        exit(1)
+
+    check: int = run_command("git --version >nul 2>nul")
+    if check != 0:
+        check = run_command("git --version >/dev/null 2>&1")
+    if check != 0:
+        print("git not on PATH; skipping nva_git_test")
+        return
+
+    rmtree(ROOT)
+    mkdirs(ROOT)
+
+    # leaf pkg
+    leaf: str = ROOT + "/leaf"
+    mkdirs(leaf + "/src")
+    write(leaf + "/nova.toml",
+        "[package]\n" +
+        "name = \"leaf\"\n" +
+        "version = \"0.1.0\"\n" +
+        "entry = \"src/main.vyu\"\n" +
+        "\n[dependencies]\n")
+    write(leaf + "/src/main.vyu", "def leaf_id() -> int:\n    return 1\n")
+    git_init_repo(leaf)
+    git_commit(leaf, "init leaf")
+    git_tag(leaf, "v0.1.0")
+
+    # parent pkg depends on leaf via git
+    parent: str = ROOT + "/parent"
+    mkdirs(parent + "/src")
+    write(parent + "/nova.toml",
+        "[package]\n" +
+        "name = \"parent\"\n" +
+        "version = \"0.1.0\"\n" +
+        "entry = \"src/main.vyu\"\n" +
+        "\n[dependencies]\n" +
+        "leaf = { git = \"" + fs.abs(leaf) + "\", tag = \"v0.1.0\" }\n")
+    write(parent + "/src/main.vyu", "def parent_id() -> int:\n    return 2\n")
+    git_init_repo(parent)
+    git_commit(parent, "init parent")
+    git_tag(parent, "v0.1.0")
+
+    # consumer project
+    consumer: str = ROOT + "/consumer"
+    mkdirs(consumer + "/src")
+    write(consumer + "/nova.toml",
+        "[package]\n" +
+        "name = \"consumer\"\n" +
+        "version = \"0.1.0\"\n" +
+        "entry = \"src/main.vyu\"\n" +
+        "\n[dependencies]\n" +
+        "parent = { git = \"" + fs.abs(parent) + "\", tag = \"v0.1.0\" }\n")
+    write(consumer + "/src/main.vyu", "def main() -> None:\n    print(\"consumer\")\n")
+
+    print("")
+    print("== nva tree ==")
+    os.chdir(consumer)
+    nva("tree")
+    os.chdir("../..")
+
+    print("")
+    print("== nva update ==")
+    os.chdir(consumer)
+    nva("update")
+    os.chdir("../..")
+
+    print("")
+    print("== nva add-git ==")
+    os.chdir(consumer)
+    nva("add-git leaf \"" + fs.abs(leaf) + "\" --tag v0.1.0")
+    os.chdir("../..")
+
+    print("")
+    print("== verify ==")
+    failed: bool = false
+    if fs.exists(consumer + "/nova_modules/parent/nova.toml"):
+        print("OK: parent installed")
+    else:
+        print("FAIL: parent missing")
+        failed = true
+
+    if fs.exists(consumer + "/nova_modules/leaf/nova.toml"):
+        print("OK: leaf (transitive) installed")
+    else:
+        print("FAIL: leaf (transitive) missing")
+        failed = true
+
+    rmtree(ROOT)
+    print("")
+    if failed:
+        print("nva git test FAILED")
+        exit(1)
+    print("nva git test done")
+
+main()

@@ -141,12 +141,791 @@ def best_match(range: str, candidates: list<str>) -> str:
         i = i + 1
     return best
 
+# ---------------------------------------------------------------------------
+# Phase 23.3 + 23.4 - git dependencies + transitive solver.
+#
+# nova.toml dependency forms:
+#   name = "1.0.0"                                          -- registry
+#   name = { git = "URL" }                                  -- default branch
+#   name = { git = "URL", tag = "v1.0.0" }                  -- tag
+#   name = { git = "URL", branch = "main" }                 -- branch
+#   name = { git = "URL", rev = "abc123" }                  -- commit
+#
+# Git deps are cloned into <project>/nova_modules/<name>.  When a
+# transitive dep comes from a git source, the same rule applies to its
+# own nova_modules/.
+# ---------------------------------------------------------------------------
+
+class DepNode:
+    name: str
+    version: str
+    git: str
+    git_ref_kind: str
+    git_ref_value: str
+    depth: int
+    dir: str
+
+    def __init__(self) -> None:
+        self.name = ""
+        self.version = ""
+        self.git = ""
+        self.git_ref_kind = ""
+        self.git_ref_value = ""
+        self.depth = 0
+        self.dir = ""
+
+def _git_available() -> bool:
+    rc: int = run_command("git --version >nul 2>nul")
+    if rc != 0:
+        rc = run_command("git --version >/dev/null 2>&1")
+    return rc == 0
+
+def _git_clone(url: str, ref_kind: str, ref_val: str, dst: str) -> int:
+    if not _git_available():
+        print("nva: git not found on PATH")
+        return 1
+    _rmtree(dst)
+    _mkdirs(fs.dirname(dst))
+    rc: int = 0
+    quiet: str = " -q"
+    na: str = " -c advice.detachedHead=false"
+    if ref_kind == "tag":
+        # Tags: full clone then checkout.  --depth 1 --branch <tag> is
+        # unreliable for tags on local repos.
+        rc = run_command("git clone" + quiet + " \"" + url + "\" \"" + dst + "\"")
+        if rc == 0:
+            rc = run_command("git -C \"" + dst + "\"" + na + " checkout \"" + ref_val + "\"")
+    elif ref_kind == "branch":
+        rc = run_command("git clone" + quiet + " --depth 1 --branch \"" + ref_val + "\" \"" + url + "\" \"" + dst + "\"")
+    elif ref_kind == "rev":
+        rc = run_command("git clone" + quiet + " \"" + url + "\" \"" + dst + "\"")
+        if rc == 0:
+            rc = run_command("git -C \"" + dst + "\"" + na + " checkout \"" + ref_val + "\"")
+    else:
+        rc = run_command("git clone" + quiet + " --depth 1 \"" + url + "\" \"" + dst + "\"")
+    return rc
+
+def _dep_dir_for(d: Dep, base_dir: str) -> str:
+    # Already-installed dep in nova_modules?
+    p1: str = base_dir + "/nova_modules/" + d.name
+    if fs.exists(p1):
+        return p1
+    # Sibling directory (development layout)?
+    p2: str = fs.dirname(fs.abs(base_dir)) + "/" + d.name
+    if fs.exists(p2):
+        return p2
+    return ""
+
+def collect_graph(m: Manifest, base_dir: str, visited: list<str>, depth: int, out: list<DepNode>) -> None:
+    i: int = 0
+    while i < len(m.deps):
+        d: Dep = m.deps[i]
+        i = i + 1
+        if str_in_list(d.name, visited):
+            continue
+        visited.append(d.name)
+
+        dep_dir: str = _dep_dir_for(d, base_dir)
+        if len(dep_dir) == 0 and len(d.git) > 0:
+            dep_dir = base_dir + "/nova_modules/" + d.name
+            if not fs.exists(dep_dir):
+                rc: int = _git_clone(d.git, d.git_ref_kind, d.git_ref_value, dep_dir)
+                if rc != 0:
+                    print("nva: git clone failed for '" + d.name + "' (" + d.git + ")")
+                    return
+
+        # Recurse into sub-manifest first (post-order visit).
+        sub_toml: str = dep_dir + "/nova.toml"
+        if len(dep_dir) > 0 and file_exists(sub_toml):
+            sub: Manifest = parse_manifest(sub_toml)
+            collect_graph(sub, dep_dir, visited, depth + 1, out)
+
+        n: DepNode = DepNode()
+        n.name = d.name
+        n.version = d.version
+        n.git = d.git
+        n.git_ref_kind = d.git_ref_kind
+        n.git_ref_value = d.git_ref_value
+        n.depth = depth
+        n.dir = dep_dir
+        out.append(n)
+
+def detect_conflicts(nodes: list<DepNode>) -> list<str>:
+    conflicts: list<str> = []
+    i: int = 0
+    while i < len(nodes):
+        ni: DepNode = nodes[i]
+        i = i + 1
+        j: int = i
+        while j < len(nodes):
+            nj: DepNode = nodes[j]
+            j = j + 1
+            if ni.name == nj.name and ni.version != nj.version:
+                msg: str = ni.name + ": " + ni.version + " vs " + nj.version
+                if not str_in_list(msg, conflicts):
+                    conflicts.append(msg)
+    return conflicts
+
+def _depnode_ref_str(n: DepNode) -> str:
+    if len(n.git) == 0:
+        return "registry " + n.version
+    if n.git_ref_kind == "tag":
+        return "git tag " + n.git_ref_value
+    if n.git_ref_kind == "branch":
+        return "git branch " + n.git_ref_value
+    if n.git_ref_kind == "rev":
+        return "git rev " + n.git_ref_value
+    return "git default"
+
+def print_tree_node(n: DepNode) -> None:
+    pad: str = ""
+    k: int = 0
+    while k < n.depth:
+        pad = pad + "  "
+        k = k + 1
+    line: str = pad + n.name
+    if len(n.version) > 0:
+        line = line + " " + n.version
+    line = line + "  (" + _depnode_ref_str(n) + ")"
+    if len(n.dir) > 0:
+        line = line + "  -> " + n.dir
+    print(line)
+
+def resolve_modules_full(m: Manifest, root_dir: str) -> str:
+    visited: list<str> = []
+    nodes: list<DepNode> = []
+    collect_graph(m, root_dir, visited, 0, nodes)
+    # VAYU_MODULE_PATH: direct deps first, then transitive in post-order.
+    parts: list<str> = []
+    i: int = len(nodes) - 1
+    while i >= 0:
+        n: DepNode = nodes[i]
+        if len(n.dir) > 0:
+            parts.append(n.dir)
+        i = i - 1
+    out: str = ""
+    k: int = 0
+    while k < len(parts):
+        if k > 0:
+            out = out + ";"
+        out = out + parts[k]
+        k = k + 1
+    return out
+
+# ---------------------------------------------------------------------------
+# toml_add_git_dep: insert an inline-table git dependency line.
+# ---------------------------------------------------------------------------
+
+def toml_add_git_dep(path: str, name: str, url: str, ref_kind: str, ref_val: str) -> None:
+    src: str = read_file(path)
+    lines: list<str> = src.split("\n")
+    dep_start: int = -1
+    dep_end: int = -1
+    i: int = 0
+    while i < len(lines):
+        t: str = trim(lines[i])
+        if t == "[dependencies]":
+            dep_start = i
+            j: int = i + 1
+            while j < len(lines):
+                u: str = trim(lines[j])
+                if u.starts_with("[") and u.ends_with("]"):
+                    break
+                if len(u) > 0:
+                    dep_end = j
+                j = j + 1
+            break
+        i = i + 1
+
+    new_line: str = name + " = { git = \"" + url + "\""
+    if ref_kind == "tag":
+        new_line = new_line + ", tag = \"" + ref_val + "\""
+    elif ref_kind == "branch":
+        new_line = new_line + ", branch = \"" + ref_val + "\""
+    elif ref_kind == "rev":
+        new_line = new_line + ", rev = \"" + ref_val + "\""
+    new_line = new_line + " }"
+
+    new_lines: list<str> = []
+    if dep_start < 0:
+        k: int = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            k = k + 1
+        new_lines.append("")
+        new_lines.append("[dependencies]")
+        new_lines.append(new_line)
+    elif dep_end < 0:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_start:
+                new_lines.append(new_line)
+            k = k + 1
+    else:
+        k = 0
+        while k < len(lines):
+            new_lines.append(lines[k])
+            if k == dep_end:
+                new_lines.append(new_line)
+            k = k + 1
+    write_file(path, join_lines(new_lines))
+
+# ---------------------------------------------------------------------------
+# Phase 23.1 + 23.2 - local + remote registry.
+#
+# Layout under a registry root:
+#   <root>/index.txt                          -- "<name> <version>" per line
+#   <root>/packages/<name>/<version>/         -- unpacked package tree
+#
+# Discovery order for the registry root:
+#   1. NVA_REGISTRY env var
+#   2. .nva/config in cwd
+#   3. ~/.nva/config
+# Remote base URL uses the same three-tier lookup with NVA_REGISTRY_REMOTE.
+# Remote layout over HTTP:
+#   GET <base>/index.txt
+#   GET <base>/packages/<name>/<version>.tar
+#   POST <base>/publish   (body: package tar)
+# ---------------------------------------------------------------------------
+
+class NvaConfig:
+    registry: str
+    registry_remote: str
+
+    def __init__(self) -> None:
+        self.registry = ""
+        self.registry_remote = ""
+
+def _mkdirs(path: str) -> None:
+    # Recursive mkdir.  Vayu stdlib only has single-level fs.mkdir.
+    if len(path) == 0:
+        return
+    norm: str = path.replace("\\", "/")
+    parts: list<str> = norm.split("/")
+    cur: str = ""
+    i: int = 0
+    while i < len(parts):
+        p: str = parts[i]
+        if len(p) > 0:
+            if len(cur) == 0:
+                cur = p
+            else:
+                cur = cur + "/" + p
+            if not fs.exists(cur):
+                fs.mkdir(cur)
+        elif i == 0:
+            cur = "/"
+        i = i + 1
+
+def _rmtree(path: str) -> None:
+    if not fs.exists(path):
+        return
+    if os.platform() == "windows":
+        # attrib clears the read-only bit that git sets on .git internals.
+        run_command("attrib -r -h -s \"" + path + "\" /s /d >nul 2>nul")
+        run_command("cmd /c rmdir /s /q \"" + path + "\" >nul 2>nul")
+    else:
+        run_command("chmod -R u+w \"" + path + "\" >/dev/null 2>&1")
+        run_command("rm -rf \"" + path + "\" >/dev/null 2>&1")
+
+def _home_dir() -> str:
+    h: str = os.getenv("USERPROFILE")
+    if len(h) > 0:
+        return h
+    return os.getenv("HOME")
+
+def _config_parse_into(path: str, c: NvaConfig) -> None:
+    src: str = read_file(path)
+    lines: list<str> = src.split("\n")
+    i: int = 0
+    while i < len(lines):
+        line: str = trim(lines[i])
+        i = i + 1
+        if is_blank_or_comment(line):
+            continue
+        eq: int = line.find("=")
+        if eq < 0:
+            continue
+        key: str = trim(line.substr(0, eq))
+        val: str = trim(line.substr(eq + 1, len(line)))
+        if key == "registry" and len(val) > 0:
+            c.registry = val
+        if key == "registry_remote" and len(val) > 0:
+            c.registry_remote = val
+
+def _config_read() -> NvaConfig:
+    c: NvaConfig = NvaConfig()
+    r: str = os.getenv("NVA_REGISTRY")
+    if len(r) > 0:
+        c.registry = r
+    r2: str = os.getenv("NVA_REGISTRY_REMOTE")
+    if len(r2) > 0:
+        c.registry_remote = r2
+    if file_exists(".nva/config"):
+        _config_parse_into(".nva/config", c)
+    else:
+        h: str = _home_dir()
+        if len(h) > 0:
+            hc: str = h + "/.nva/config"
+            if file_exists(hc):
+                _config_parse_into(hc, c)
+    return c
+
+def _config_write(c: NvaConfig) -> None:
+    _mkdirs(".nva")
+    body: str = ""
+    if len(c.registry) > 0:
+        body = body + "registry=" + c.registry + "\n"
+    if len(c.registry_remote) > 0:
+        body = body + "registry_remote=" + c.registry_remote + "\n"
+    write_file(".nva/config", body)
+
+def _index_path(root: str) -> str:
+    return root + "/index.txt"
+
+def _index_read(root: str) -> list<str>:
+    p: str = _index_path(root)
+    if not file_exists(p):
+        return []
+    src: str = read_file(p)
+    lines: list<str> = src.split("\n")
+    out: list<str> = []
+    i: int = 0
+    while i < len(lines):
+        t: str = trim(lines[i])
+        i = i + 1
+        if is_blank_or_comment(t):
+            continue
+        out.append(t)
+    return out
+
+def _index_write(root: str, lines: list<str>) -> None:
+    _mkdirs(root)
+    body: str = "# nva-registry-index v1\n"
+    i: int = 0
+    while i < len(lines):
+        body = body + lines[i] + "\n"
+        i = i + 1
+    write_file(_index_path(root), body)
+
+def _index_add(root: str, name: str, version: str) -> None:
+    lines: list<str> = _index_read(root)
+    entry: str = name + " " + version
+    i: int = 0
+    while i < len(lines):
+        if lines[i] == entry:
+            return
+        i = i + 1
+    lines.append(entry)
+    _index_write(root, lines)
+
+class SemverTest:
+    passes: int
+    fails: int
+
+    def __init__(self) -> None:
+        self.passes = 0
+        self.fails = 0
+
+    def check(self, name: str, got: bool, want: bool) -> None:
+        if got == want:
+            print("  PASS  " + name)
+            self.passes = self.passes + 1
+        else:
+            print("  FAIL  " + name)
+            self.fails = self.fails + 1
+
+def _pkg_versions(root: str, name: str) -> list<str>:
+    lines: list<str> = _index_read(root)
+    out: list<str> = []
+    i: int = 0
+    while i < len(lines):
+        ln: str = lines[i]
+        i = i + 1
+        sp: int = ln.find(" ")
+        if sp <= 0:
+            continue
+        n: str = ln.substr(0, sp)
+        v: str = trim(ln.substr(sp + 1, len(ln)))
+        if n == name:
+            out.append(v)
+    return out
+
+def _pkg_dir(root: str, name: str, version: str) -> str:
+    return root + "/packages/" + name + "/" + version
+
+def _make_tar(src_dir: str, out_tar: str) -> int:
+    parent: str = fs.dirname(fs.abs(src_dir))
+    leaf: str = fs.basename(fs.abs(src_dir))
+    opts: str = "--exclude=.git --exclude=build --exclude=nova_modules --exclude=out --exclude=.vscode --exclude=_nva_test"
+    cmd: str = "tar -cf \"" + out_tar + "\" " + opts + " -C \"" + parent + "\" \"" + leaf + "\""
+    return run_command(cmd)
+
+def _extract_tar_flat(tar_path: str, dst_dir: str) -> int:
+    _mkdirs(dst_dir)
+    cmd: str = "tar -xf \"" + tar_path + "\" -C \"" + dst_dir + "\" --strip-components=1"
+    return run_command(cmd)
+
+def _copy_tree(src: str, dst: str) -> int:
+    _mkdirs(dst)
+    tmp: str = dst + ".nva_copy.tar"
+    rc: int = _make_tar(src, tmp)
+    if rc != 0:
+        return rc
+    rc = _extract_tar_flat(tmp, dst)
+    fs.remove(tmp)
+    return rc
+
+def _http_get(url: str, out_path: str) -> int:
+    _mkdirs(fs.dirname(out_path))
+    cmd: str = "curl -L -s -o \"" + out_path + "\" \"" + url + "\""
+    return run_command(cmd)
+
+def _http_post_file(url: str, file_path: str, out_path: str) -> int:
+    cmd: str = "curl -L -s -X POST --data-binary @\"" + file_path + "\" -o \"" + out_path + "\" \"" + url + "\""
+    return run_command(cmd)
+
+def _flag_value(a: list<str>, flag: str) -> str:
+    i: int = 0
+    while i < len(a):
+        if a[i] == flag and i + 1 < len(a):
+            return a[i + 1]
+        i = i + 1
+    return ""
+
+def cmd_registry(path: str) -> None:
+    c: NvaConfig = _config_read()
+    if len(path) == 0:
+        if len(c.registry) == 0:
+            print("nva: registry not set")
+        else:
+            print(c.registry)
+        return
+    c.registry = fs.abs(path)
+    _config_write(c)
+    print("nva: registry = " + c.registry)
+
+def cmd_registry_remote(url: str) -> None:
+    c: NvaConfig = _config_read()
+    if len(url) == 0:
+        if len(c.registry_remote) == 0:
+            print("nva: remote registry not set")
+        else:
+            print(c.registry_remote)
+        return
+    c.registry_remote = url
+    _config_write(c)
+    print("nva: registry_remote = " + url)
+
+def cmd_publish_local(registry: str) -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m: Manifest = parse_manifest("nova.toml")
+    if len(m.name) == 0 or len(m.version) == 0:
+        print("nva: nova.toml missing name or version")
+        exit(1)
+
+    root: str = registry
+    if len(root) == 0:
+        cfg: NvaConfig = _config_read()
+        root = cfg.registry
+    if len(root) == 0:
+        print("nva: no registry configured; pass --registry <path>")
+        exit(1)
+    # Deliberately do NOT call fs.abs here.  mingw-w64's _fullpath is not
+    # idempotent for already-absolute paths when cwd differs, and fopen
+    # handles both relative and absolute paths natively.
+
+    pkg: str = _pkg_dir(root, m.name, m.version)
+    _rmtree(pkg)
+    _mkdirs(pkg)
+
+    _mkdirs(root)
+    tmp_tar: str = root + "/.tmp_publish_" + m.name + ".tar"
+    rc: int = _make_tar(fs.cwd(), tmp_tar)
+    if rc != 0:
+        print("nva: tar creation failed (rc=" + str(rc) + ")")
+        exit(1)
+    rc = _extract_tar_flat(tmp_tar, pkg)
+    fs.remove(tmp_tar)
+    if rc != 0:
+        print("nva: tar extraction failed (rc=" + str(rc) + ")")
+        exit(1)
+
+    _index_add(root, m.name, m.version)
+    print("nva: published " + m.name + " " + m.version + " to " + pkg)
+
+def cmd_search(query: str, registry: str) -> None:
+    root: str = registry
+    if len(root) == 0:
+        cfg: NvaConfig = _config_read()
+        root = cfg.registry
+    if len(root) == 0:
+        print("nva: no registry configured")
+        exit(1)
+    # No fs.abs: see comment in cmd_publish_local.
+    lines: list<str> = _index_read(root)
+    count: int = 0
+    i: int = 0
+    while i < len(lines):
+        ln: str = lines[i]
+        i = i + 1
+        if len(query) > 0 and not ln.contains(query):
+            continue
+        print("  " + ln)
+        count = count + 1
+    print("nva: " + str(count) + " package version(s)")
+
+def cmd_install(name: str, range: str, registry: str) -> None:
+    if len(name) == 0:
+        print("nva: install requires a package name")
+        exit(1)
+    r: str = range
+    if len(r) == 0:
+        r = "*"
+
+    root: str = registry
+    if len(root) == 0:
+        cfg: NvaConfig = _config_read()
+        root = cfg.registry
+    if len(root) == 0:
+        root = ".nva_local_registry"
+    # No fs.abs: see comment in cmd_publish_local.
+
+    versions: list<str> = _pkg_versions(root, name)
+    pick: str = best_match(r, versions)
+    from_remote: bool = false
+
+    if len(pick) == 0:
+        cfg2: NvaConfig = _config_read()
+        remote: str = cfg2.registry_remote
+        if len(remote) == 0:
+            print("nva: package '" + name + "' not in local registry, no remote configured")
+            exit(1)
+        _mkdirs(".nva")
+        idx_tmp: str = ".nva/remote_index.txt"
+        rc: int = _http_get(remote + "/index.txt", idx_tmp)
+        if rc != 0 or not file_exists(idx_tmp):
+            print("nva: cannot fetch remote index at " + remote)
+            exit(1)
+        _rmtree(root)
+        _mkdirs(root)
+        _copy_tree(idx_tmp, root + "/index.txt")
+        versions = _pkg_versions(root, name)
+        pick = best_match(r, versions)
+        from_remote = true
+        fs.remove(idx_tmp)
+        if len(pick) == 0:
+            print("nva: no version of '" + name + "' matches '" + r + "'")
+            exit(1)
+
+    dst: str = "nova_modules/" + name
+    _rmtree(dst)
+    _mkdirs(dst)
+
+    # Phase 23.3 - if the manifest entry for this dep uses git, fetch it.
+    if file_exists("nova.toml"):
+        rootm: Manifest = parse_manifest("nova.toml")
+        j: int = 0
+        dep_match: Dep = Dep("", "")
+        found_git: bool = false
+        while j < len(rootm.deps):
+            dj: Dep = rootm.deps[j]
+            j = j + 1
+            if dj.name == name and len(dj.git) > 0:
+                dep_match = dj
+                found_git = true
+        if found_git:
+            rc2: int = _git_clone(dep_match.git, dep_match.git_ref_kind, dep_match.git_ref_value, dst)
+            if rc2 == 0:
+                print("nva: installed " + name + " from git -> " + dst)
+                return
+            print("nva: git install failed for " + name)
+            exit(1)
+
+    if from_remote:
+        cfg3: NvaConfig = _config_read()
+        remote3: str = cfg3.registry_remote
+        archive: str = ".nva/dl_" + name + "_" + pick + ".tar"
+        _mkdirs(".nva")
+        url: str = remote3 + "/packages/" + name + "/" + pick + ".tar"
+        rc = _http_get(url, archive)
+        if rc != 0 or not file_exists(archive):
+            print("nva: download failed: " + url)
+            exit(1)
+        _extract_tar_flat(archive, dst)
+        fs.remove(archive)
+    else:
+        src: str = _pkg_dir(root, name, pick)
+        if not fs.exists(src):
+            print("nva: index lists " + name + " " + pick + " but directory is missing")
+            exit(1)
+        _copy_tree(src, dst)
+
+    print("nva: installed " + name + " " + pick + " -> " + dst)
+
+def cmd_publish(remote: str) -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    if len(remote) == 0:
+        cfg: NvaConfig = _config_read()
+        remote = cfg.registry_remote
+    if len(remote) == 0:
+        print("nva: no remote configured; pass --remote <url> or set registry_remote")
+        exit(1)
+
+    m: Manifest = parse_manifest("nova.toml")
+    if len(m.name) == 0 or len(m.version) == 0:
+        print("nva: nova.toml missing name or version")
+        exit(1)
+
+    _mkdirs(".nva")
+    archive: str = ".nva/publish_" + m.name + "_" + m.version + ".tar"
+    rc: int = _make_tar(fs.cwd(), archive)
+    if rc != 0:
+        print("nva: tar creation failed")
+        exit(1)
+
+    resp: str = ".nva/publish_response.txt"
+    url: str = remote + "/publish"
+    rc = _http_post_file(url, archive, resp)
+    if rc != 0:
+        print("nva: publish POST failed")
+        exit(1)
+    body: str = read_file(resp)
+    print("nva: publish response: " + trim(body))
+    fs.remove(archive)
+    fs.remove(resp)
+
+def cmd_search_remote(query: str, remote: str) -> None:
+    if len(remote) == 0:
+        cfg: NvaConfig = _config_read()
+        remote = cfg.registry_remote
+    if len(remote) == 0:
+        print("nva: no remote configured")
+        exit(1)
+    _mkdirs(".nva")
+    idx: str = ".nva/remote_search_index.txt"
+    rc: int = _http_get(remote + "/index.txt", idx)
+    if rc != 0 or not file_exists(idx):
+        print("nva: cannot fetch remote index")
+        exit(1)
+    src: str = read_file(idx)
+    lines: list<str> = src.split("\n")
+    count: int = 0
+    i: int = 0
+    while i < len(lines):
+        t: str = trim(lines[i])
+        i = i + 1
+        if is_blank_or_comment(t):
+            continue
+        if len(query) > 0 and not t.contains(query):
+            continue
+        print("  " + t)
+        count = count + 1
+    fs.remove(idx)
+    print("nva: " + str(count) + " remote version(s)")
+
+# ---------------------------------------------------------------------------
+# Phase 23.3 + 23.4 commands.
+# ---------------------------------------------------------------------------
+
+def cmd_tree() -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m: Manifest = parse_manifest("nova.toml")
+    m.root_dir = ""
+    visited: list<str> = []
+    nodes: list<DepNode> = []
+    collect_graph(m, fs.cwd(), visited, 1, nodes)
+
+    print(m.name + " " + m.version)
+    i: int = 0
+    while i < len(nodes):
+        print_tree_node(nodes[i])
+        i = i + 1
+
+    conflicts: list<str> = detect_conflicts(nodes)
+    if len(conflicts) > 0:
+        print("")
+        print("nva: version conflicts detected:")
+        k: int = 0
+        while k < len(conflicts):
+            print("  " + conflicts[k])
+            k = k + 1
+
+def cmd_add_git(name: str, url: str, ref_kind: str, ref_val: str) -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    if len(name) == 0 or len(url) == 0:
+        print("nva: add --git requires a name and a URL")
+        exit(1)
+    m: Manifest = parse_manifest("nova.toml")
+    i: int = 0
+    while i < len(m.deps):
+        if m.deps[i].name == name:
+            print("nva: '" + name + "' is already a dependency")
+            exit(1)
+        i = i + 1
+    toml_add_git_dep("nova.toml", name, url, ref_kind, ref_val)
+    suffix: str = ""
+    if ref_kind == "tag":
+        suffix = " tag " + ref_val
+    elif ref_kind == "branch":
+        suffix = " branch " + ref_val
+    elif ref_kind == "rev":
+        suffix = " rev " + ref_val
+    print("nva: added " + name + " from git " + url + suffix)
+
+def cmd_update() -> None:
+    if not file_exists("nova.toml"):
+        print("nva: no nova.toml in this directory")
+        exit(1)
+    m: Manifest = parse_manifest("nova.toml")
+    m.root_dir = ""
+    visited: list<str> = []
+    nodes: list<DepNode> = []
+    collect_graph(m, fs.cwd(), visited, 0, nodes)
+    # collect_graph already re-fetches missing git deps.  Force a refresh
+    # of every git-sourced dep.
+    count: int = 0
+    i: int = 0
+    while i < len(nodes):
+        n: DepNode = nodes[i]
+        i = i + 1
+        if len(n.git) == 0:
+            continue
+        dst: str = ""
+        if len(n.dir) > 0:
+            dst = n.dir
+        else:
+            dst = "nova_modules/" + n.name
+        rc: int = _git_clone(n.git, n.git_ref_kind, n.git_ref_value, dst)
+        if rc == 0:
+            print("nva: updated " + n.name + "  (" + _depnode_ref_str(n) + ")")
+            count = count + 1
+        else:
+            print("nva: failed to update " + n.name)
+    print("nva: " + str(count) + " git dep(s) refreshed")
+
 class Dep:
     name: str
     version: str
+    git: str
+    git_ref_kind: str
+    git_ref_value: str
+
     def __init__(self, name: str, version: str) -> None:
         self.name = name
         self.version = version
+        self.git = ""
+        self.git_ref_kind = ""
+        self.git_ref_value = ""
 
 class Manifest:
     name: str
@@ -228,7 +1007,42 @@ def parse_manifest(path: str) -> Manifest:
             if key == "entry":
                 m.entry = val
         if section == "dependencies":
-            m.deps.append(Dep(key, val))
+            # Two forms:
+            #   name = "1.0.0"
+            #   name = { git = "url", tag = "v1", branch = "main", rev = "abc" }
+            if val.starts_with("{"):
+                d: Dep = Dep(key, "")
+                inner: str = val.substr(1, len(val) - 1)
+                if inner.ends_with("}"):
+                    inner = inner.substr(0, len(inner) - 1)
+                fields: list<str> = inner.split(",")
+                j: int = 0
+                while j < len(fields):
+                    f: str = trim(fields[j])
+                    if len(f) > 0:
+                        eq2: int = f.find("=")
+                        if eq2 > 0:
+                            k2: str = trim(f.substr(0, eq2))
+                            v2: str = trim(f.substr(eq2 + 1, len(f)))
+                            if v2.starts_with("\"") and v2.ends_with("\"") and len(v2) >= 2:
+                                v2 = v2.substr(1, len(v2) - 1)
+                            if k2 == "git":
+                                d.git = v2
+                            elif k2 == "version":
+                                d.version = v2
+                            elif k2 == "tag":
+                                d.git_ref_kind = "tag"
+                                d.git_ref_value = v2
+                            elif k2 == "branch":
+                                d.git_ref_kind = "branch"
+                                d.git_ref_value = v2
+                            elif k2 == "rev":
+                                d.git_ref_kind = "rev"
+                                d.git_ref_value = v2
+                    j = j + 1
+                m.deps.append(d)
+            else:
+                m.deps.append(Dep(key, val))
     return m
 
 def join_path(a: str, b: str) -> str:
@@ -591,7 +1405,7 @@ def cmd_build() -> str:
     if m.name == "":
         print("nva: nova.toml has no package.name")
         exit(1)
-    mod_path = resolve_modules(m)
+    mod_path = resolve_modules_full(m, fs.cwd())
     mkdir("build")
 
     entry_win = m.entry.replace("/", "\\")
@@ -648,6 +1462,23 @@ def main() -> None:
         print("       nva build")
         print("       nva run")
         print("       nva clean")
+        print("")
+        print("registry:")
+        print("       nva registry [--set <path>]")
+        print("       nva registry-remote [--set <url>]")
+        print("       nva publish-local [--registry <path>]")
+        print("       nva publish [--remote <url>]")
+        print("       nva install <name> [range] [--registry <path>]")
+        print("       nva search <query> [--registry <path>]")
+        print("       nva search-remote <query> [--remote <url>]")
+        print("")
+        print("git deps + solver:")
+        print("       nva add-git <name> <url> [--tag|--branch|--rev <value>]")
+        print("       nva tree")
+        print("       nva update")
+        print("")
+        print("utility:")
+        print("       nva semver-test")
         exit(1)
     cmd = a[0]
     if cmd == "new":
@@ -688,40 +1519,94 @@ def main() -> None:
         return
     if cmd == "semver-test":
         # Quick self-test of version resolution.  Prints PASS/FAIL lines.
-        okc: int = 0
-        failc: int = 0
-        def check(name: str, got: bool, want: bool) -> None:
-            nonlocal okc
-            nonlocal failc
-            if got == want:
-                print("  PASS  " + name)
-                okc = okc + 1
-            else:
-                print("  FAIL  " + name)
-                failc = failc + 1
+        tc: SemverTest = SemverTest()
 
-        check("^1.2.3 matches 1.5.0", version_matches("^1.2.3", "1.5.0"), true)
-        check("^1.2.3 matches 1.2.3", version_matches("^1.2.3", "1.2.3"), true)
-        check("^1.2.3 rejects 2.0.0", version_matches("^1.2.3", "2.0.0"), false)
-        check("^1.2.3 rejects 1.1.0", version_matches("^1.2.3", "1.1.0"), false)
-        check("^0.3.5 matches 0.3.9", version_matches("^0.3.5", "0.3.9"), true)
-        check("^0.3.5 rejects 0.4.0", version_matches("^0.3.5", "0.4.0"), false)
-        check("~1.2.3 matches 1.2.9", version_matches("~1.2.3", "1.2.9"), true)
-        check("~1.2.3 rejects 1.3.0", version_matches("~1.2.3", "1.3.0"), false)
-        check(">=1.0.0 matches 5.0.0", version_matches(">=1.0.0", "5.0.0"), true)
-        check("<2.0.0 rejects 2.0.0", version_matches("<2.0.0", "2.0.0"), false)
-        check("* matches anything", version_matches("*", "0.0.1"), true)
-        check("exact 1.2.3 matches 1.2.3", version_matches("1.2.3", "1.2.3"), true)
-        check("exact 1.2.3 rejects 1.2.4", version_matches("1.2.3", "1.2.4"), false)
+        tc.check("^1.2.3 matches 1.5.0", version_matches("^1.2.3", "1.5.0"), true)
+        tc.check("^1.2.3 matches 1.2.3", version_matches("^1.2.3", "1.2.3"), true)
+        tc.check("^1.2.3 rejects 2.0.0", version_matches("^1.2.3", "2.0.0"), false)
+        tc.check("^1.2.3 rejects 1.1.0", version_matches("^1.2.3", "1.1.0"), false)
+        tc.check("^0.3.5 matches 0.3.9", version_matches("^0.3.5", "0.3.9"), true)
+        tc.check("^0.3.5 rejects 0.4.0", version_matches("^0.3.5", "0.4.0"), false)
+        tc.check("~1.2.3 matches 1.2.9", version_matches("~1.2.3", "1.2.9"), true)
+        tc.check("~1.2.3 rejects 1.3.0", version_matches("~1.2.3", "1.3.0"), false)
+        tc.check(">=1.0.0 matches 5.0.0", version_matches(">=1.0.0", "5.0.0"), true)
+        tc.check("<2.0.0 rejects 2.0.0", version_matches("<2.0.0", "2.0.0"), false)
+        tc.check("* matches anything", version_matches("*", "0.0.1"), true)
+        tc.check("exact 1.2.3 matches 1.2.3", version_matches("1.2.3", "1.2.3"), true)
+        tc.check("exact 1.2.3 rejects 1.2.4", version_matches("1.2.3", "1.2.4"), false)
 
         cands: list<str> = ["1.0.0", "1.2.0", "1.2.5", "1.9.0", "2.0.0"]
         bm: str = best_match("^1.0.0", cands)
-        check("best_match ^1.0.0 -> 1.9.0", bm == "1.9.0", true)
+        tc.check("best_match ^1.0.0 -> 1.9.0", bm == "1.9.0", true)
 
         print("")
-        print("  " + str(okc) + " passed, " + str(failc) + " failed")
-        if failc > 0:
+        print("  " + str(tc.passes) + " passed, " + str(tc.fails) + " failed")
+        if tc.fails > 0:
             exit(1)
+        return
+
+    if cmd == "registry":
+        cmd_registry(_flag_value(a, "--set"))
+        return
+    if cmd == "registry-remote":
+        cmd_registry_remote(_flag_value(a, "--set"))
+        return
+    if cmd == "publish-local":
+        cmd_publish_local(_flag_value(a, "--registry"))
+        return
+    if cmd == "publish":
+        cmd_publish(_flag_value(a, "--remote"))
+        return
+    if cmd == "install":
+        if len(a) < 2:
+            print("nva: install requires a package name")
+            exit(1)
+        pkg_name: str = a[1]
+        ver_range: str = "*"
+        i: int = 2
+        while i < len(a):
+            if a[i].starts_with("--"):
+                i = i + 2
+                continue
+            ver_range = a[i]
+            i = i + 1
+        cmd_install(pkg_name, ver_range, _flag_value(a, "--registry"))
+        return
+    if cmd == "search":
+        if len(a) < 2:
+            print("nva: search requires a query")
+            exit(1)
+        cmd_search(a[1], _flag_value(a, "--registry"))
+        return
+    if cmd == "search-remote":
+        if len(a) < 2:
+            print("nva: search-remote requires a query")
+            exit(1)
+        cmd_search_remote(a[1], _flag_value(a, "--remote"))
+        return
+    if cmd == "tree":
+        cmd_tree()
+        return
+    if cmd == "update":
+        cmd_update()
+        return
+    if cmd == "add-git":
+        if len(a) < 3:
+            print("nva: add-git <name> <url> [--tag|--branch|--rev <value>]")
+            exit(1)
+        url0: str = a[2]
+        rk: str = ""
+        rv: str = ""
+        if _flag_value(a, "--tag") != "":
+            rk = "tag"
+            rv = _flag_value(a, "--tag")
+        elif _flag_value(a, "--branch") != "":
+            rk = "branch"
+            rv = _flag_value(a, "--branch")
+        elif _flag_value(a, "--rev") != "":
+            rk = "rev"
+            rv = _flag_value(a, "--rev")
+        cmd_add_git(a[1], url0, rk, rv)
         return
 
     print("nva: unknown command '" + cmd + "'")

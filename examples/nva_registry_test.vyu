@@ -1,0 +1,105 @@
+# examples/nva_registry_test.vyu -- Phase 23.1 + 23.2 demo.
+# Exercises publish-local, search, and install against a scratch registry
+# under _nva_test/.  Safe to re-run; cleans up on entry.
+#
+# Requires nva.exe at the repo root (build with:
+#     .\build\x64-debug\bin\vayuc.exe tools\nva.vyu --native-out nva.exe
+# )
+
+import fs
+import os
+
+const TEST_ROOT: str = "_nva_test"
+const REG_ROOT: str = "_nva_test/registry"
+const PKG_SRC: str = "_nva_test/pkg_src"
+const CONSUMER: str = "_nva_test/consumer"
+
+NVA: str = ""
+
+def rmtree(p: str) -> None:
+    if os.platform() == "windows":
+        run_command("rmdir /s /q \"" + p + "\" >nul 2>nul")
+    else:
+        run_command("rm -rf \"" + p + "\" >/dev/null 2>&1")
+
+def mkdirs(p: str) -> None:
+    if not fs.exists(p):
+        fs.mkdir(p)
+
+def write(path: str, content: str) -> None:
+    write_file(path, content)
+
+def nva(args_str: str) -> int:
+    return run_command("\"" + NVA + "\" " + args_str)
+
+def main() -> None:
+    NVA = fs.abs("nva.exe")
+    if not fs.exists(NVA):
+        print("nva.exe not found at " + NVA)
+        print("build it with:")
+        print("  .\\build\\x64-debug\\bin\\vayuc.exe tools\\nva.vyu --native-out nva.exe")
+        exit(1)
+
+    rmtree(TEST_ROOT)
+    mkdirs(TEST_ROOT)
+    mkdirs(REG_ROOT)
+    mkdirs(PKG_SRC + "/src")
+    mkdirs(CONSUMER + "/src")
+
+    write(PKG_SRC + "/nova.toml",
+        "[package]\n" +
+        "name = \"greet\"\n" +
+        "version = \"0.1.0\"\n" +
+        "author = \"test\"\n" +
+        "description = \"a test package\"\n" +
+        "entry = \"src/main.vyu\"\n" +
+        "\n" +
+        "[dependencies]\n")
+    write(PKG_SRC + "/src/main.vyu",
+        "def hello(name: str) -> str:\n" +
+        "    return \"hi \" + name\n")
+
+    reg_abs: str = fs.abs(REG_ROOT)
+    print("registry root: " + reg_abs)
+
+    print("")
+    print("== publish-local ==")
+    os.chdir(PKG_SRC)
+    rc: int = nva("publish-local --registry \"" + reg_abs + "\"")
+    print("  rc=" + str(rc))
+    os.chdir("../..")
+    if rc != 0:
+        print("FAIL: publish-local")
+        exit(1)
+
+    print("")
+    print("== search greet ==")
+    nva("search greet --registry \"" + reg_abs + "\"")
+
+    print("")
+    print("== install greet ==")
+    os.chdir(CONSUMER)
+    rc = nva("install greet --registry \"" + reg_abs + "\"")
+    print("  rc=" + str(rc))
+    os.chdir("../..")
+    if rc != 0:
+        print("FAIL: install")
+        exit(1)
+
+    if fs.exists(CONSUMER + "/nova_modules/greet/nova.toml"):
+        print("OK: greet installed")
+    else:
+        print("FAIL: greet/nova.toml not found after install")
+        exit(1)
+
+    if fs.exists(CONSUMER + "/nova_modules/greet/src/main.vyu"):
+        print("OK: greet/src/main.vyu present")
+    else:
+        print("FAIL: greet/src/main.vyu missing")
+        exit(1)
+
+    rmtree(TEST_ROOT)
+    print("")
+    print("nva registry test done")
+
+main()

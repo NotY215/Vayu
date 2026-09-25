@@ -5,9 +5,9 @@
     <VSSDKBuildToolsAutoSetup>true</VSSDKBuildToolsAutoSetup>
     <VsixDeployOnDebug>false</VsixDeployOnDebug>
     <GeneratePkgDefFile>false</GeneratePkgDefFile>
-    <TargetName>vayu-vs-community-0.3.0</TargetName>
-    <VsixVersion>0.3.0</VsixVersion>
-    <VsixPublisherName>NotY215</VsixPublisherName>
+    <TargetName>vayu-vs-community-0.2.0</TargetName>
+    <VsixVersion>0.2.0</VsixVersion>
+    <VsixPublisherName>Fliczo</VsixPublisherName>
   </PropertyGroup>
 
   <ItemGroup>
