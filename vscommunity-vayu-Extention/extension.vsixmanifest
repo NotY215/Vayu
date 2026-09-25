@@ -3,7 +3,7 @@
     xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011"
     xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="Vayu.Language.Community"
+    <Identity Id="NotY215.Vayu.Language.Support"
               Version="0.2.0"
               Language="en-US"
               Publisher="Fliczo" />
@@ -16,12 +16,12 @@
   </Metadata>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                   Version="[18.0,)"
+                   Version="[17.14,)"
                    DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community"
-                        Version="[18.0,)">
+                        Version="[17.14,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
