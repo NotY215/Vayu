@@ -16,12 +16,12 @@
   </Metadata>
   <Prerequisites>
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor"
-                   Version="[18.0,)"
+                   Version="[17.14,)"
                    DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community"
-                        Version="[18.0,)">
+                        Version="[17.14,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
