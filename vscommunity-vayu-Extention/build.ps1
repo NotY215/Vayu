@@ -8,7 +8,7 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Project = Join-Path $Root "Vayu.Vsix.csproj"
 $Bin = Join-Path $Root "bin"
 $Obj = Join-Path $Root "obj"
-$RootVsix = Join-Path $Root "vayu-vs-community-0.2.0.vsix"
+$RootVsix = Join-Path $Root "vayu-lang-support-1.0.0.vsix"
 
 function Remove-BuildArtifacts {
     Write-Host ""
@@ -51,7 +51,7 @@ try {
     }
 
     if ($Candidates.Count -gt 1) {
-        $Candidates = @($Candidates | Where-Object { $_.Name -eq "vayu-vs-community-0.2.0.vsix" })
+        $Candidates = @($Candidates | Where-Object { $_.Name -eq "vayu-lang-support-1.0.0.vsix" })
     }
 
     if ($Candidates.Count -ne 1) {
