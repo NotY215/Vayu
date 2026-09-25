@@ -40,7 +40,7 @@ The planned direction includes:
 
 ## Current Status
 
-Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area.
+Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area; Phase 24.2 is the planned tensor-storage migration from Q16.16 to f32 or f64.
 
 For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
 
@@ -63,9 +63,9 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 
 ## Phase Position
 
-**Phase 16 is complete. Phase 17 is complete. Phase 18 is the current/most recently completed developer-tooling phase.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration.
+**Phases 1–23 are complete development phases and Phase 24 is current.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
 
-The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
+Phase 24 now prioritizes native floats before serious benchmark work. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
 
 
 ## Current Implementation Status
