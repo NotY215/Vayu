@@ -10,7 +10,7 @@
     <DisplayName>Vayu Language Support</DisplayName>
     <Description xml:space="preserve">Syntax highlighting for .vyu files.</Description>
     <MoreInfo>https://github.com/NotY215/Vayu</MoreInfo>
-    <License>LICENSE.txt</License>
+    <License>LICENSE</License>
     <Icon>Vayu_logo.png</Icon>
     <Tags>vayu, vyu, language</Tags>
   </Metadata>
@@ -21,7 +21,7 @@
   </Prerequisites>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community"
-                        Version="[17.0,)">
+                        Version="[18.0,)">
       <ProductArchitecture>amd64</ProductArchitecture>
     </InstallationTarget>
   </Installation>
