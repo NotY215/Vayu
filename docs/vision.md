@@ -25,9 +25,9 @@ The current source tree demonstrates a substantially expanded language/compiler 
 - native CPython loading and expanded Python value/call interoperability
 - interpreter, bytecode/VM and native execution paths
 
-The current development history now records **Phase 21 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, while Phase 21 completed the software raster and 3D pipeline. Phase 18 introduced the Vayu Language Server, formatter, linter, VS Code integration, additional LSP capabilities, compiler optimization/runtime options, and related tooling infrastructure.
+The current development history now records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. The long-term native-backend direction is being developed separately through VCB.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. The next language/runtime milestone is Phase 24 native floating-point support.
 
 ## Roadmap
 
@@ -35,29 +35,72 @@ The roadmap below records the project's planned development phases. A phase may 
 
 | Phase | Scope |
 |---:|---|
-| **1** | Core lexer, parser, AST, expressions, variables and indentation-based language structure. |
-| **2** | Conditions, loops, `range()`, `break`, `continue`, typed functions, return values and recursion. |
-| **3** | Static type checking, inference, primitive types, generic collections, lists, maps and indexing. |
-| **4** | Lambdas, closures, higher-order functions, structs, classes, constructors, methods, inheritance, overriding and `super()`. |
-| **5** | Runtime behavior, exception handling, nested handlers, re-raising and the module system. |
-| **6** | Peephole optimization on emitted IL to collapse redundant comparison chains. |
-| **7** | Rewrite `vayuc` in Vayu itself, then bootstrap the compiler so Vayu can compile its own compiler. |
-| **8** | Stack-allocate instances whose address never escapes a function, closing the remaining OOP performance gap. |
-| **9** | `nva` · `nova.toml` · `nova.lock` · dependency resolver · registry. |
-| **10** | `regex` · `thread` · `net` · `crypto` · `random` · `os` · math extras. |
-| **11** | `with` · `match/case` · `enum` · `interface` · `namespace` · `const` · `static` · `defer` · `yield` · `is / is_not` · bitwise · compound assignment · visibility. |
-| **12** | `unique<T>` · `shared<T>` · `weak<T>` · move semantics · opt-in borrow checking. |
-| **13** | `repr` · `hash` · `id` · `isinstance` · `enumerate` · `zip` · `reversed` · `round` · `pow` · `divmod` · `sign` · `gcd` · `lcm` · `clamp`. |
-| **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
-| **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
-| **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | Self-hosting/compiler-bootstrap work: bring the Vayu implementation toward the C++ `vayuc` feature set and stabilize the bootstrap path. **Completed development phase; the C++ compiler remains the current reference/bootstrap implementation.** |
-| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling. **Completed.** |
+| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed development phases.** |
+| **18** | LSP, formatter, linter, VS Code extension and compiler/runtime tooling. **Completed.** |
 | **19** | Native window / event / widget layer and GUI canvas foundation. **Completed.** |
 | **20** | 2D graphics, transforms, text, image/UI primitives and canvas functionality. **Completed foundation.** |
 | **21** | Software raster + 3D pipeline: framebuffers, depth buffers, Q16.16 matrices, meshes, textures, mipmaps, perspective-correct rasterization, lighting and post-processing. **Completed.** |
-| **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Current direction.** |
-| **23** | **Single-binary native toolchain:** retire the existing QBE/GCC backend chain and move toward VCB emitting native machine code directly; Windows-first, then ELF/Mach-O targets. |
+| **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Completed development phase.** |
+| **23** | **Single-binary native toolchain:** retire the QBE/GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
+| **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
+| **25** | **Benchmarking Round 1 (pre-VCB)** — harness/control programs, compute-heavy workloads, allocation-heavy workloads and reproducible reports. |
+| **26** | **Version cut 1** — Linux/macOS toolchain builds, SDL3 GUI/raster direction, VS Community LSP, VS Code Marketplace + Open VSX publishing, Vayu rewrites of `tools/*.py`, documentation and release. |
+| **27** | **VCB — separate project** — 27.0 PE object emitter; 27.1 direct codegen; 27.2 linker + runtime merge; 27.3 ELF/Mach-O; 27.4 ARM64. |
+| **28** | **Benchmarking Round 2 (post-VCB)** — same benchmark suite with before/after VCB delta reporting and regression detection. |
+| **29** | **Version cut 2** — VCB-era single-binary toolchain release; QBE/GCC retired from docs and packaging; target `v1.0`. |
+| **30+** | **Open / parking lot** — shaders, escape analysis, multi-input ONNX, GPU tensor support, optimizer/loss additions and other future work. |
+
+### Phase 24 — Native floats
+
+The next major native-backend/runtime gap is floating-point support. The native path currently centers on integer execution and Q16.16-oriented numerical work, so Phase 24 moves real floating-point values into the native value model before benchmarking and tensor migration.
+
+- **24.0 — Float type + ABI.** Native `float` value representation, cross-backend representation, `+ - * / // % **`, comparisons, unary negate, mixed `int → float` widening and print formatting.
+- **24.1 — Math library + collections.** Native `math.*`, `list<float>`, `map<str, float>`, and `float(x)`, `int(x)`, `str(x)` round-trips.
+- **24.2 — Tensor migration.** Move `tensor` from Q16.16 to f32 or f64 internally; retain Q16.16 as a compatibility layer temporarily, then retire it.
+
+**Exit criteria:** fixpoint still passes; `examples/native_floats.vyu` compiles and matches tree-walk output; `math.*` outputs are bit-identical to tree-walk on roughly 30 expressions.
+
+**Why before benchmarks:** integer-only benchmark programs would distort comparisons with C++, Java and Python. Floats land first so the benchmark suite represents the workloads developers would actually write.
+
+### Phase 25 — Benchmarking (Round 1, pre-VCB)
+
+A dedicated root-level `benchmarks/` tree will contain the methodology, runner, four-language programs and generated results. Vayu runs each program through tree-walk, VM and native execution.
+
+**25.0 — Harness + control programs:** `arith`, `fib`, `startup`.
+
+**25.1 — Compute-heavy:** `matmul` (512×512 dense), `nbody` (5-body, 1M steps), `mandelbrot` (2000×2000).
+
+**25.2 — Allocation-heavy:** `string_concat` (100k `+=`), `hashmap` (1M string→int insert/lookup), `json_parse` (10 MB), `sort` (10M ints).
+
+Comparison targets: C++ `-O3 -march=native`, Java 17 with `-Xmx4g`, and CPython 3.12. Each program runs 5×; the best wall-clock time and peak RSS are reported. Results include a markdown table, per-program bars and `results/SUMMARY.md`.
+
+### Phase 26 — Version cut 1
+
+First coherent release cut: Linux + macOS toolchain builds, SDL3 replacing Win32 in the GUI/raster direction, VS Community LSP integration, VS Code Marketplace + Open VSX publication, Vayu rewrites of `tools/*.py`, documentation site and release notes. Target version remains a release decision at cut time (`v0.9` or `v1.0`).
+
+### Phase 27 — VCB (separate project)
+
+VCB is a sister project, not a Vayu phase in the same tree. Its projected work is:
+
+- **27.0 — Object file emitter:** x86-64 PE `.obj` from the Vayu SSA IL boundary.
+- **27.1 — Direct codegen:** x86-64 machine code from the compiler IR/AST path with Vayu-aware optimization, inlining and register allocation.
+- **27.2 — Linker + runtime merge:** produce executables without invoking GCC.
+- **27.3 — ELF + Mach-O:** Linux and macOS object formats.
+- **27.4 — ARM64:** Apple Silicon and ARM Linux, with other targets considered later.
+
+**Exit criteria:** `vayuc file.vyu --native` can produce an `.exe` without invoking `qbe` or `gcc`; fixpoint still passes with VCB; peak fixpoint RSS falls from roughly 15 GB to under 1 GB.
+
+### Phase 28 — Benchmarking (Round 2, post-VCB)
+
+The same benchmark tree, ten-program suite and comparison languages are reused. Only Vayu's native backend changes from QBE + GCC to VCB. `results/SUMMARY_AFTER_VCB.md` records per-program time/memory deltas and highlights regressions.
+
+### Phase 29 — Version cut 2
+
+Ship the VCB-era toolchain as the single-binary release: bundle VCB for Windows/Linux/macOS, remove QBE and GCC dependency references from docs and packaging, publish the benchmark delta table, and target `v1.0`.
+
+### Beyond Phase 29
+
+Known parking-lot items include escape analysis, programmable shaders, DirectML only if needed, GPU-accelerated tensors beyond CUDA, Adam/cross-entropy/softmax additions, and multi-input ONNX for CNNs and transformers.
 
 ### Phase 19–21 — GUI, 2D Graphics and 3D Raster
 
@@ -179,13 +222,13 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phase 16 is complete, Phase 17 is complete, Phase 18 is complete, Phase 19 is complete, Phase 20 is complete, and Phase 21 is complete. Phase 22 is the current direction.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
+**Phases 1–23 are complete development phases, and Phase 24 is the current direction.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
 The project is moving from broad core-language/runtime capability toward a complete development ecosystem. The immediate areas are compiler/bootstrap stabilization, self-hosting, memory/resource correctness, native backend evolution, standard-library growth, package tooling, concurrency, and continued developer-tooling improvements.
 
-The project has now progressed through the GUI/event/widget layer, 2D graphics foundation, and software-raster/3D pipeline. Current work can move toward the Phase 22 package ecosystem and continued runtime/UI optimization, followed by the long-term VCB native backend direction.
+The project has now progressed through the GUI/event/widget layer, 2D graphics foundation, software-raster/3D pipeline, package-ecosystem direction, and the Phase 23 native-toolchain transition. Current work is Phase 24 native floats, followed by benchmark-driven release and VCB work.
 
 ## Architecture Direction
 
