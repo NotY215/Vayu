@@ -119,6 +119,14 @@
     "functions": {
       "patterns": [
         {
+          "name": "meta.function.definition.vayu",
+          "match": "\\b(def)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.vayu" },
+            "2": { "name": "entity.name.function.vayu" }
+          }
+        },
+        {
           "name": "entity.name.function.vayu",
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()"
         }
