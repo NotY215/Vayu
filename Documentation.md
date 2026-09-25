@@ -90,19 +90,19 @@ Vayu Source (.vyu)
         +-------------------+
         |
         v
- Native Compiler
+ Native Compiler / IR
         |
         v
-      QBE IL
+   Native backend
         |
         v
- Native Toolchain
+      VCB (planned)
         |
         v
     Executable
 ```
 
-VCB is being developed separately as the future native backend layer.
+VCB is being developed separately as the native backend project and is the planned replacement for the QBE/GCC backend chain.
 
 ---
 
@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is moving toward compiler independence and self-hosting.
+The current project is moving toward compiler independence and self-hosting, with native floating-point support now preceding the benchmark and VCB stages.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -875,35 +875,22 @@ C++ bootstrap can eventually be retired
 
 # 29. Roadmap
 
-The project roadmap covers:
+| Phase | Direction |
+|---:|---|
+| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed.** |
+| **18** | Developer tooling: LSP, formatter, linter, VS Code extension. **Completed.** |
+| **19–21** | GUI, 2D graphics, software raster and 3D pipeline. **Completed.** |
+| **22** | Package ecosystem and runtime/UI optimization. **Completed development phase.** |
+| **23** | Single-binary native toolchain direction; VCB established as a separate backend project. **Completed phase direction.** |
+| **24** | **Native floats** — float ABI, math/collections, tensor migration. **Current.** |
+| **25** | Benchmarking Round 1 before VCB. |
+| **26** | Version cut 1: cross-platform builds, SDL3, VS Community LSP, Marketplace/Open VSIX, Vayu tooling rewrite and release. |
+| **27** | VCB separate project: PE, direct codegen, linker/runtime merge, ELF/Mach-O, ARM64. |
+| **28** | Benchmarking Round 2 after VCB, including delta and regression reports. |
+| **29** | Version cut 2: single-binary VCB-era release, QBE/GCC retired, target `v1.0`. |
+| **30+** | Open parking lot: shaders, escape analysis, multi-input ONNX, GPU tensors and future ML/runtime additions. |
 
-1. Core language
-2. Control flow and functions
-3. Types and collections
-4. OOP and functional programming
-5. Runtime and modules
-6. Native compilation
-7. Self-hosting preparation
-8. Object/escape optimization
-9. Package ecosystem
-10. Standard-library expansion
-11. Advanced syntax
-12. Ownership and memory safety
-13. Runtime utility expansion
-14. Collections and interoperability
-15. Native FFI
-16. CPython integration
-17. Vayu self-hosting
-18. Developer tooling
-19. GUI framework
-20. 2D and 3D development
-21. AI/ML
-22. Package ecosystem expansion
-23. Single-binary native toolchain with VCB as the direct native backend
-
-The detailed phase descriptions remain in [docs/vision.md](docs/vision.md).
-
----
+Detailed phase specifications are maintained in [docs/vision.md](docs/vision.md).
 
 # 30. Current Status
 
