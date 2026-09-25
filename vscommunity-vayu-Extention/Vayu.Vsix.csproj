@@ -26,10 +26,10 @@
     <Content Include="Vayu_logo.png" IncludeInVSIX="true" />
     <Content Include="LICENSE.txt" IncludeInVSIX="true" />
     <Content Include="README.md" IncludeInVSIX="true" />
-    <Content Include="Grammarsayu.tmLanguage.json" IncludeInVSIX="true" />
-    <Content Include="Grammarslanguage-configuration.json" IncludeInVSIX="true" />
-    <Content Include="assetsVyu_Icon.ico" IncludeInVSIX="true" />
-    <Content Include="assetsVyu_Icon_Dark.ico" IncludeInVSIX="true" />
+    <Content Include="Grammars\vayu.tmLanguage.json" IncludeInVSIX="true" />
+    <Content Include="Grammars\language-configuration.json" IncludeInVSIX="true" />
+    <Content Include="assets\Vyu_Icon.ico" IncludeInVSIX="true" />
+    <Content Include="assets\Vyu_Icon_Dark.ico" IncludeInVSIX="true" />
   </ItemGroup>
 
 </Project>
