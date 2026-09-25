@@ -4,7 +4,7 @@
     xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
     <Identity Id="NotY215.Vayu.Language.Support"
-              Version="0.2.0"
+              Version="1.0.0"
               Language="en-US"
               Publisher="NotY215" />
     <DisplayName>Vayu Language Support</DisplayName>
