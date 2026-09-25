@@ -530,9 +530,9 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, tooling, FFI layer, Python/CPython interoperability, and native-backend work.
 
-**Phase 21 has been completed, including the software raster and 3D rendering pipeline.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 extends that foundation with framebuffers, depth buffering, 4×4 Q16.16 matrices, meshes, textures, mipmaps, lighting, 3D rasterization, render-to-texture, and post-processing. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
+**Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 23 remains the long-term native toolchain direction, with VCB being developed as the companion backend project for direct native machine-code generation.**
+**Phase 24 is now the current development phase: native floating-point support, math/runtime integration, and tensor migration.**
 
 Current implemented areas include:
 
@@ -553,6 +553,14 @@ Current implemented areas include:
 
 ### Current Development Direction
 
+**Phase 24 — Native floats**
+
+The next major backend/runtime milestone is native floating-point support. Vayu's native path is being extended from integer-centric execution to real `float` values, native arithmetic and comparisons, mixed integer/float operations, math-library coverage, float-aware collections, conversions, and migration of tensors away from Q16.16 storage.
+
+**Phase 23 — Single-binary native toolchain — Completed**
+
+Phase 23 established the transition from the QBE + GCC backend chain toward VCB as the dedicated native backend project. VCB is now treated as a separate sister project with its own repository and roadmap.
+
 **Phase 18 — Vayu developer tooling**
 
 The current development track focuses on making Vayu practical to use inside a modern editor and development workflow. The repository now contains the Vayu Language Server, formatter, linter, and VS Code extension, alongside the existing compiler/runtime infrastructure.
@@ -565,29 +573,32 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 
 | Phase | Scope |
 |---:|---|
-| **1** | Core lexer, parser, AST, expressions, variables and indentation-based language structure. |
-| **2** | Conditions, loops, `range()`, `break`, `continue`, typed functions, return values and recursion. |
-| **3** | Static type checking, inference, primitive types, generic collections, lists, maps and indexing. |
-| **4** | Lambdas, closures, higher-order functions, structs, classes, constructors, methods, inheritance, overriding and `super()`. |
-| **5** | Runtime behavior, exception handling, nested handlers, re-raising and the module system. |
-| **6** | Peephole optimization on emitted IL to collapse redundant comparison chains. |
-| **7** | Rewrite `vayuc` in Vayu itself, then bootstrap the compiler so Vayu can compile its own compiler. |
-| **8** | Stack-allocate instances whose address never escapes a function, closing the remaining OOP performance gap. |
-| **9** | `nva` · `nova.toml` · `nova.lock` · dependency resolver · registry. |
-| **10** | `regex` · `thread` · `net` · `crypto` · `random` · `os` · math extras. |
-| **11** | `with` · `match/case` · `enum` · `interface` · `namespace` · `const` · `static` · `defer` · `yield` · `is / is_not` · bitwise · compound assignment · visibility. |
-| **12** | `unique<T>` · `shared<T>` · `weak<T>` · move semantics · opt-in borrow checking. |
-| **13** | `repr` · `hash` · `id` · `isinstance` · `enumerate` · `zip` · `reversed` · `round` · `pow` · `divmod` · `sign` · `gcd` · `lcm` · `clamp`. |
-| **14** | String, list, map, set, tuple, math, file/OS and functional helpers. |
-| **15** | `extern` blocks · `dlopen` / `LoadLibrary` · struct layout · variadic calls. |
-| **16** | CPython embedding · `import py "…"` · Vayu `Value` ↔ `PyObject` and expanded Python interoperability. |
-| **17** | `vayu.vyu` supports the implemented C++ `vayuc` feature set, followed by dropping the C++ bootstrap backend. |
-| **18** | LSP · formatter · linter · VS Code extension · references · rename · signature help · compiler/runtime tooling. **Completed.** |
+| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed development phases.** |
+| **18** | LSP, formatter, linter, VS Code extension and compiler/runtime tooling. **Completed.** |
 | **19** | Native window, event, canvas and widget layer. **Completed.** |
 | **20** | 2D graphics, canvas drawing, text, transforms and image/UI primitives. **Completed foundation.** |
 | **21** | Software raster and 3D pipeline: framebuffers, depth, matrices, meshes, textures, mipmaps, lighting and post-processing. **Completed.** |
-| **22** | Package ecosystem and continued native/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing, and runtime/UI optimization. **Current direction.** |
-| **23** | **Single-binary native toolchain — retire QBE + GCC backend chain; VCB emits native machine code directly. Windows-first, then ELF/Mach-O.** |
+| **22** | Package ecosystem and continued native/UI performance work. **Completed development phase.** |
+| **23** | **Single-binary native toolchain / VCB direction.** Retire the QBE + GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
+| **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
+| **25** | **Benchmarking Round 1 (pre-VCB)** — dedicated harness, control programs, compute-heavy and allocation-heavy workloads. |
+| **26** | **Version cut 1** — cross-platform toolchain builds, SDL3, VS Community LSP, Marketplace/Open VSX publishing, Vayu rewrites of Python tools, documentation and release. |
+| **27** | **VCB — separate project** — PE object emitter, direct codegen, linker/runtime merge, ELF/Mach-O and ARM64. |
+| **28** | **Benchmarking Round 2 (post-VCB)** — same suite and comparison languages, with a VCB delta report. |
+| **29** | **Version cut 2** — VCB-era single-binary toolchain release; QBE/GCC retired from docs and packaging; target v1.0. |
+| **30+** | **Open / parking lot** — shaders, escape analysis, multi-input ONNX, GPU tensors, optimizer/loss additions and other future work. |
+
+#### Full map from Phase 24
+
+    24    Native floats
+    25    Benchmarking Round 1              <- pre-VCB data
+    26    Version cut 1                     <- QBE-era Vayu release
+    ---
+    27    VCB (separate project)
+    28    Benchmarking Round 2              <- VCB delta report
+    29    Version cut 2                     <- single-binary Vayu release
+    ---
+    30+   Parking lot (shaders, escape analysis, multi-input ONNX, ...)
 
 > The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
 
