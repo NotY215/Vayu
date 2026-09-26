@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is moving toward compiler independence and self-hosting, with native floating-point support now preceding the benchmark and VCB stages.
+The current project is moving from completed native-float work into the VCB native-backend transition. Phase 25 benchmarking is intentionally skipped for now and will be performed after VCB-built binaries are working.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -883,12 +883,13 @@ C++ bootstrap can eventually be retired
 | **22** | Package ecosystem and runtime/UI optimization. **Completed development phase.** |
 | **23** | Single-binary native toolchain direction; VCB established as a separate backend project. **Completed phase direction.** |
 | **24** | **Native floats** — float ABI, math/collections, tensor migration. **Current.** |
-| **25** | Benchmarking Round 1 before VCB. |
-| **26** | Version cut 1: cross-platform builds, SDL3, VS Community LSP, Marketplace/Open VSIX, Vayu tooling rewrite and release. |
-| **27** | VCB separate project: PE, direct codegen, linker/runtime merge, ELF/Mach-O, ARM64. |
-| **28** | Benchmarking Round 2 after VCB, including delta and regression reports. |
-| **29** | Version cut 2: single-binary VCB-era release, QBE/GCC retired, target `v1.0`. |
-| **30+** | Open parking lot: shaders, escape analysis, multi-input ONNX, GPU tensors and future ML/runtime additions. |
+| **25** | **Skipped for now** — benchmarking postponed until after VCB. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, `vcb dump`. |
+| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and `vayuc` migration from QBE+GCC to VCB. |
+| **27** | ELF writer and Linux target. |
+| **28** | Full benchmarking on VCB-built binaries. |
+| **29** | Version cut. |
+| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
 Detailed phase specifications are maintained in [docs/vision.md](docs/vision.md).
 
