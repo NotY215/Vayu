@@ -1,0 +1,20 @@
+# vcb_smoke.vyu -- exercises the VCB backend.
+# Expected output:
+#   7
+#   -5
+#   42
+
+def add(a: int, b: int) -> int:
+    return a + b
+
+def sub(a: int, b: int) -> int:
+    return a - b
+
+x: int = 3
+y: int = 4
+print(add(x, y))
+print(sub(x, y))
+
+n: int = 40
+m: int = 2
+exit(add(n, m))

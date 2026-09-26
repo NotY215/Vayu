@@ -44,7 +44,6 @@ static void usage() {
         "  --run                tree-walking interpreter\n"
         "  --vm                 bytecode virtual machine\n"
         "  --native             QBE native compilation and execution\n"
-        "  --backend <qbe|vcb>  native backend (default qbe)\n"
         "  --native-out <path>  compile to native exe at <path>, do not run\n"
         "  --check              type-check only\n"
         "  --dump-tokens        print the lexer output\n"
@@ -53,6 +52,7 @@ static void usage() {
         "  --dump-ir            print the QBE IL\n"
         "\n"
         "Flags:\n"
+        "  --backend <qbe|vcb>  native backend (default qbe)\n"
         "  --opt <0-3>          gcc optimization level (default 2)\n"
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
@@ -155,6 +155,9 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--dump-bytecode")) mode = Mode::DumpBytecode;
         else if (!std::strcmp(a, "--dump-ir"))       mode = Mode::DumpIR;
         else if (!std::strcmp(a, "--native"))        mode = Mode::Native;
+        else if (!std::strcmp(a, "--vm"))            useVM = true;
+        else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
+        else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
             if (i + 1 >= argc) {
                 std::fprintf(stderr, "vayuc: --backend requires qbe or vcb\n");
@@ -168,9 +171,6 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        else if (!std::strcmp(a, "--vm"))            useVM = true;
-        else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
-        else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--native-out")) {
             if (i + 1 >= argc) {
                 std::fprintf(stderr, "vayuc: --native-out requires a path\n");
@@ -269,8 +269,8 @@ int main(int argc, char** argv) {
     // ---------- dump-ir ----------
     if (mode == Mode::DumpIR) {
         vayu::NativeCompiler nc;
-        nc.setOptLevel(g_optLevel);
         nc.setBackend(g_backend);
+        nc.setOptLevel(g_optLevel);
         nc.dumpIR(program, srcDir);
         return nc.lastError().empty() ? 0 : 1;
     }
@@ -279,8 +279,8 @@ int main(int argc, char** argv) {
     if (mode == Mode::Native) {
         if (!nativeOutPath.empty()) {
             vayu::NativeCompiler nc;
-            nc.setOptLevel(g_optLevel);
             nc.setBackend(g_backend);
+            nc.setOptLevel(g_optLevel);
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
             if (rc != 0) {
@@ -293,8 +293,8 @@ int main(int argc, char** argv) {
         if (benchRuns > 0) {
             runBenchmark("native (includes compile)", benchRuns, [&]() {
                 vayu::NativeCompiler nc;
-                nc.setOptLevel(g_optLevel);
                 nc.setBackend(g_backend);
+                nc.setOptLevel(g_optLevel);
                 if (nc.compileAndRun(program, srcDir) != 0) {
                     std::fprintf(stderr, "native: %s\n",
                         nc.lastError().c_str());
@@ -305,8 +305,8 @@ int main(int argc, char** argv) {
         }
 
         vayu::NativeCompiler nc;
-        nc.setOptLevel(g_optLevel);
         nc.setBackend(g_backend);
+        nc.setOptLevel(g_optLevel);
         return nc.compileAndRun(program, srcDir);
     }
 

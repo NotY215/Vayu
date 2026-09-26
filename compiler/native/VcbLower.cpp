@@ -12,7 +12,6 @@ namespace vayu {
         class Lower {
         public:
             std::string run(const Block& program) {
-                // 1. Emit every user-defined function first.
                 for (auto& s : program.stmts) {
                     if (s->kind == StmtKind::Def) {
                         auto* d = static_cast<const DefStmt*>(s.get());
@@ -23,14 +22,13 @@ namespace vayu {
                         emitFn(d);
                     }
                 }
-                // 2. Wrap top-level statements into func main().
                 emitMain(program);
                 return out_.str();
             }
 
         private:
             std::ostringstream                           out_;
-            std::unordered_map<std::string, std::string> fnSlots_;   // name -> %v_x slot
+            std::unordered_map<std::string, std::string> fnSlots_;
             int  nextTemp_ = 0;
             int  nextLabel_ = 0;
             bool terminated_ = false;
@@ -53,7 +51,6 @@ namespace vayu {
                 std::string slot = "%v_" + name;
                 fnSlots_[name] = slot;
                 emit("i64 " + slot + " = alloca i64");
-                // Initialize to 0 so loads before stores are well-defined.
                 std::string z = fresh();
                 emit("i64 " + z + " = const.i64 0");
                 emit("store " + z + ", " + slot);
@@ -324,7 +321,7 @@ namespace vayu {
                 emitLabel("entry");
 
                 for (auto& s : program.stmts) {
-                    if (s->kind == StmtKind::Def) continue;   // handled earlier
+                    if (s->kind == StmtKind::Def) continue;
                     emitStmt(s.get());
                     if (terminated_) break;
                 }
