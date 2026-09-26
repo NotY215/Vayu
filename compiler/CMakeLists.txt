@@ -13,6 +13,7 @@ add_library(vayu_compiler STATIC
     compile/Compiler.cpp
     vm/VM.cpp
     native/NativeCompiler.cpp
+    native/VcbLower.cpp
 )
 
 target_include_directories(vayu_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
