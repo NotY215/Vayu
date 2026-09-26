@@ -42,13 +42,14 @@ The roadmap below records the project's planned development phases. A phase may 
 | **21** | Software raster + 3D pipeline: framebuffers, depth buffers, Q16.16 matrices, meshes, textures, mipmaps, perspective-correct rasterization, lighting and post-processing. **Completed.** |
 | **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Completed development phase.** |
 | **23** | **Native backend transition:** establish VCB as a separate backend project and add a selectable Vayu `--backend qbe|vcb` boundary. QBE remains the current default. **Completed direction.** |
-| **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
-| **25** | **Benchmarking Round 1 (pre-VCB)** — harness/control programs, compute-heavy workloads, allocation-heavy workloads and reproducible reports. |
-| **26** | **Version cut 1** — Linux/macOS toolchain builds, SDL3 GUI/raster direction, VS Community LSP, VS Code Marketplace + Open VSX publishing, Vayu rewrites of `tools/*.py`, documentation and release. |
-| **27** | **VCB — separate project** — 27.0 PE object emitter; 27.1 direct codegen; 27.2 linker + runtime merge; 27.3 ELF/Mach-O; 27.4 ARM64. |
-| **28** | **Benchmarking Round 2 (post-VCB)** — same benchmark suite with before/after VCB delta reporting and regression detection. |
-| **29** | **Version cut 2** — VCB-era single-binary toolchain release; QBE/GCC retired from docs and packaging; target `v1.0`. |
-| **30+** | **Open / parking lot** — shaders, escape analysis, multi-input ONNX, GPU tensor support, optimizer/loss additions and other future work. |
+| **24** | **Native floats** — float ABI, math/collections, tensor migration. **Completed.** |
+| **25** | **Skipped for now** — benchmarks postponed until after VCB. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, `vcb dump`. |
+| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and `vayuc` switches from QBE+GCC to VCB. |
+| **27** | ELF writer and Linux target. |
+| **28** | Full benchmarking on VCB-built binaries. |
+| **29** | Version cut. |
+| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
 ### Phase 24 — Native floats
 
@@ -222,13 +223,13 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phases 1–23 are complete development phases, and Phase 24 is the current direction.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
+**Phases 1–26 Part 1 are complete development phases. Phase 26 Part 2 is the current direction. Phase 25 is skipped for now and will be revisited after VCB.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
 The project is moving from broad core-language/runtime capability toward a complete development ecosystem. The immediate areas are compiler/bootstrap stabilization, self-hosting, memory/resource correctness, native backend evolution, standard-library growth, package tooling, concurrency, and continued developer-tooling improvements.
 
-The project has now progressed through the GUI/event/widget layer, 2D graphics foundation, software-raster/3D pipeline, package-ecosystem direction, and the Phase 23 native-toolchain transition. Current work is Phase 24 native floats, followed by benchmark-driven release and VCB work.
+The project has progressed through the GUI/event/widget layer, 2D graphics foundation, software-raster/3D pipeline, package ecosystem, native floats, and the VCB transition. Current work is Phase 26 Part 2: native x86-64 code generation, PE/ELF output, prebuilt runtime integration, and migration of `vayuc` from QBE+GCC to VCB.
 
 ## Architecture Direction
 
@@ -248,7 +249,7 @@ Native Assembly / Machine Code
 Executable
 ```
 
-VCB is a companion project, not a replacement for the Vayu frontend. Its long-term role is to provide the native machine-code backend boundary for the compiler ecosystem.
+VCB is a companion backend project, not a replacement for the Vayu frontend. Part 1 is complete; Part 2 is actively implementing native code generation and object/executable writers.
 
 ## Developer Ecosystem
 
