@@ -15967,7 +15967,27 @@ int main(int argc, char** argv) {
         }
         std::fprintf(stderr, "native: resolved vcb=%s\n", vcbExe.c_str());
 
-        std::string cmd = "\"" + vcbExe + "\" build \"" + irPath +
+        // Build the subprocess command.
+        //
+        // cmd.exe's /c parser has a documented quirk: if the command
+        // line begins with a quote AND contains more than two quote
+        // characters, cmd strips the *first* and *last* quote on the
+        // whole line.  With a quoted exe path at the front and a
+        // quoted output path at the end, that eats the closing quote
+        // on the output and leaves a stray " on the executable name,
+        // producing ERROR_PATH_NOT_FOUND ("The system cannot find the
+        // path specified.").  Since vcbExe is a project-relative path
+        // we control, it never contains spaces, so we leave it
+        // unquoted.  If a caller sets VAYU_VCB to a path with a space,
+        // prefix with `call ` so cmd.exe never sees a leading quote.
+        std::string exeCmd;
+        if (vcbExe.find(' ') == std::string::npos) {
+            exeCmd = vcbExe;
+        }
+        else {
+            exeCmd = "call \"" + vcbExe + "\"";
+        }
+        std::string cmd = exeCmd + " build \"" + irPath +
             "\" -o \"" + exePath + "\"";
         std::fprintf(stderr, "native: running %s\n", cmd.c_str());
         int rc = std::system(cmd.c_str());

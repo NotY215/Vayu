@@ -9,3 +9,4 @@ examples/bench/cpp/*.exe
 tools/Lib/
 benchmarks/java/*.class
 _vayu_tmp
+!tools/*.exe
