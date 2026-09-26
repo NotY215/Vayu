@@ -102,7 +102,7 @@ Vayu Source (.vyu)
     Executable
 ```
 
-VCB is being developed separately as the native backend project and is the planned replacement for the QBE/GCC backend chain.
+VCB is developed as a separate backend project. The Vayu compiler already exposes a selectable `--backend qbe|vcb` interface, but QBE remains the default native backend until VCB is ready to replace the existing QBE + GCC path.
 
 ---
 
@@ -962,3 +962,14 @@ When implementation and documentation differ, the compiler source and tests are 
 [🌐 vayu.gt.tc](https://vayu.gt.tc)
 
 </div>
+
+
+## Current Codebase Notes
+
+The compiler driver currently supports tree-walk execution, bytecode VM execution, type-check-only mode, token/AST/bytecode/IR inspection, native compilation, benchmarking, and native-runtime emission.
+
+Native compilation exposes `--backend qbe|vcb`, `--native`, `--native-out <path>`, `--dump-ir`, and `--opt 0-3`. `--emit-runtime <path>` exports the native runtime C source.
+
+The QBE backend is still the default. VCB is a selectable backend boundary and is developed separately in the VCB repository.
+
+Phase 24.0 adds native `float` values and mixed integer/float arithmetic. Phase 24.1 adds the native math module and float-aware collections. Tensor storage migration remains Phase 24.2.
