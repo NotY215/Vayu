@@ -1,6 +1,7 @@
 #include "NativeCompiler.hpp"
 #include "parser/Parser.hpp"
 #include "lexer/Lexer.hpp"
+#include "VcbLower.hpp"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -44,6 +45,8 @@ namespace vayu {
         if (const char* p = std::getenv("VAYU_CC_OPT")) {
             int n = std::atoi(p);
             if (n >= 0 && n <= 3) optLevel_ = n;
+        if (vcbPath_.empty()) vcbPath_ = "vcb.exe";
+        if (const char* p = std::getenv("VAYU_VCB")) vcbPath_ = p;
         }
         /* Phase 25.0a - -O3.  The 25.0 benchmark showed native ~2.8x slower
            than hand-written C++ at -O2; -O3 recovers most of that on tight
@@ -15695,6 +15698,10 @@ int main(int argc, char** argv) {
 
     void NativeCompiler::dumpIR(const Block& program, const std::string& sourceDir) {
         lastError_.clear();
+        if (backend_ == NativeBackend::Vcb) {
+            dumpIRVcb(program, sourceDir);
+            return;
+        }
         try { std::printf("%s\n", buildQBE(program, sourceDir).c_str()); }
         catch (const std::exception& e) {
             lastError_ = e.what();
