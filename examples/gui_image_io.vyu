@@ -54,25 +54,31 @@ def on_event(ev: int) -> None:
     gui.canvas_free(c)
 
 def main() -> None:
+    print("[dbg] cwd path resolves to: " + fs.abs(TMP))
     gui.init()
     src: int = build_gradient()
+    print("[dbg] gradient handle = " + str(src))
     if src == 0:
         print("failed to build gradient")
         exit(1)
 
     # Save via WIC, then reload via WIC.
     tmpcanvas: int = gui.canvas_new(TEX_W, TEX_H)
+    print("[dbg] canvas handle = " + str(tmpcanvas))
     gui.canvas_clear(tmpcanvas, 0xFF000000)
     gui.draw_bitmap(tmpcanvas, src, 0, 0)
     ok: int = gui.canvas_save_png(tmpcanvas, TMP)
+    print("[dbg] canvas_save_png returned " + str(ok))
     gui.canvas_free(tmpcanvas)
     gui.bitmap_free(src)
     if ok == 0:
         print("failed to save PNG via WIC")
         exit(1)
     print("saved " + TMP)
+    print("[dbg] file exists after save? " + str(fs.exists(TMP)))
 
     bmp = gui.bitmap_load(TMP)
+    print("[dbg] bitmap_load returned " + str(bmp))
     if bmp == 0:
         print("failed to reload PNG via WIC")
         fs.remove(TMP)

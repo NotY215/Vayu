@@ -61,8 +61,11 @@ def on_event(ev: int) -> None:
     gui.canvas_free(c)
 
 def main() -> None:
+    print("[dbg] before gui.init")
     gui.init()
+    print("[dbg] after gui.init")
     fb = raster.fb_new(W, H)
+    print("[dbg] fb_new returned " + str(fb))
     if fb == 0:
         print("failed to allocate framebuffer")
         exit(1)
@@ -71,15 +74,23 @@ def main() -> None:
 
     # Headless render once, before the window opens, so fb_get can be
     # exercised on a known state.
+    print("[dbg] about to call render()")
     render()
+    print("[dbg] render() returned")
     print("fb_get(0,0)     = " + str(raster.fb_get(fb, 0, 0)))
+    print("[dbg] fb_get(0,0) ok")
     print("fb_get(180, 200) = " + str(raster.fb_get(fb, 180, 200)))
+    print("[dbg] fb_get(180,200) ok")
 
+    print("[dbg] about to create_window")
     win: int = gui.create_window("Vayu raster", W, H)
+    print("[dbg] window = " + str(win))
     gui.set_callback(&on_event)
     gui.show_window(win)
     gui.set_timer(1500)
+    print("[dbg] about to gui.run")
     gui.run(win)
+    print("[dbg] gui.run returned")
     if fb != 0:
         raster.fb_free(fb)
     print("raster demo done")

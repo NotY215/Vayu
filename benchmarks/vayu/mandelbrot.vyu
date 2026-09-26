@@ -1,0 +1,31 @@
+# benchmarks/vayu/mandelbrot.vyu
+
+W: int = 400
+H: int = 400
+MAX_ITER: int = 100
+
+def main() -> None:
+    total: int = 0
+    py: int = 0
+    while py < H:
+        px: int = 0
+        while px < W:
+            x0: float = (float(px) / float(W)) * 3.5 - 2.5
+            y0: float = (float(py) / float(H)) * 2.0 - 1.0
+            x: float = 0.0
+            y: float = 0.0
+            it: int = 0
+            while it < MAX_ITER:
+                x2: float = x * x
+                y2: float = y * y
+                if x2 + y2 > 4.0:
+                    break
+                y = 2.0 * x * y + y0
+                x = x2 - y2 + x0
+                it = it + 1
+            total = total + it
+            px = px + 1
+        py = py + 1
+    print(total)
+
+main()

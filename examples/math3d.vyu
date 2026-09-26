@@ -28,20 +28,18 @@ def rad2deg(r: float) -> float:
     return r * RAD2DEG
 
 def fmt(x: float) -> str:
-    # Fixed 4 decimals so output is stable across tree/vm/reruns.
+    # Fixed 4 decimals, truncating (matches tree-walk's int() cast).
+    # The `scaled == 0` guard prevents "-0.0000" for values in
+    # (-0.0001, 0) whose sign differs by one ULP across backends.
     neg: bool = x < 0.0
     ax: float = x
     if neg:
         ax = 0.0 - x
-    scaled: int = 0
-    # multiply by 10000 by repeated addition to keep int math exact
-    i: int = 0
-    while i < 10000:
-        scaled = scaled + 0
-        i = i + 1
-    scaled = int(ax * 10000.0)
+    scaled: int = int(ax * 10000.0)
+    if scaled == 0:
+        neg = false
     whole: int = scaled // 10000
-    frac: int = scaled - whole * 10000
+    frac: int = scaled % 10000
     sign: str = ""
     if neg:
         sign = "-"

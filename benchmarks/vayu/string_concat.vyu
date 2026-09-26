@@ -1,0 +1,14 @@
+# benchmarks/vayu/string_concat.vyu
+
+N: int = 100000
+CHUNK: str = "abcdefghijklmnop"
+
+def main() -> None:
+    s: str = ""
+    i: int = 0
+    while i < N:
+        s = s + CHUNK
+        i = i + 1
+    print(len(s))
+
+main()

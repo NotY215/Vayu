@@ -39,6 +39,12 @@ namespace vayu {
             size_t                       stackBase = 0;
             size_t                       handlersAtEntry = 0;
             size_t                       activeExcAtEntry = 0;
+            /* Phase 25.0b: one entry per chunk->names index.  Populated on
+               first LOAD of that name; nullptr means "not yet cached" or
+               "lookup failed".  Safe without invalidation because the
+               Environment stores each binding behind a shared_ptr; the
+               Value* target does not move when the outer vector grows. */
+            std::vector<Value*>          nameCache;
         };
 
         std::shared_ptr<Environment> globals_;

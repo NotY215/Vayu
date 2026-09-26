@@ -745,9 +745,9 @@ namespace vayu {
 
         auto mod = std::make_shared<ModuleValue>();
         mod->name = name;
-        for (auto& [k, v] : modEnv->localVars()) {
-            mod->members[k] = *v;
-        }
+        modEnv->forEachLocal([&](const std::string& k, const Value& v) {
+            mod->members[k] = v;
+            });
 
         moduleCache_[name] = mod;
         return Value(mod);

@@ -58,8 +58,12 @@ def main() -> None:
     print("")
     print("== float in map ==")
     m: map<str, float> = {"a": 1.5, "b": 2.5}
-    print(m)
-    print(m["a"] + m["b"])
+    # Print entries individually: tree-walk uses std::unordered_map and
+    # native uses a custom open-addressing map, so whole-map iteration
+    # order is not guaranteed to match.  Per-key access is deterministic.
+    print("m[a] = " + str(m["a"]))
+    print("m[b] = " + str(m["b"]))
+    print("m[a] + m[b] = " + str(m["a"] + m["b"]))
 
     print("")
     print("== float in tuple ==")

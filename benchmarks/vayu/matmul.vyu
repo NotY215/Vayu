@@ -1,0 +1,40 @@
+# benchmarks/vayu/matmul.vyu
+
+N: int = 128
+
+def main() -> None:
+    a: list<float> = []
+    b: list<float> = []
+    i: int = 0
+    while i < N * N:
+        a.append(float((i * 7) % 100) * 0.01)
+        b.append(float((i * 13) % 100) * 0.01)
+        i = i + 1
+
+    c: list<float> = []
+    i = 0
+    while i < N * N:
+        c.append(0.0)
+        i = i + 1
+
+    ii: int = 0
+    while ii < N:
+        jj: int = 0
+        while jj < N:
+            s: float = 0.0
+            kk: int = 0
+            while kk < N:
+                s = s + a[ii * N + kk] * b[kk * N + jj]
+                kk = kk + 1
+            c[ii * N + jj] = s
+            jj = jj + 1
+        ii = ii + 1
+
+    total: float = 0.0
+    i = 0
+    while i < N * N:
+        total = total + c[i]
+        i = i + 1
+    print(total)
+
+main()

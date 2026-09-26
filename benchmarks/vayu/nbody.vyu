@@ -1,0 +1,54 @@
+# benchmarks/vayu/nbody.vyu
+
+import math
+
+BODIES: int = 5
+STEPS: int = 100000
+DT: float = 0.01
+
+def main() -> None:
+    x: list<float> = [0.0, 1.0, 2.0, 3.0, 4.0]
+    y: list<float> = [0.0, -1.0, 0.5, -0.5, 2.0]
+    z: list<float> = [0.0, 1.5, -1.5, 0.5, -2.0]
+    vx: list<float> = [0.0, 0.1, -0.1, 0.2, -0.2]
+    vy: list<float> = [0.1, 0.0, 0.2, -0.1, -0.2]
+    vz: list<float> = [-0.1, 0.2, 0.0, -0.2, 0.1]
+    mass: list<float> = [1.0, 2.0, 3.0, 2.5, 1.5]
+
+    step: int = 0
+    while step < STEPS:
+        i: int = 0
+        while i < BODIES:
+            j: int = i + 1
+            while j < BODIES:
+                dx: float = x[i] - x[j]
+                dy: float = y[i] - y[j]
+                dz: float = z[i] - z[j]
+                d2: float = dx * dx + dy * dy + dz * dz + 0.01
+                inv: float = 1.0 / (d2 * math.sqrt(d2))
+                fi: float = mass[j] * inv
+                fj: float = mass[i] * inv
+                vx[i] = vx[i] - dx * fi * DT
+                vy[i] = vy[i] - dy * fi * DT
+                vz[i] = vz[i] - dz * fi * DT
+                vx[j] = vx[j] + dx * fj * DT
+                vy[j] = vy[j] + dy * fj * DT
+                vz[j] = vz[j] + dz * fj * DT
+                j = j + 1
+            i = i + 1
+        i = 0
+        while i < BODIES:
+            x[i] = x[i] + vx[i] * DT
+            y[i] = y[i] + vy[i] * DT
+            z[i] = z[i] + vz[i] * DT
+            i = i + 1
+        step = step + 1
+
+    e: float = 0.0
+    i = 0
+    while i < BODIES:
+        e = e + 0.5 * mass[i] * (vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i])
+        i = i + 1
+    print(e)
+
+main()

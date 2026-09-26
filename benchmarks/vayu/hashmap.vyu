@@ -1,0 +1,25 @@
+# benchmarks/vayu/hashmap.vyu
+
+N: int = 500000
+
+def key_of(i: int) -> str:
+    return "key_" + str(i * 2654435761 % 1000000)
+
+def main() -> None:
+    m: map<str, int> = {}
+    i: int = 0
+    while i < N:
+        m[key_of(i)] = i
+        i = i + 1
+
+    total: int = 0
+    i = 0
+    while i < N:
+        k: str = key_of(i)
+        if m.contains(k):
+            total = total + m[k]
+        i = i + 1
+    print(total)
+    print(len(m))
+
+main()

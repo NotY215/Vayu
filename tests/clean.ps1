@@ -1,37 +1,63 @@
-# tests\clean.ps1 — remove transient artifacts.  No caches to manage.
+# tests/clean.ps1
+# Removes transient native-compiler artifacts.  Keeps the built tools
+# (nva.exe, vayu.exe, vcode.exe, vlex.exe, vparse.exe) and the CMake
+# build tree.  Use -Full to wipe the tools too.
 
-param([switch]$Full)
+param(
+    [switch]$Full
+)
 
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = 'SilentlyContinue'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-Set-Location $root
+Push-Location $root
 
-Get-ChildItem -Path . -Filter "_vayu_*" -File -ErrorAction SilentlyContinue |
-    ForEach-Object { Write-Host ("rm " + $_.Name); Remove-Item $_.FullName -Force }
+$kept = @('nva.exe', 'vayu.exe', 'vcode.exe', 'vlex.exe', 'vparse.exe')
 
-foreach ($f in @(
-    "vayu_self.ssa","vayu_self.s","vayu_self2.ssa","vayu_rt.c",
-    "vayu_qbe.log","vayu_gcc.log","vayu_sc.log",
-    "vcode_self.ssa","vcode_self.s","vcode_self2.ssa","vcode_rt.c",
-    "vcode_qbe.log","vcode_gcc.log","vcode_sc.log",
-    ".vayu_rt_cache.c",".fixpoint_vayu.cache",".fixpoint_vcode.cache",
-    ".fixpoint.cmd")) {
-    if (Test-Path $f) { Write-Host ("rm " + $f); Remove-Item $f -Force -ErrorAction SilentlyContinue }
+# Transient artifacts anywhere in the repo root (not recursive).
+Get-ChildItem -File -Filter '_vayu_*' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -File -Filter '*.ssa' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -File -Filter '*.s' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -File -Filter '*.o' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
+}
+Get-ChildItem -File -Filter '*_rt.c' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
 }
 
-foreach ($f in @(
-    "tests\.fixpoint_vcode.cache","tests\.fixpoint_vayu.cache",
-    "tests\.vayu_rt_cache.c","tests\.fixpoint.cmd",
-    "tests\hello_fmt.vyu","tests\hello_fmt2.vyu")) {
-    if (Test-Path $f) { Write-Host ("rm " + $f); Remove-Item $f -Force -ErrorAction SilentlyContinue }
+# The native build temp directory.
+if (Test-Path '_vayu_tmp') {
+    Remove-Item '_vayu_tmp' -Recurse -Force
+    Write-Host 'rm _vayu_tmp/'
+}
+
+# Any stray .exe in the repo root that isn't a keeper.
+Get-ChildItem -File -Filter '*.exe' | ForEach-Object {
+    if ($kept -notcontains $_.Name) {
+        Write-Host ("rm " + $_.Name)
+        Remove-Item $_.FullName -Force
+    }
 }
 
 if ($Full) {
-    foreach ($f in @("vayu.exe","vcode.exe","nva.exe")) {
-        if (Test-Path $f) { Write-Host ("rm " + $f); Remove-Item $f -Force }
+    foreach ($f in $kept) {
+        if (Test-Path $f) {
+            Write-Host ("rm " + $f)
+            Remove-Item $f -Force
+        }
     }
-    Write-Host "(full clean)"
 }
 
-Write-Host ""
-Write-Host "Clean."
+Write-Host ''
+Write-Host 'Clean.'
+Pop-Location

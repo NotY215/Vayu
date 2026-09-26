@@ -7,3 +7,5 @@ examples/bench/cpp/*.exe
 *.ssa
 *.o
 tools/Lib/
+benchmarks/java/*.class
+_vayu_tmp

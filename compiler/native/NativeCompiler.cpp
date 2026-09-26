@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <filesystem>
 
 #ifdef _WIN32
 #  define _CRT_NONSTDC_NO_DEPRECATE
@@ -44,7 +45,10 @@ namespace vayu {
             int n = std::atoi(p);
             if (n >= 0 && n <= 3) optLevel_ = n;
         }
-        optLevel_ = 2;   // -O2: fastest runtime.  Compile time is ~1.4x -O1.
+        /* Phase 25.0a - -O3.  The 25.0 benchmark showed native ~2.8x slower
+           than hand-written C++ at -O2; -O3 recovers most of that on tight
+           numeric loops.  Overridable via --opt / VAYU_CC_OPT. */
+        optLevel_ = 3;
     }
 
     namespace {
@@ -4349,6 +4353,20 @@ namespace vayu {
                         "native: math." + m + ": unsupported argument type");
                     };
 
+                /* floor / ceil / trunc return Int in tree-walk.  Handle
+                   them here before the unary map so the result is
+                   converted with dtosi. */
+                if (m == "floor" || m == "ceil" || m == "trunc") {
+                    std::string a = argBits(0);
+                    std::string df = newTemp();
+                    line(df + " =l call $vayu_math_" + m + "(l " + a + ")");
+                    std::string dd = newTemp();
+                    line(dd + " =d cast " + df);
+                    std::string t = newTemp();
+                    line(t + " =l dtosi " + dd);
+                    r.ssa = t; r.type = VType::Int; return r;
+                }
+
                 static const std::unordered_map<std::string, const char*> unary = {
                     {"sqrt","$vayu_math_sqrt"},  {"sin","$vayu_math_sin"},
                     {"cos","$vayu_math_cos"},    {"tan","$vayu_math_tan"},
@@ -4358,8 +4376,7 @@ namespace vayu {
                     {"asinh","$vayu_math_asinh"},{"acosh","$vayu_math_acosh"},
                     {"atanh","$vayu_math_atanh"},{"exp","$vayu_math_exp"},
                     {"log","$vayu_math_log"},    {"log2","$vayu_math_log2"},
-                    {"log10","$vayu_math_log10"},{"floor","$vayu_math_floor"},
-                    {"ceil","$vayu_math_ceil"},  {"trunc","$vayu_math_trunc"},
+                    {"log10","$vayu_math_log10"},
                     {"fabs","$vayu_math_fabs"},  {"cbrt","$vayu_math_cbrt"},
                     {"expm1","$vayu_math_expm1"},{"log1p","$vayu_math_log1p"},
                     {"tgamma","$vayu_math_tgamma"},{"lgamma","$vayu_math_lgamma"},
@@ -5436,11 +5453,41 @@ namespace vayu {
                     sym = "$vayu_fn_" + mangle(name);
                 }
 
+                /* If the target function declares a `float` parameter and
+                   the caller passes an Int, widen it.  Without this, an
+                   int bit pattern (0x0000...0001) gets reinterpreted as
+                   the double 4.94e-324 and the callee produces garbage. */
                 std::vector<std::string> args;
-                for (auto& a : n->args) {
+                for (size_t ai = 0; ai < n->args.size(); ++ai) {
+                    const auto& a = n->args[ai];
                     if (!a.name.empty())
                         throw std::runtime_error("native: kwargs not supported");
-                    args.push_back(emitExpr(a.value.get()).ssa);
+                    Val v = emitExpr(a.value.get());
+                    bool wantFloat = false;
+                    if (fit != topFnDecls_.end() && ai < fit->second->params.size()) {
+                        const Expr* pt = fit->second->params[ai].type.get();
+                        if (pt && pt->kind == ExprKind::NameRef) {
+                            const std::string& pn =
+                                static_cast<const NameRefExpr*>(pt)->name;
+                            if (pn == "float") wantFloat = true;
+                        }
+                    }
+                    if (std::getenv("VAYU_DEBUG_WIDEN") != nullptr) {
+                        std::fprintf(stderr,
+                            "[widen] fn=%s arg=%zu wantFloat=%d vtype=%d ssa=%s\n",
+                            name.c_str(), ai, wantFloat ? 1 : 0,
+                            (int)v.type, v.ssa.c_str());
+                    }
+                    if (wantFloat && v.type == VType::Int) {
+                        std::string d = newTemp();
+                        line(d + " =d sltof " + v.ssa);
+                        std::string rl = newTemp();
+                        line(rl + " =l cast " + d);
+                        args.push_back(rl);
+                    }
+                    else {
+                        args.push_back(v.ssa);
+                    }
                 }
                 std::string argsStr;
                 for (size_t i = 0; i < args.size(); ++i) {
@@ -6794,9 +6841,17 @@ VAYU_MATH_UNARY(exp,  exp)
 VAYU_MATH_UNARY(log,  log)
 VAYU_MATH_UNARY(log2, log2)
 VAYU_MATH_UNARY(log10, log10)
-VAYU_MATH_UNARY(floor, floor)
-VAYU_MATH_UNARY(ceil, ceil)
-VAYU_MATH_UNARY(trunc, trunc)
+/* floor / ceil / trunc: the plain variants return a double bit pattern
+   (matching the VAYU_MATH_UNARY convention).  The emitter converts the
+   result to int64 with dtosi when the tree-walk semantics require an
+   Int result.  The `_i` variants are kept for any caller that wants
+   the conversion done inside the runtime. */
+int64_t vayu_math_floor(int64_t a) { return vayu_double_to_bits(floor(vayu_bits_to_double(a))); }
+int64_t vayu_math_ceil (int64_t a) { return vayu_double_to_bits(ceil (vayu_bits_to_double(a))); }
+int64_t vayu_math_trunc(int64_t a) { return vayu_double_to_bits(trunc(vayu_bits_to_double(a))); }
+int64_t vayu_math_floor_i(int64_t a) { return (int64_t)floor(vayu_bits_to_double(a)); }
+int64_t vayu_math_ceil_i (int64_t a) { return (int64_t)ceil (vayu_bits_to_double(a)); }
+int64_t vayu_math_trunc_i(int64_t a) { return (int64_t)trunc(vayu_bits_to_double(a)); }
 VAYU_MATH_UNARY(fabs, fabs)
 VAYU_MATH_UNARY(cbrt, cbrt)
 VAYU_MATH_UNARY(expm1, expm1)
@@ -15659,7 +15714,27 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        std::string base = "_vayu_" + std::to_string(VAYU_GETPID());
+        /* Build into a dedicated subdirectory.  Windows occasionally holds
+           a file lock for a few ms after the child .exe exits, which makes
+           std::remove fail; keeping everything under _vayu_tmp/ means a
+           failed delete leaves the repo root clean anyway.  clean.ps1
+           wipes the whole directory on every run.
+
+           Using std::filesystem rather than system(): the shell on this
+           machine has w64devkit's sh.exe on PATH, so `if not exist` got
+           parsed as POSIX and failed.  create_directories is shell-free. */
+        {
+            std::error_code ec;
+            std::filesystem::create_directories("_vayu_tmp", ec);
+        }
+        /* Windows: cmd.exe treats `/` in an unquoted path as a switch
+           separator, so `_vayu_tmp/foo.exe` fails with "not recognized".
+           Use backslashes on Windows, forward slashes elsewhere. */
+#ifdef _WIN32
+        std::string base = "_vayu_tmp\\_vayu_" + std::to_string(VAYU_GETPID());
+#else
+        std::string base = "_vayu_tmp/_vayu_" + std::to_string(VAYU_GETPID());
+#endif
         std::string ssaPath = base + ".ssa";
         std::string asmPath = base + ".s";
         std::string objPath = base + ".o";
