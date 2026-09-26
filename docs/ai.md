@@ -40,7 +40,7 @@ The planned direction includes:
 
 ## Current Status
 
-Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area; Phase 24.2 is the planned tensor-storage migration from Q16.16 to f32 or f64.
+Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area; Phase 24.2 is the planned tensor-storage migration from Q16.16 to f32/f64 with a temporary compatibility layer.
 
 For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
 
@@ -70,8 +70,12 @@ Phase 24 now prioritizes native floats before serious benchmark work. The dedica
 
 ## Current Implementation Status
 
-The compiler/runtime has progressed through Phase 21. The completed Phase 19-21 work is primarily the native application and graphics foundation: GUI windows/events/widgets, 2D canvas functionality, and a software/hybrid raster pipeline with 3D math, meshes, textures, lighting and post-processing.
+The compiler/runtime has progressed through Phase 24.1. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition boundary, Phase 24.0 added native floats, and Phase 24.1 added native math and float-aware collections.
 
-These graphics capabilities provide useful infrastructure for future scientific and AI/ML visualization, but they should not be described as an implemented tensor/autodiff/ONNX/CUDA stack. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
+The current AI/ML implementation is still foundational rather than a complete ML framework. Native C FFI and CPython interoperability exist, while tensors, autodiff, ONNX integration, CUDA/GPU execution, and high-level neural-network APIs remain development work.
+
+These graphics capabilities provide useful infrastructure for future scientific and AI/ML visualization, but they are not an implemented tensor/autodiff/ONNX/CUDA stack.
+
+Phase 24.0/24.1 now provide the numerical foundation needed for later AI work: native float values, mixed int/float operations, conversions, `math.*`, `list<float>`, and `map<str, float>`. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
 
 The current native raster API includes framebuffers, depth buffers, Q16.16 matrices, mesh and texture resources, mipmaps, filtering, perspective-correct rasterization, lighting, render-to-texture and post-processing. These are native graphics APIs rather than AI/ML APIs.
