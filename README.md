@@ -536,7 +536,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 24 is the current development phase. Phase 24.0 native floats and Phase 24.1 native math/float collections are implemented; Phase 24.2 tensor migration is the remaining Phase 24 milestone.**
+**Phase 26 Part 2 is the current development phase. Phase 25 is intentionally skipped for now; benchmarking will resume after the VCB transition. Phase 26 Part 1 is complete, while Part 2 is implementing native x86-64 code generation and replacing the QBE+GCC path in `vayuc`.**
 
 Current implemented areas include:
 
@@ -588,12 +588,13 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **22** | Package ecosystem and continued native/UI performance work. **Completed development phase.** |
 | **23** | **Single-binary native toolchain / VCB direction.** Retire the QBE + GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
 | **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
-| **25** | **Benchmarking Round 1 (pre-VCB)** — dedicated harness, control programs, compute-heavy and allocation-heavy workloads. |
-| **26** | **Version cut 1** — cross-platform toolchain builds, SDL3, VS Community LSP, Marketplace/Open VSX publishing, Vayu rewrites of Python tools, documentation and release. |
-| **27** | **VCB — separate project** — PE object emitter, direct codegen, linker/runtime merge, ELF/Mach-O and ARM64. |
-| **28** | **Benchmarking Round 2 (post-VCB)** — same suite and comparison languages, with a VCB delta report. |
-| **29** | **Version cut 2** — VCB-era single-binary toolchain release; QBE/GCC retired from docs and packaging; target v1.0. |
-| **30+** | **Open / parking lot** — shaders, escape analysis, multi-input ONNX, GPU tensors, optimizer/loss additions and other future work. |
+| **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
+| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and migration of `vayuc` from QBE+GCC to VCB. |
+| **27** | ELF writer and Linux target. |
+| **28** | Full benchmarking on VCB-built binaries. |
+| **29** | Version cut. |
+| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
 #### Full map from Phase 24
 
