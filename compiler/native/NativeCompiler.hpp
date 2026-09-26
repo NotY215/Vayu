@@ -38,7 +38,12 @@ namespace vayu {
 
         std::string buildQBE(const Block& program, const std::string& sourceDir);
 
-        // VCB path
+        // Resolve vcb.exe from the filesystem.  Prefers the relative
+        // path tools\vcb.exe (or tools/vcb), walking up a few levels
+        // if the current directory is not the project root.  Returns
+        // an empty string when no candidate exists.
+        std::string resolveVcbPath() const;
+
         int  compileAndRunVcb(const Block& program, const std::string& sourceDir);
         void dumpIRVcb(const Block& program, const std::string& sourceDir);
     };

@@ -1,4 +1,5 @@
 #include "NativeCompiler.hpp"
+#include "VcbLower.hpp"
 #include "parser/Parser.hpp"
 #include "lexer/Lexer.hpp"
 #include "VcbLower.hpp"
@@ -39,15 +40,35 @@ namespace vayu {
         ccPath_ = "cc";
         qbeTarget_ = "amd64_sysv";
 #endif
+
         if (const char* p = std::getenv("VAYU_QBE"))        qbePath_ = p;
         if (const char* p = std::getenv("VAYU_CC"))         ccPath_ = p;
         if (const char* p = std::getenv("VAYU_QBE_TARGET")) qbeTarget_ = p;
+
+        // Relative default.  cmd.exe resolves "tools\\vcb.exe" against
+        // the current working directory; the resolver
+        // NativeCompiler::resolveVcbPath() walks up a few levels if the
+        // cwd is not the project root.  A bare name like "vcb.exe" is
+        // never stored here: cmd.exe would search PATH, fail with
+        // "'vcb.exe' is not recognized", and hide the real problem.
+#ifdef _WIN32
+        vcbPath_ = "tools\\vcb.exe";
+#else
+        vcbPath_ = "tools/vcb";
+#endif
+        if (const char* p = std::getenv("VAYU_VCB")) {
+            std::string s = p;
+            if (s.find('\\') != std::string::npos ||
+                s.find('/') != std::string::npos) {
+                vcbPath_ = s;
+            }
+        }
+
         if (const char* p = std::getenv("VAYU_CC_OPT")) {
             int n = std::atoi(p);
             if (n >= 0 && n <= 3) optLevel_ = n;
         }
-        if (vcbPath_.empty()) vcbPath_ = "vcb.exe";
-        if (const char* p = std::getenv("VAYU_VCB")) vcbPath_ = p;
+
         /* Phase 25.0a - -O3.  The 25.0 benchmark showed native ~2.8x slower
            than hand-written C++ at -O2; -O3 recovers most of that on tight
            numeric loops.  Overridable via --opt / VAYU_CC_OPT. */
@@ -5652,17 +5673,17 @@ namespace vayu {
                             "native: index-assign on unsupported type");
                     }
                     if (n->target->kind != ExprKind::NameRef)
-                    if (n->target->kind == ExprKind::Unary) {
-                        auto* u = static_cast<const UnaryExpr*>(n->target.get());
-                        if (u->op == UnOp::Deref) {
-                            Val p = emitExpr(u->operand.get());
-                            Val v = emitExpr(n->value.get());
-                            line("storel " + v.ssa + ", " + p.ssa);
-                            return;
+                        if (n->target->kind == ExprKind::Unary) {
+                            auto* u = static_cast<const UnaryExpr*>(n->target.get());
+                            if (u->op == UnOp::Deref) {
+                                Val p = emitExpr(u->operand.get());
+                                Val v = emitExpr(n->value.get());
+                                line("storel " + v.ssa + ", " + p.ssa);
+                                return;
+                            }
+                            throw std::runtime_error(
+                                "native: unsupported unary assignment target");
                         }
-                        throw std::runtime_error(
-                            "native: unsupported unary assignment target");
-                    }
 
                     auto* nm = static_cast<const NameRefExpr*>(n->target.get());
                     std::string slotName = nm->name;
@@ -15712,6 +15733,7 @@ int main(int argc, char** argv) {
     int NativeCompiler::compileAndRun(const Block& program,
         const std::string& sourceDir) {
         lastError_.clear();
+
         if (backend_ == NativeBackend::Vcb)
             return compileAndRunVcb(program, sourceDir);
 
@@ -15842,7 +15864,7 @@ int main(int argc, char** argv) {
     }
 
     void NativeCompiler::dumpIRVcb(const Block& program,
-                                   const std::string& sourceDir) {
+        const std::string& sourceDir) {
         try {
             VcbLower lower;
             std::string ir = lower.lower(program, sourceDir);
@@ -15854,8 +15876,52 @@ int main(int argc, char** argv) {
         }
     }
 
+    std::string NativeCompiler::resolveVcbPath() const {
+        auto exists = [](const std::string& p) -> bool {
+            std::ifstream f(p, std::ios::binary);
+            return (bool)f;
+            };
+
+#ifdef _WIN32
+        const char* exeName = "vcb.exe";
+        const char* subDir = "tools\\";
+        const char* upUnit = "..\\";
+#else
+        const char* exeName = "vcb";
+        const char* subDir = "tools/";
+        const char* upUnit = "../";
+#endif
+
+        // Candidate 0: whatever the constructor stored, if it is
+        // non-empty and not a bare filename.  cmd.exe resolves a
+        // relative path against the cwd; the walk below handles the
+        // case where the cwd is not the project root.
+        if (!vcbPath_.empty()) {
+            bool hasSeparator =
+                vcbPath_.find('\\') != std::string::npos ||
+                vcbPath_.find('/') != std::string::npos;
+            if (hasSeparator && exists(vcbPath_)) return vcbPath_;
+        }
+
+        // Candidate 1: tools/ relative to cwd.
+        {
+            std::string cur = std::string(subDir) + exeName;
+            if (exists(cur)) return cur;
+        }
+
+        // Candidates 2..7: walk up to six levels.
+        for (int up = 1; up <= 6; ++up) {
+            std::string prefix;
+            for (int k = 0; k < up; ++k) prefix += upUnit;
+            std::string cur = prefix + subDir + exeName;
+            if (exists(cur)) return cur;
+        }
+
+        return {};
+    }
+
     int NativeCompiler::compileAndRunVcb(const Block& program,
-                                         const std::string& sourceDir) {
+        const std::string& sourceDir) {
         std::string ir;
         try {
             VcbLower lower;
@@ -15874,7 +15940,7 @@ int main(int argc, char** argv) {
 #else
         std::string base = "_vayu_tmp/_vayu_" + std::to_string(VAYU_GETPID());
 #endif
-        std::string irPath  = base + ".vcbir";
+        std::string irPath = base + ".vcbir";
         std::string exePath = outputExe_.empty() ? (base + ".exe") : outputExe_;
         const bool  compileOnly = !outputExe_.empty();
 
@@ -15884,12 +15950,30 @@ int main(int argc, char** argv) {
             out << ir;
         }
 
-        std::string cmd = vcbPath_ + " build \"" + irPath +
-                          "\" -o \"" + exePath + "\"";
+        // Print what was actually configured so the next failure of
+        // this kind takes one glance to diagnose instead of three
+        // round trips.
+        if (const char* env = std::getenv("VAYU_VCB"))
+            std::fprintf(stderr, "native: VAYU_VCB=%s\n", env);
+        std::fprintf(stderr, "native: vcbPath_=%s\n", vcbPath_.c_str());
+
+        std::string vcbExe = resolveVcbPath();
+        if (vcbExe.empty()) {
+            lastError_ = "cannot find vcb.exe.  Place it at "
+                "tools\\vcb.exe relative to the project root, "
+                "or set VAYU_VCB to a path containing '\\' or '/'.";
+            std::fprintf(stderr, "native: %s\n", lastError_.c_str());
+            return 1;
+        }
+        std::fprintf(stderr, "native: resolved vcb=%s\n", vcbExe.c_str());
+
+        std::string cmd = "\"" + vcbExe + "\" build \"" + irPath +
+            "\" -o \"" + exePath + "\"";
+        std::fprintf(stderr, "native: running %s\n", cmd.c_str());
         int rc = std::system(cmd.c_str());
         if (rc != 0) {
-            lastError_ = "vcb.exe failed (exit " + std::to_string(rc) +
-                         "). IR at " + irPath;
+            lastError_ = "vcb failed (exit " + std::to_string(rc) +
+                "). IR at " + irPath;
             std::fprintf(stderr, "native: %s\n", lastError_.c_str());
             return 1;
         }
@@ -15898,7 +15982,7 @@ int main(int argc, char** argv) {
 
         if (compileOnly) return 0;
 
-        int runRc = std::system((("\"" + exePath + "\"")).c_str());
+        int runRc = std::system(("\"" + exePath + "\"").c_str());
         bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
         if (!keep) tryRemove(exePath);
         if (runRc != 0) {
