@@ -1,0 +1,22 @@
+# benchmarks/vayu/arith.vyu
+
+def main() -> None:
+    n: int = 1000000
+
+    sum_int: int = 0
+    i: int = 1
+    while i <= n:
+        sum_int = sum_int + i * 3 - i // 4
+        i = i + 1
+
+    sum_float: float = 0.0
+    i = 1
+    while i <= n:
+        fi: float = float(i)
+        sum_float = sum_float + fi * 1.5 / (fi + 1.0)
+        i = i + 1
+
+    print(sum_int)
+    print(sum_float)
+
+main()

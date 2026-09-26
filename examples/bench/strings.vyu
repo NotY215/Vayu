@@ -1,7 +1,0 @@
-count = 0
-for i in range(20000):
-    s = "abcdefghij"
-    t = s.upper() + s.lower()
-    if t.contains("EFG"):
-        count = count + 1
-print(count)

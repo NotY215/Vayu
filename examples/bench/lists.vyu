@@ -1,8 +1,0 @@
-total = 0
-for outer in range(200):
-    lst = []
-    for i in range(500):
-        lst.append(i * 2)
-    for i in range(500):
-        total = total + lst[i]
-print(total)

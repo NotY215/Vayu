@@ -13,6 +13,8 @@
 #include <unordered_set>
 #include <vector>
 #include <algorithm>
+#include <cstring>
+#include <limits>
 
 #ifdef _WIN32
 #  define _CRT_NONSTDC_NO_DEPRECATE
@@ -49,7 +51,7 @@ namespace vayu {
 
         enum class VType {
             Int, Bool, Str, List, Map, Obj, Exc, Void, Unknown,
-            Tuple, Set, Ptr
+            Tuple, Set, Ptr, Float
         };
 
         struct VarInfo {
@@ -336,6 +338,7 @@ namespace vayu {
                             n->moduleName != "gui" && n->moduleName != "raster" &&
                             n->moduleName != "tensor" && n->moduleName != "onnx" &&
                             n->moduleName != "cuda" && n->moduleName != "dml" &&
+                            n->moduleName != "math" &&
                             !modules_.count(n->moduleName))
                             loadModule(n->moduleName, s->loc);
                     }
@@ -794,10 +797,11 @@ namespace vayu {
 
             static int kindOf(VType t) {
                 switch (t) {
-                case VType::Int:  return 0;
-                case VType::Bool: return 1;
-                case VType::Str:  return 2;
-                default:          return 0;
+                case VType::Int:   return 0;
+                case VType::Bool:  return 1;
+                case VType::Str:   return 2;
+                case VType::Float: return 7;
+                default:           return 0;
                 }
             }
 
@@ -810,6 +814,7 @@ namespace vayu {
                 case VType::Map:   return 4;
                 case VType::Tuple: return 5;
                 case VType::Set:   return 6;
+                case VType::Float: return 7;
                 default:           return 0;
                 }
             }
@@ -822,7 +827,7 @@ namespace vayu {
                     if (s == "int")   v.type = VType::Int;
                     else if (s == "bool")  v.type = VType::Bool;
                     else if (s == "str")   v.type = VType::Str;
-                    else if (s == "float") v.type = VType::Int;
+                    else if (s == "float") v.type = VType::Float;
                     else if (s == "list")  v.type = VType::List;
                     else if (s == "map")   v.type = VType::Map;
                     else if (classes_.count(s)) {
@@ -1160,7 +1165,7 @@ namespace vayu {
                 if (!e) return r;
                 switch (e->kind) {
                 case ExprKind::IntLit:   r.type = VType::Int;  break;
-                case ExprKind::FloatLit: r.type = VType::Int;  break;
+                case ExprKind::FloatLit: r.type = VType::Float; break;
                 case ExprKind::BoolLit:  r.type = VType::Bool; break;
                 case ExprKind::NoneLit:  r.type = VType::Int;  break;
                 case ExprKind::StringLit:
@@ -1613,6 +1618,15 @@ namespace vayu {
                     switch (n->op) {
                     case UnOp::Pos: return v;
                     case UnOp::Neg: {
+                        if (v.type == VType::Float) {
+                            std::string vd = newTemp();
+                            line(vd + " =d cast " + v.ssa);
+                            std::string nd = newTemp();
+                            line(nd + " =d neg " + vd);
+                            std::string rl = newTemp();
+                            line(rl + " =l cast " + nd);
+                            r.ssa = rl; r.type = VType::Float; return r;
+                        }
                         std::string t = newTemp();
                         line(t + " =l sub 0, " + v.ssa);
                         r.ssa = t; r.type = VType::Int; return r;
@@ -1725,6 +1739,97 @@ namespace vayu {
                         r.ssa = t; r.type = VType::Ptr;
                         return r;
                     }
+
+                    /* Phase 24.0 - float dispatch.  Floats cross the ABI as
+                       bit patterns in i64 registers; arithmetic runs on `d`
+                       and casts back.  `/` is always float (Vayu semantics),
+                       even when both operands are int. */
+                    bool anyF = (a.type == VType::Float) || (b.type == VType::Float);
+                    bool isArithOrCmp =
+                        n->op == BinOp::Add || n->op == BinOp::Sub ||
+                        n->op == BinOp::Mul || n->op == BinOp::FloorDiv ||
+                        n->op == BinOp::Mod || n->op == BinOp::Pow ||
+                        n->op == BinOp::Eq || n->op == BinOp::NotEq ||
+                        n->op == BinOp::Lt || n->op == BinOp::Gt ||
+                        n->op == BinOp::LtEq || n->op == BinOp::GtEq;
+                    bool useFloat = (n->op == BinOp::Div)
+                        || (anyF && isArithOrCmp);
+                    if (useFloat) {
+                        std::string aD;
+                        if (a.type == VType::Float) {
+                            aD = newTemp();
+                            line(aD + " =d cast " + a.ssa);
+                        }
+                        else {
+                            aD = newTemp();
+                            line(aD + " =d sltof " + a.ssa);
+                        }
+                        std::string bD;
+                        if (b.type == VType::Float) {
+                            bD = newTemp();
+                            line(bD + " =d cast " + b.ssa);
+                        }
+                        else {
+                            bD = newTemp();
+                            line(bD + " =d sltof " + b.ssa);
+                        }
+
+                        if (n->op == BinOp::Add || n->op == BinOp::Sub ||
+                            n->op == BinOp::Mul || n->op == BinOp::Div) {
+                            const char* dop = "add";
+                            if (n->op == BinOp::Sub) dop = "sub";
+                            else if (n->op == BinOp::Mul) dop = "mul";
+                            else if (n->op == BinOp::Div) dop = "div";
+                            std::string t = newTemp();
+                            line(t + " =d " + std::string(dop) + " " + aD + ", " + bD);
+                            std::string rl = newTemp();
+                            line(rl + " =l cast " + t);
+                            r.ssa = rl; r.type = VType::Float; return r;
+                        }
+                        if (n->op == BinOp::FloorDiv) {
+                            std::string t = newTemp();
+                            line(t + " =l call $vayu_floordiv_d(l " + a.ssa +
+                                ", l " + b.ssa + ")");
+                            r.ssa = t; r.type = VType::Float; return r;
+                        }
+                        if (n->op == BinOp::Mod) {
+                            std::string t = newTemp();
+                            line(t + " =l call $vayu_mod_d(l " + a.ssa +
+                                ", l " + b.ssa + ")");
+                            r.ssa = t; r.type = VType::Float; return r;
+                        }
+                        if (n->op == BinOp::Pow) {
+                            std::string t = newTemp();
+                            line(t + " =l call $vayu_pow_d(l " + a.ssa +
+                                ", l " + b.ssa + ")");
+                            r.ssa = t; r.type = VType::Float; return r;
+                        }
+                        if (n->op == BinOp::Eq || n->op == BinOp::NotEq ||
+                            n->op == BinOp::Lt || n->op == BinOp::Gt ||
+                            n->op == BinOp::LtEq || n->op == BinOp::GtEq) {
+                            /* QBE has no cneq for `d`.  NotEq is ceqd + xor 1. */
+                            if (n->op == BinOp::NotEq) {
+                                std::string cw = newTemp();
+                                line(cw + " =w ceqd " + aD + ", " + bD);
+                                std::string inv = newTemp();
+                                line(inv + " =w xor " + cw + ", 1");
+                                std::string ext = newTemp();
+                                line(ext + " =l extsw " + inv);
+                                r.ssa = ext; r.type = VType::Bool; return r;
+                            }
+                            const char* cop = "ceqd";
+                            if (n->op == BinOp::Lt)   cop = "cltd";
+                            else if (n->op == BinOp::Gt)   cop = "cgtd";
+                            else if (n->op == BinOp::LtEq) cop = "cled";
+                            else if (n->op == BinOp::GtEq) cop = "cged";
+                            std::string cw = newTemp();
+                            line(cw + " =w " + std::string(cop) + " " + aD + ", " + bD);
+                            std::string ext = newTemp();
+                            line(ext + " =l extsw " + cw);
+                            r.ssa = ext; r.type = VType::Bool; return r;
+                        }
+                    }
+
                     switch (n->op) {
                     case BinOp::Add: {
                         std::string t = newTemp();
@@ -1961,6 +2066,31 @@ namespace vayu {
                         const auto* tn = static_cast<const NameRefExpr*>(n->target.get());
 
                         // Phase 19.2 — gui event constants.
+                        if (tn->name == "math") {
+                            const std::string& mm = n->name;
+                            double d = 0.0;
+                            bool hasD = true;
+                            /* The digits below are the exact decimal
+                               expansions of pi, e, and tau.  A `double`
+                               only holds ~15-17 significant decimal
+                               digits, so everything past that is
+                               silently truncated by the C++ compiler.
+                               The long forms are kept for documentation
+                               and for a future BigFloat type. */
+                            if (mm == "pi")  d = 3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067;
+                            else if (mm == "e")   d = 2.718281828459045235360287471352662497757247093699959574966967627724076630353547594571382178525166427;
+                            else if (mm == "tau") d = 6.2831853071795864769252867665590057683943387987502116419498891846156328125724179972560696509622349006;
+                            else if (mm == "inf") d = std::numeric_limits<double>::infinity();
+                            else if (mm == "nan") d = std::numeric_limits<double>::quiet_NaN();
+                            else hasD = false;
+                            if (hasD) {
+                                uint64_t bits = 0;
+                                std::memcpy(&bits, &d, 8);
+                                r.ssa = std::to_string((long long)bits);
+                                r.type = VType::Float;
+                                return r;
+                            }
+                        }
                         if (tn->name == "gui") {
                             const std::string& mm = n->name;
                             if (mm == "EV_NONE") { r.ssa = "0";  r.type = VType::Int; return r; }
@@ -2231,8 +2361,15 @@ namespace vayu {
                     }
                     return r;
                 }
-                case ExprKind::FloatLit:
-                    throw std::runtime_error("native: floats not yet supported");
+                case ExprKind::FloatLit: {
+                    auto* n = static_cast<const FloatLitExpr*>(e);
+                    double d = n->value;
+                    uint64_t bits = 0;
+                    std::memcpy(&bits, &d, 8);
+                    r.ssa = std::to_string((long long)bits);
+                    r.type = VType::Float;
+                    return r;
+                }
                 case ExprKind::CharLit:
                     throw std::runtime_error("native: char literals not yet supported");
                 case ExprKind::Lambda:
@@ -2251,7 +2388,7 @@ namespace vayu {
                     if (s == "int")   return VType::Int;
                     if (s == "bool")  return VType::Bool;
                     if (s == "str")   return VType::Str;
-                    if (s == "float") return VType::Int;
+                    if (s == "float") return VType::Float;
                     if (s == "list")  return VType::List;
                     if (s == "map")   return VType::Map;
                     if (classes_.count(s)) return VType::Obj;
@@ -4108,6 +4245,7 @@ namespace vayu {
                 if (m == "zeros") { Val sh = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_zeros(l " + sh.ssa + ")");         r.ssa = t; r.type = VType::Int; return r; }
                 if (m == "ones") { Val sh = a0(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_ones(l " + sh.ssa + ")");          r.ssa = t; r.type = VType::Int; return r; }
                 if (m == "from_int_list") { Val sh = a0();Val vl = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_from_int_list(l " + sh.ssa + ", l " + vl.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
+                if (m == "from_float_list") { Val sh = a0();Val vl = a1(); std::string t = newTemp(); line(t + " =l call $vayu_tensor_from_float_list(l " + sh.ssa + ", l " + vl.ssa + ")"); r.ssa = t; r.type = VType::Int; return r; }
                 if (m == "copy") { Val h = a0();  std::string t = newTemp(); line(t + " =l call $vayu_tensor_copy(l " + h.ssa + ")");           r.ssa = t; r.type = VType::Int; return r; }
                 if (m == "free") { Val h = a0();  line("call $vayu_tensor_free(l " + h.ssa + ")");   r.ssa = "0"; r.type = VType::Void; return r; }
                 if (m == "fill") { Val h = a0();Val v = a1(); line("call $vayu_tensor_fill(l " + h.ssa + ", l " + v.ssa + ")"); r.ssa = "0"; r.type = VType::Void; return r; }
@@ -4189,6 +4327,79 @@ namespace vayu {
                 }
 
                 throw std::runtime_error("native: onnx has no method '" + m + "'");
+            }
+
+            Val emitMathCall(const CallExpr* n, const AttrExpr* attr) {
+                Val r;
+                const std::string& m = attr->name;
+
+                auto argBits = [&](size_t i) -> std::string {
+                    if (i >= n->args.size())
+                        throw std::runtime_error("native: math." + m + ": too few args");
+                    Val v = emitExpr(n->args[i].value.get());
+                    if (v.type == VType::Float) return v.ssa;
+                    if (v.type == VType::Int || v.type == VType::Bool) {
+                        std::string d = newTemp();
+                        line(d + " =d sltof " + v.ssa);
+                        std::string rl = newTemp();
+                        line(rl + " =l cast " + d);
+                        return rl;
+                    }
+                    throw std::runtime_error(
+                        "native: math." + m + ": unsupported argument type");
+                    };
+
+                static const std::unordered_map<std::string, const char*> unary = {
+                    {"sqrt","$vayu_math_sqrt"},  {"sin","$vayu_math_sin"},
+                    {"cos","$vayu_math_cos"},    {"tan","$vayu_math_tan"},
+                    {"asin","$vayu_math_asin"},  {"acos","$vayu_math_acos"},
+                    {"atan","$vayu_math_atan"},  {"sinh","$vayu_math_sinh"},
+                    {"cosh","$vayu_math_cosh"},  {"tanh","$vayu_math_tanh"},
+                    {"asinh","$vayu_math_asinh"},{"acosh","$vayu_math_acosh"},
+                    {"atanh","$vayu_math_atanh"},{"exp","$vayu_math_exp"},
+                    {"log","$vayu_math_log"},    {"log2","$vayu_math_log2"},
+                    {"log10","$vayu_math_log10"},{"floor","$vayu_math_floor"},
+                    {"ceil","$vayu_math_ceil"},  {"trunc","$vayu_math_trunc"},
+                    {"fabs","$vayu_math_fabs"},  {"cbrt","$vayu_math_cbrt"},
+                    {"expm1","$vayu_math_expm1"},{"log1p","$vayu_math_log1p"},
+                    {"tgamma","$vayu_math_tgamma"},{"lgamma","$vayu_math_lgamma"},
+                    {"erf","$vayu_math_erf"},    {"erfc","$vayu_math_erfc"},
+                    {"degrees","$vayu_math_degrees"},
+                    {"radians","$vayu_math_radians"},
+                };
+                auto u = unary.find(m);
+                if (u != unary.end()) {
+                    std::string a = argBits(0);
+                    std::string t = newTemp();
+                    line(t + " =l call " + std::string(u->second) + "(l " + a + ")");
+                    r.ssa = t; r.type = VType::Float; return r;
+                }
+
+                static const std::unordered_map<std::string, const char*> binary = {
+                    {"pow","$vayu_math_pow"},     {"atan2","$vayu_math_atan2"},
+                    {"hypot","$vayu_math_hypot"}, {"fmod","$vayu_math_fmod"},
+                    {"copysign","$vayu_math_copysign"},
+                };
+                auto b = binary.find(m);
+                if (b != binary.end()) {
+                    std::string a = argBits(0);
+                    std::string c = argBits(1);
+                    std::string t = newTemp();
+                    line(t + " =l call " + std::string(b->second) + "(l " + a + ", l " + c + ")");
+                    r.ssa = t; r.type = VType::Float; return r;
+                }
+
+                if (m == "is_nan" || m == "is_inf" || m == "is_finite") {
+                    std::string a = argBits(0);
+                    const char* fn = "$vayu_math_is_nan";
+                    if (m == "is_inf") fn = "$vayu_math_is_inf";
+                    else if (m == "is_finite") fn = "$vayu_math_is_finite";
+                    std::string t = newTemp();
+                    line(t + " =l call " + std::string(fn) + "(l " + a + ")");
+                    r.ssa = t; r.type = VType::Bool; return r;
+                }
+
+                throw std::runtime_error("native: math has no method '" + m + "'");
             }
 
             Val emitCudaCall(const CallExpr* n, const AttrExpr* attr) {
@@ -4335,6 +4546,7 @@ namespace vayu {
                         if (tn0->name == "onnx")  return emitOnnxCall(n, attr);
                         if (tn0->name == "cuda")  return emitCudaCall(n, attr);
                         if (tn0->name == "dml")   return emitDmlCall(n, attr);
+                        if (tn0->name == "math")  return emitMathCall(n, attr);
                         if (tn0->name == "fs")    return emitFsCall(n, attr);
                         if (tn0->name == "time")  return emitTimeCall(n, attr);
                         if (tn0->name == "json")  return emitJsonCall(n, attr);
@@ -4900,6 +5112,9 @@ namespace vayu {
                         case VType::Bool:
                             line("call $vayu_print_bool_noln(l " + v.ssa + ")");
                             break;
+                        case VType::Float:
+                            line("call $vayu_print_float_noln(l " + v.ssa + ")");
+                            break;
                         case VType::Str:
                             line("call $vayu_print_str_noln(l " + v.ssa + ")");
                             break;
@@ -4947,6 +5162,12 @@ namespace vayu {
                 if (name == "str") {
                     Val v = emitExpr(n->args[0].value.get());
                     if (v.type == VType::Str) return v;
+                    if (v.type == VType::Float) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_float_to_str(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::Str;
+                        return r;
+                    }
                     if (v.type == VType::Int || v.type == VType::Bool) {
                         std::string t = newTemp();
                         line(t + " =l call $vayu_int_to_str(l " + v.ssa + ", l " +
@@ -4961,6 +5182,14 @@ namespace vayu {
                     Val v = emitExpr(n->args[0].value.get());
                     if (v.type == VType::Int)  return v;
                     if (v.type == VType::Bool) return v;
+                    if (v.type == VType::Float) {
+                        std::string vd = newTemp();
+                        line(vd + " =d cast " + v.ssa);
+                        std::string t = newTemp();
+                        line(t + " =l dtosi " + vd);
+                        r.ssa = t; r.type = VType::Int;
+                        return r;
+                    }
                     if (v.type == VType::Str) {
                         std::string t = newTemp();
                         line(t + " =l call $vayu_str_to_int(l " + v.ssa + ")");
@@ -4973,7 +5202,22 @@ namespace vayu {
 
                 if (name == "float") {
                     Val v = emitExpr(n->args[0].value.get());
-                    return v;
+                    if (v.type == VType::Float) return v;
+                    if (v.type == VType::Int || v.type == VType::Bool) {
+                        std::string t = newTemp();
+                        line(t + " =d sltof " + v.ssa);
+                        std::string rl = newTemp();
+                        line(rl + " =l cast " + t);
+                        r.ssa = rl; r.type = VType::Float; return r;
+                    }
+                    if (v.type == VType::Str) {
+                        std::string t = newTemp();
+                        line(t + " =l call $vayu_str_to_float(l " + v.ssa + ")");
+                        r.ssa = t; r.type = VType::Float; return r;
+                    }
+                    throw std::runtime_error(
+                        "native: float() cannot convert value of type "
+                        + std::to_string((int)v.type));
                 }
 
                 if (name == "bool") {
@@ -6170,6 +6414,45 @@ namespace vayu {
                             return w;
                         }
 
+                        /* Phase 24.0 - float compare. */
+                        bool anyF =
+                            (a.type == VType::Float || c.type == VType::Float);
+                        if (anyF) {
+                            std::string aD;
+                            if (a.type == VType::Float) {
+                                aD = newTemp();
+                                line(aD + " =d cast " + a.ssa);
+                            }
+                            else {
+                                aD = newTemp();
+                                line(aD + " =d sltof " + a.ssa);
+                            }
+                            std::string cD;
+                            if (c.type == VType::Float) {
+                                cD = newTemp();
+                                line(cD + " =d cast " + c.ssa);
+                            }
+                            else {
+                                cD = newTemp();
+                                line(cD + " =d sltof " + c.ssa);
+                            }
+                            if (b->op == BinOp::NotEq) {
+                                std::string cw = newTemp();
+                                line(cw + " =w ceqd " + aD + ", " + cD);
+                                std::string inv = newTemp();
+                                line(inv + " =w xor " + cw + ", 1");
+                                return inv;
+                            }
+                            const char* cop = "ceqd";
+                            if (b->op == BinOp::Lt)   cop = "cltd";
+                            else if (b->op == BinOp::Gt)   cop = "cgtd";
+                            else if (b->op == BinOp::LtEq) cop = "cled";
+                            else if (b->op == BinOp::GtEq) cop = "cged";
+                            std::string w = newTemp();
+                            line(w + " =w " + std::string(cop) + " " + aD + ", " + cD);
+                            return w;
+                        }
+
                         const char* opName = nullptr;
                         switch (b->op) {
                         case BinOp::Eq:    opName = "ceql";  break;
@@ -6329,6 +6612,7 @@ namespace vayu {
 #include <setjmp.h>
 #include <ctype.h>
 #include <time.h>
+#include <math.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -6415,6 +6699,134 @@ void vayu_print_str(VayuStr* s) {
 void vayu_print_str_noln(VayuStr* s) {
     fwrite(s->data, 1, (size_t)s->len, stdout);
 }
+
+/* ---- Phase 24.0 - float helpers ---- */
+
+static double vayu_bits_to_double(int64_t bits) {
+    double d; memcpy(&d, &bits, 8); return d;
+}
+static int64_t vayu_double_to_bits(double d) {
+    int64_t bits; memcpy(&bits, &d, 8); return bits;
+}
+
+static void vayu_fmt_double(char* buf, size_t cap, double d) {
+    if (isnan(d)) { snprintf(buf, cap, "nan"); return; }
+    if (isinf(d)) { snprintf(buf, cap, d < 0 ? "-inf" : "inf"); return; }
+    snprintf(buf, cap, "%.15g", d);
+    int hasDot = 0;
+    for (size_t i = 0; buf[i]; ++i)
+        if (buf[i] == '.' || buf[i] == 'e') { hasDot = 1; break; }
+    if (!hasDot) {
+        size_t n = strlen(buf);
+        if (n + 2 < cap) { buf[n] = '.'; buf[n + 1] = '0'; buf[n + 2] = 0; }
+    }
+}
+
+void vayu_print_float_noln(int64_t bits) {
+    char buf[64];
+    vayu_fmt_double(buf, sizeof(buf), vayu_bits_to_double(bits));
+    fputs(buf, stdout);
+}
+
+VayuStr* vayu_float_to_str(int64_t bits) {
+    char buf[64];
+    vayu_fmt_double(buf, sizeof(buf), vayu_bits_to_double(bits));
+    return vayu_mkstr_c(buf);
+}
+
+int64_t vayu_floordiv_d(int64_t a_bits, int64_t b_bits) {
+    double a = vayu_bits_to_double(a_bits);
+    double b = vayu_bits_to_double(b_bits);
+    if (b == 0.0) {
+        vayu_raise_str(vayu_mkstr_c("ZeroDivisionError"),
+                       vayu_mkstr_c("division by zero"));
+    }
+    return vayu_double_to_bits(floor(a / b));
+}
+
+int64_t vayu_mod_d(int64_t a_bits, int64_t b_bits) {
+    double a = vayu_bits_to_double(a_bits);
+    double b = vayu_bits_to_double(b_bits);
+    if (b == 0.0) {
+        vayu_raise_str(vayu_mkstr_c("ZeroDivisionError"),
+                       vayu_mkstr_c("modulo by zero"));
+    }
+    double m = fmod(a, b);
+    if (m != 0.0 && ((m < 0.0) != (b < 0.0))) m += b;
+    return vayu_double_to_bits(m);
+}
+
+int64_t vayu_pow_d(int64_t a_bits, int64_t b_bits) {
+    double a = vayu_bits_to_double(a_bits);
+    double b = vayu_bits_to_double(b_bits);
+    return vayu_double_to_bits(pow(a, b));
+}
+
+int64_t vayu_str_to_float(int64_t s_sp) {
+    VayuStr* s = (VayuStr*)s_sp;
+    char buf[256];
+    int64_t n = s->len < 255 ? s->len : 255;
+    memcpy(buf, s->data, (size_t)n);
+    buf[n] = 0;
+    return vayu_double_to_bits(strtod(buf, NULL));
+}
+
+/* ---- Phase 24.1 - native math module ---- */
+
+#define VAYU_MATH_UNARY(name, fn) \
+    int64_t vayu_math_##name(int64_t a) { \
+        return vayu_double_to_bits(fn(vayu_bits_to_double(a))); \
+    }
+VAYU_MATH_UNARY(sqrt, sqrt)
+VAYU_MATH_UNARY(sin,  sin)
+VAYU_MATH_UNARY(cos,  cos)
+VAYU_MATH_UNARY(tan,  tan)
+VAYU_MATH_UNARY(asin, asin)
+VAYU_MATH_UNARY(acos, acos)
+VAYU_MATH_UNARY(atan, atan)
+VAYU_MATH_UNARY(sinh, sinh)
+VAYU_MATH_UNARY(cosh, cosh)
+VAYU_MATH_UNARY(tanh, tanh)
+VAYU_MATH_UNARY(asinh, asinh)
+VAYU_MATH_UNARY(acosh, acosh)
+VAYU_MATH_UNARY(atanh, atanh)
+VAYU_MATH_UNARY(exp,  exp)
+VAYU_MATH_UNARY(log,  log)
+VAYU_MATH_UNARY(log2, log2)
+VAYU_MATH_UNARY(log10, log10)
+VAYU_MATH_UNARY(floor, floor)
+VAYU_MATH_UNARY(ceil, ceil)
+VAYU_MATH_UNARY(trunc, trunc)
+VAYU_MATH_UNARY(fabs, fabs)
+VAYU_MATH_UNARY(cbrt, cbrt)
+VAYU_MATH_UNARY(expm1, expm1)
+VAYU_MATH_UNARY(log1p, log1p)
+VAYU_MATH_UNARY(tgamma, tgamma)
+VAYU_MATH_UNARY(lgamma, lgamma)
+VAYU_MATH_UNARY(erf,  erf)
+VAYU_MATH_UNARY(erfc, erfc)
+#undef VAYU_MATH_UNARY
+
+#define VAYU_MATH_BINARY(name, fn) \
+    int64_t vayu_math_##name(int64_t a, int64_t b) { \
+        return vayu_double_to_bits(fn(vayu_bits_to_double(a), vayu_bits_to_double(b))); \
+    }
+VAYU_MATH_BINARY(pow, pow)
+VAYU_MATH_BINARY(atan2, atan2)
+VAYU_MATH_BINARY(hypot, hypot)
+VAYU_MATH_BINARY(fmod, fmod)
+VAYU_MATH_BINARY(copysign, copysign)
+#undef VAYU_MATH_BINARY
+
+int64_t vayu_math_degrees(int64_t a) {
+    return vayu_double_to_bits(vayu_bits_to_double(a) * 180.0 / 3.14159265358979323846);
+}
+int64_t vayu_math_radians(int64_t a) {
+    return vayu_double_to_bits(vayu_bits_to_double(a) * 3.14159265358979323846 / 180.0);
+}
+int64_t vayu_math_is_nan(int64_t a)    { return isnan(vayu_bits_to_double(a)) ? 1 : 0; }
+int64_t vayu_math_is_inf(int64_t a)    { return isinf(vayu_bits_to_double(a)) ? 1 : 0; }
+int64_t vayu_math_is_finite(int64_t a) { return isfinite(vayu_bits_to_double(a)) ? 1 : 0; }
 
 void vayu_print_raw(VayuStr* s) {
     fwrite(s->data, 1, (size_t)s->len, stdout);
@@ -8520,8 +8932,10 @@ void vayu_print_value(int64_t v, int64_t kind) {
         case 0: printf("%lld", (long long)v); break;
         case 1: printf("%s", v ? "true" : "false"); break;
         case 2: { VayuStr* s = (VayuStr*)v; fwrite(s->data, 1, (size_t)s->len, stdout); break; }
+        case 7: vayu_print_float_noln(v); break;
     }
 }
+
 void vayu_print_list_noln(VayuList* l);
 void vayu_print_map_noln(VayuMap* m, int64_t vk);
 void vayu_print_tuple_noln(VayuList* t);
@@ -8547,6 +8961,8 @@ void vayu_print_list_noln(VayuList* l) {
             vayu_print_tuple_noln((VayuTuple*)l->items[i]);
         } else if (t == 6) {
             vayu_print_set_noln((VayuSet*)l->items[i]);
+        } else if (t == 7) {
+            vayu_print_float_noln(l->items[i]);
         } else {
             printf("%lld", (long long)l->items[i]);
         }
@@ -8573,6 +8989,8 @@ void vayu_print_tuple_noln(VayuTuple* t) {
             vayu_print_tuple_noln((VayuTuple*)t->items[i]);
         } else if (tag == 6) {
             vayu_print_set_noln((VayuSet*)t->items[i]);
+        } else if (tag == 7) {
+            vayu_print_float_noln(t->items[i]);
         } else {
             printf("%lld", (long long)t->items[i]);
         }
@@ -8599,6 +9017,8 @@ void vayu_print_set_noln(VayuSet* s) {
             vayu_print_tuple_noln((VayuTuple*)s->items[i]);
         } else if (tag == 6) {
             vayu_print_set_noln((VayuSet*)s->items[i]);
+        } else if (tag == 7) {
+            vayu_print_float_noln(s->items[i]);
         } else {
             printf("%lld", (long long)s->items[i]);
         }
@@ -11208,14 +11628,14 @@ int64_t vayu_raster_tex_from_fb(int64_t fbh) {
  * ========================================================================= */
 
 typedef struct {
-    int64_t* data;    /* Q16.16 */
+    double*  data;    /* Phase 24.2 - real doubles, not Q16.16 */
     int64_t* shape;
     int64_t* strides;
     int      ndim;
     int64_t  numel;
-    int      requires_grad;   /* Phase 22.1 */
-    int64_t  grad;            /* tensor handle, 0 if none */
-    int      tape_idx;        /* index into g_tape, -1 if not on tape */
+    int      requires_grad;
+    int64_t  grad;
+    int      tape_idx;
 } VayuTensor;
 
 /* Phase 22.1 op codes, stored on the tape entry. */
@@ -11277,12 +11697,12 @@ static int64_t vayu_tensor_new_from_shape(const int64_t* shape, int ndim) {
         vayu_tensor_strides(t->shape, ndim, t->strides);
         t->numel = vayu_tensor_numel(t->shape, ndim);
     }
-    t->data = (int64_t*)malloc(sizeof(int64_t) * (size_t)(t->numel > 0 ? t->numel : 1));
+    t->data = (double*)malloc(sizeof(double) * (size_t)(t->numel > 0 ? t->numel : 1));
     if (!t->data) {
         free(t->shape); free(t->strides); free(t);
         return 0;
     }
-    memset(t->data, 0, sizeof(int64_t) * (size_t)(t->numel > 0 ? t->numel : 1));
+    memset(t->data, 0, sizeof(double) * (size_t)(t->numel > 0 ? t->numel : 1));
     return (int64_t)t;
 }
 
@@ -11311,12 +11731,12 @@ int64_t vayu_tensor_numel_h(int64_t h) {
 int64_t vayu_tensor_get_flat(int64_t h, int64_t i) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t || i < 0 || i >= t->numel) return 0;
-    return t->data[i];
+    return (int64_t)(t->data[i] * 65536.0 + (t->data[i] < 0.0 ? -0.5 : 0.5));
 }
 void vayu_tensor_set_flat(int64_t h, int64_t i, int64_t v) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t || i < 0 || i >= t->numel) return;
-    t->data[i] = v;
+    t->data[i] = (double)v / 65536.0;
 }
 
 static int vayu_tensor_read_shape(VayuList* lst, int64_t* out_shape, int* out_ndim) {
@@ -11342,7 +11762,7 @@ int64_t vayu_tensor_ones(int64_t shape_list) {
     int64_t h = vayu_tensor_new(shape_list);
     VayuTensor* t = (VayuTensor*)h;
     if (!t) return 0;
-    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = 65536;
+    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = 1.0;
     return h;
 }
 int64_t vayu_tensor_from_int_list(int64_t shape_list, int64_t values_list) {
@@ -11354,7 +11774,22 @@ int64_t vayu_tensor_from_int_list(int64_t shape_list, int64_t values_list) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t) return 0;
     int64_t n = t->numel < vl->len ? t->numel : vl->len;
-    for (int64_t i = 0; i < n; ++i) t->data[i] = vl->items[i];
+    /* Q16.16 compatibility: values[i]/65536 -> real value. */
+    for (int64_t i = 0; i < n; ++i)
+        t->data[i] = (double)vl->items[i] / 65536.0;
+    return h;
+}
+int64_t vayu_tensor_from_float_list(int64_t shape_list, int64_t values_list) {
+    int64_t sh[8]; int nd = 0;
+    if (!vayu_tensor_read_shape((VayuList*)shape_list, sh, &nd)) return 0;
+    VayuList* vl = (VayuList*)values_list;
+    if (!vl) return 0;
+    int64_t h = vayu_tensor_new_from_shape(sh, nd);
+    VayuTensor* t = (VayuTensor*)h;
+    if (!t) return 0;
+    int64_t n = t->numel < vl->len ? t->numel : vl->len;
+    for (int64_t i = 0; i < n; ++i)
+        t->data[i] = vayu_bits_to_double(vl->items[i]);
     return h;
 }
 int64_t vayu_tensor_copy(int64_t h) {
@@ -11363,13 +11798,14 @@ int64_t vayu_tensor_copy(int64_t h) {
     int64_t nh = vayu_tensor_new_from_shape(t->shape, t->ndim);
     VayuTensor* nt = (VayuTensor*)nh;
     if (!nt) return 0;
-    memcpy(nt->data, t->data, sizeof(int64_t) * (size_t)t->numel);
+    memcpy(nt->data, t->data, sizeof(double) * (size_t)t->numel);
     return nh;
 }
 void vayu_tensor_fill(int64_t h, int64_t v) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t) return;
-    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = v;
+    double vf = (double)v / 65536.0;
+    for (int64_t i = 0; i < t->numel; ++i) t->data[i] = vf;
 }
 
 /* Broadcasting: align right; size-1 dims propagate; matched dims required. */
@@ -11442,18 +11878,13 @@ static int64_t vayu_tensor_ew(int64_t a_h, int64_t b_h, int op) {
             vayu_tensor_bcast_index(a, i, out_ndim, out_shape, &ao);
             vayu_tensor_bcast_index(b, i, out_ndim, out_shape, &bo);
         }
-        int64_t av = a->data[ao], bv = b->data[bo];
-        int64_t r = 0;
+        double av = a->data[ao], bv = b->data[bo];
+        double r = 0.0;
         switch (op) {
             case 0: r = av + bv; break;
             case 1: r = av - bv; break;
-            case 2: r = (av * bv) >> 16; break;
-            case 3: {
-                if (bv == 0) { r = 0; break; }
-                double dv = (double)av / (double)bv;
-                r = (int64_t)(dv * 65536.0 + (dv < 0.0 ? -0.5 : 0.5));
-                break;
-            }
+            case 2: r = av * bv; break;
+            case 3: r = (bv == 0.0) ? 0.0 : (av / bv); break;
         }
         out->data[i] = r;
     }
@@ -11475,7 +11906,8 @@ int64_t vayu_tensor_add_scalar(int64_t a_h, int64_t v) {
     int64_t oh = vayu_tensor_new_from_shape(a->shape, a->ndim);
     VayuTensor* out = (VayuTensor*)oh;
     if (!out) return 0;
-    for (int64_t i = 0; i < a->numel; ++i) out->data[i] = a->data[i] + v;
+    double vf = (double)v / 65536.0;
+    for (int64_t i = 0; i < a->numel; ++i) out->data[i] = a->data[i] + vf;
     if (a->requires_grad) {
         out->requires_grad = 1;
         vayu_tape_push(VAYU_OP_ADD_SCALAR, oh, a_h, 0, v);
@@ -11488,8 +11920,9 @@ int64_t vayu_tensor_mul_scalar(int64_t a_h, int64_t v) {
     int64_t oh = vayu_tensor_new_from_shape(a->shape, a->ndim);
     VayuTensor* out = (VayuTensor*)oh;
     if (!out) return 0;
+    double vf = (double)v / 65536.0;
     for (int64_t i = 0; i < a->numel; ++i)
-        out->data[i] = (a->data[i] * v) >> 16;
+        out->data[i] = a->data[i] * vf;
     if (a->requires_grad) {
         out->requires_grad = 1;
         vayu_tape_push(VAYU_OP_MUL_SCALAR, oh, a_h, 0, v);
@@ -11508,14 +11941,14 @@ int64_t vayu_tensor_matmul(int64_t a_h, int64_t b_h) {
     int64_t oh = vayu_tensor_new_from_shape(out_shape, 2);
     VayuTensor* out = (VayuTensor*)oh;
     if (!out) return 0;
-    const int64_t* A = a->data;
-    const int64_t* B = b->data;
-    int64_t* C = out->data;
+    const double* A = a->data;
+    const double* B = b->data;
+    double* C = out->data;
     for (int64_t i = 0; i < M; ++i) {
         for (int64_t j = 0; j < N; ++j) {
-            int64_t s = 0;
+            double s = 0.0;
             for (int64_t k = 0; k < K; ++k) {
-                s += (A[i*K + k] * B[k*N + j]) >> 16;
+                s += A[i*K + k] * B[k*N + j];
             }
             C[i*N + j] = s;
         }
@@ -11530,7 +11963,7 @@ int64_t vayu_tensor_matmul(int64_t a_h, int64_t b_h) {
 int64_t vayu_tensor_sum(int64_t h) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t) return 0;
-    int64_t s = 0;
+    double s = 0.0;
     for (int64_t i = 0; i < t->numel; ++i) s += t->data[i];
     int64_t sh[1] = { 1 };
     int64_t oh = vayu_tensor_new_from_shape(sh, 1);
@@ -11546,7 +11979,7 @@ int64_t vayu_tensor_sum(int64_t h) {
 int64_t vayu_tensor_max(int64_t h) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t || t->numel == 0) return 0;
-    int64_t m = t->data[0];
+    double m = t->data[0];
     for (int64_t i = 1; i < t->numel; ++i) if (t->data[i] > m) m = t->data[i];
     int64_t sh[1] = { 1 };
     int64_t oh = vayu_tensor_new_from_shape(sh, 1);
@@ -11574,7 +12007,7 @@ int64_t vayu_tensor_reshape(int64_t h, int64_t shape_list) {
     int64_t oh = vayu_tensor_new_from_shape(sh, nd);
     VayuTensor* out = (VayuTensor*)oh;
     if (!out) return 0;
-    memcpy(out->data, t->data, sizeof(int64_t) * (size_t)n);
+    memcpy(out->data, t->data, sizeof(double) * (size_t)n);
     return oh;
 }
 
@@ -11596,13 +12029,8 @@ int64_t vayu_tensor_transpose(int64_t h) {
     return oh;
 }
 
-static void vayu_tensor_print_q16(int64_t v) {
-    int neg = v < 0;
-    int64_t a = neg ? -v : v;
-    int64_t whole = a >> 16;
-    int64_t frac  = ((a & 0xFFFF) * 10000) >> 16;
-    if (neg) putchar('-');
-    printf("%lld.%04lld", (long long)whole, (long long)frac);
+static void vayu_tensor_print_d(double d) {
+    printf("%.4f", d);
 }
 
 void vayu_tensor_print(int64_t h, int64_t name_sp) {
@@ -11618,7 +12046,7 @@ void vayu_tensor_print(int64_t h, int64_t name_sp) {
     printf("] data=[");
     for (int64_t i = 0; i < t->numel; ++i) {
         if (i) printf(" ");
-        vayu_tensor_print_q16(t->data[i]);
+        vayu_tensor_print_d(t->data[i]);
     }
     printf("]\n");
 }
@@ -11709,14 +12137,14 @@ static int64_t vayu_tensor_unary(int64_t h, int op) {
     VayuTensor* o = (VayuTensor*)r;
     if (!o) return 0;
     for (int64_t i = 0; i < t->numel; ++i) {
-        int64_t x = t->data[i];
-        int64_t y = 0;
+        double x = t->data[i];
+        double y = 0.0;
         switch (op) {
-            case VAYU_OP_RELU:    y = vayu_q_relu(x);    break;
-            case VAYU_OP_SIGMOID: y = vayu_q_sigmoid(x); break;
-            case VAYU_OP_TANH:    y = vayu_q_tanh(x);    break;
-            case VAYU_OP_EXP:     y = vayu_q_exp(x);     break;
-            case VAYU_OP_LOG:     y = vayu_q_log(x);     break;
+            case VAYU_OP_RELU:    y = (x > 0.0) ? x : 0.0;                 break;
+            case VAYU_OP_SIGMOID: y = 1.0 / (1.0 + exp(-x));               break;
+            case VAYU_OP_TANH:    y = tanh(x);                             break;
+            case VAYU_OP_EXP:     y = exp(x);                              break;
+            case VAYU_OP_LOG:     y = (x > 0.0) ? log(x) : -1.0e30;        break;
         }
         o->data[i] = y;
     }
@@ -11740,7 +12168,7 @@ static int64_t vayu_tensor_ones_like(int64_t h) {
     if (!t) return 0;
     int64_t r = vayu_tensor_new_from_shape(t->shape, t->ndim);
     VayuTensor* o = (VayuTensor*)r;
-    for (int64_t i = 0; i < o->numel; ++i) o->data[i] = 65536;
+    for (int64_t i = 0; i < o->numel; ++i) o->data[i] = 1.0;
     return r;
 }
 
@@ -12191,22 +12619,19 @@ static void onnx_parse_graph(const uint8_t* data, size_t len, VayuOnnx* m) {
 static int64_t vayu_tensor_softmax(int64_t h) {
     VayuTensor* t = (VayuTensor*)h;
     if (!t || t->numel == 0) return 0;
-    int64_t mx = t->data[0];
+    double mx = t->data[0];
     for (int64_t i = 1; i < t->numel; ++i) if (t->data[i] > mx) mx = t->data[i];
     int64_t oh = vayu_tensor_new_from_shape(t->shape, t->ndim);
     VayuTensor* o = (VayuTensor*)oh;
     if (!o) return 0;
     double sum = 0.0;
     for (int64_t i = 0; i < t->numel; ++i) {
-        double e = exp((double)(t->data[i] - mx) / 65536.0);
-        o->data[i] = (int64_t)(e * 65536.0 + 0.5);
-        sum += (double)o->data[i];
+        double e = exp(t->data[i] - mx);
+        o->data[i] = e;
+        sum += e;
     }
     if (sum <= 0.0) return oh;
-    for (int64_t i = 0; i < t->numel; ++i) {
-        double v = (double)o->data[i] / sum;
-        o->data[i] = (int64_t)(v * 65536.0 + 0.5);
-    }
+    for (int64_t i = 0; i < t->numel; ++i) o->data[i] = o->data[i] / sum;
     return oh;
 }
 
@@ -13053,7 +13478,9 @@ void vayu_tensor_backward(int64_t h) {
                 VayuTensor* a = (VayuTensor*)e->a;
                 int64_t r = vayu_tensor_new_from_shape(a->shape, a->ndim);
                 VayuTensor* o = (VayuTensor*)r;
-                int64_t gv = g->data[0];
+                /* data is now `double`, not Q16.16.  Casting to int64
+                   would truncate any gradient smaller than 1.0 to zero. */
+                double gv = g->data[0];
                 for (int64_t k = 0; k < a->numel; ++k) o->data[k] = gv;
                 vayu_grad_accum(e->a, r);
                 break;
@@ -13078,16 +13505,16 @@ void vayu_tensor_backward(int64_t h) {
                 int64_t r = vayu_tensor_new_from_shape(x->shape, x->ndim);
                 VayuTensor* o = (VayuTensor*)r;
                 for (int64_t k = 0; k < x->numel; ++k) {
-                    int64_t xi = x->data[k], yi = y->data[k], gi = g->data[k];
-                    int64_t d = 0;
+                    double xi = x->data[k], yi = y->data[k], gi = g->data[k];
+                    double d = 0.0;
                     switch (e->op) {
-                        case VAYU_OP_RELU:    d = xi > 0 ? 65536 : 0; break;
-                        case VAYU_OP_SIGMOID: d = vayu_q_mul(yi, 65536 - yi); break;
-                        case VAYU_OP_TANH:    d = 65536 - vayu_q_mul(yi, yi); break;
-                        case VAYU_OP_EXP:     d = yi; break;
-                        case VAYU_OP_LOG:     d = xi > 0 ? (int64_t)(65536.0 * 65536.0 / (double)xi) : 0; break;
+                        case VAYU_OP_RELU:    d = (xi > 0.0) ? 1.0 : 0.0;       break;
+                        case VAYU_OP_SIGMOID: d = yi * (1.0 - yi);              break;
+                        case VAYU_OP_TANH:    d = 1.0 - yi * yi;                break;
+                        case VAYU_OP_EXP:     d = yi;                           break;
+                        case VAYU_OP_LOG:     d = (xi > 0.0) ? (1.0 / xi) : 0.0; break;
                     }
-                    o->data[k] = vayu_q_mul(gi, d);
+                    o->data[k] = gi * d;
                 }
                 vayu_grad_accum(e->a, r);
                 break;

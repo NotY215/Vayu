@@ -1,0 +1,77 @@
+# examples/native_floats.vyu -- Phase 24.0 demo.
+# Runs on tree-walk, VM, and native; harness compares all three.
+
+def dbl(x: float) -> float:
+    return x * 2.0
+
+def avg(a: float, b: float) -> float:
+    return (a + b) / 2.0
+
+def main() -> None:
+    print("== literals ==")
+    print(1.5)
+    print(0.5)
+    print(100.0)
+    print(0.1)
+    print(3.14)
+    print(-3.14)
+
+    print("")
+    print("== float + float ==")
+    print(1.5 + 2.5)
+    print(3.5 - 1.2)
+    print(2.5 * 4.0)
+    print(7.5 / 2.5)
+
+    print("")
+    print("== int + float ==")
+    print(1 + 2.5)
+    print(3.5 + 1)
+    print(2 * 1.5)
+    print(1.5 * 2)
+    print(7 - 2.5)
+    print(8 / 2)
+
+    print("")
+    print("== floor div / mod / pow ==")
+    print(7.5 // 2.0)
+    print(7.5 % 2.0)
+    print(2.0 ** 10.0)
+    print(-7.5 // 2.0)
+    print(-7.5 % 2.0)
+
+    print("")
+    print("== comparisons ==")
+    print(1.5 < 2.5)
+    print(1.5 > 2.5)
+    print(1.5 == 1.5)
+    print(1.5 != 2.5)
+    print(1.5 <= 1.5)
+    print(1.5 >= 1.5)
+    print(1 < 1.5)
+    print(1.5 < 2)
+
+    print("")
+    print("== conversions ==")
+    print(float(3))
+    print(float(3.5))
+    print(int(3.7))
+    print(int(-3.7))
+    print(str(1.5))
+    print(str(1.0))
+
+    print("")
+    print("== variables ==")
+    x: float = 1.5
+    y: float = 2.5
+    print(x + y)
+    print(x * 2.0)
+    x = x + 1.0
+    print(x)
+
+    print("")
+    print("== functions ==")
+    print(dbl(3.14))
+    print(avg(1.0, 3.0))
+
+main()

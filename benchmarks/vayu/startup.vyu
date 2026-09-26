@@ -1,0 +1,2 @@
+# benchmarks/vayu/startup.vyu
+print("ready")

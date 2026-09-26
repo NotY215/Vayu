@@ -1,0 +1,69 @@
+# examples/native_math.vyu -- Phase 24.1 demo.
+
+import math
+
+def main() -> None:
+    print("== constants ==")
+    print(math.pi)
+    print(math.e)
+
+    print("")
+    print("== unary ==")
+    print(math.sqrt(16.0))
+    print(math.sin(0.0))
+    print(math.cos(0.0))
+    print(math.tan(0.0))
+    print(math.exp(0.0))
+    print(math.log(math.e))
+    print(math.log2(8.0))
+    print(math.log10(1000.0))
+    print(math.floor(3.7))
+    print(math.ceil(3.2))
+    print(math.trunc(3.9))
+    print(math.fabs(-4.5))
+    print(math.cbrt(27.0))
+    print(math.degrees(math.pi))
+    print(math.radians(180.0))
+
+    print("")
+    print("== int args widen ==")
+    print(math.sqrt(9))
+    print(math.floor(5))
+
+    print("")
+    print("== binary ==")
+    print(math.pow(2.0, 10.0))
+    print(math.atan2(1.0, 1.0))
+    print(math.hypot(3.0, 4.0))
+    print(math.fmod(7.5, 2.0))
+
+    print("")
+    print("== predicates ==")
+    print(math.is_nan(math.nan))
+    print(math.is_inf(math.inf))
+    print(math.is_finite(1.5))
+    print(math.is_finite(math.inf))
+
+    print("")
+    print("== float in list ==")
+    xs: list<float> = [1.5, 2.5, 3.5]
+    print(xs)
+    ys: list<float> = []
+    i: int = 0
+    while i < len(xs):
+        ys.append(xs[i] * 2.0)
+        i = i + 1
+    print(ys)
+
+    print("")
+    print("== float in map ==")
+    m: map<str, float> = {"a": 1.5, "b": 2.5}
+    print(m)
+    print(m["a"] + m["b"])
+
+    print("")
+    print("== float in tuple ==")
+    t: list<float> = [1.5]
+    print(t)
+
+main()
