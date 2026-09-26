@@ -27,7 +27,7 @@ The current source tree demonstrates a substantially expanded language/compiler 
 
 The current development history now records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. The next language/runtime milestone is Phase 24 native floating-point support.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phase 24.0 native floats and 24.1 native math/float collections are implemented; 24.2 is the remaining tensor-storage migration milestone.
 
 ## Roadmap
 
@@ -41,7 +41,7 @@ The roadmap below records the project's planned development phases. A phase may 
 | **20** | 2D graphics, transforms, text, image/UI primitives and canvas functionality. **Completed foundation.** |
 | **21** | Software raster + 3D pipeline: framebuffers, depth buffers, Q16.16 matrices, meshes, textures, mipmaps, perspective-correct rasterization, lighting and post-processing. **Completed.** |
 | **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Completed development phase.** |
-| **23** | **Single-binary native toolchain:** retire the QBE/GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
+| **23** | **Native backend transition:** establish VCB as a separate backend project and add a selectable Vayu `--backend qbe|vcb` boundary. QBE remains the current default. **Completed direction.** |
 | **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
 | **25** | **Benchmarking Round 1 (pre-VCB)** — harness/control programs, compute-heavy workloads, allocation-heavy workloads and reproducible reports. |
 | **26** | **Version cut 1** — Linux/macOS toolchain builds, SDL3 GUI/raster direction, VS Community LSP, VS Code Marketplace + Open VSX publishing, Vayu rewrites of `tools/*.py`, documentation and release. |
@@ -52,11 +52,11 @@ The roadmap below records the project's planned development phases. A phase may 
 
 ### Phase 24 — Native floats
 
-The next major native-backend/runtime gap is floating-point support. The native path currently centers on integer execution and Q16.16-oriented numerical work, so Phase 24 moves real floating-point values into the native value model before benchmarking and tensor migration.
+Phase 24 is now partially implemented. Native floating-point values have landed in the compiler/runtime, followed by native math and float-aware collections. Tensor storage migration remains the final Phase 24 milestone.
 
-- **24.0 — Float type + ABI.** Native `float` value representation, cross-backend representation, `+ - * / // % **`, comparisons, unary negate, mixed `int → float` widening and print formatting.
-- **24.1 — Math library + collections.** Native `math.*`, `list<float>`, `map<str, float>`, and `float(x)`, `int(x)`, `str(x)` round-trips.
-- **24.2 — Tensor migration.** Move `tensor` from Q16.16 to f32 or f64 internally; retain Q16.16 as a compatibility layer temporarily, then retire it.
+- **24.0 — Float type + ABI.** **Implemented.** Native `float` values, arithmetic, comparisons, unary negate, mixed integer/float operations, conversions and formatting.
+- **24.1 — Math library + collections.** **Implemented.** Native `math.*`, `list<float>`, `map<str, float>`, and float/int/string conversions.
+- **24.2 — Tensor migration.** **Remaining.** Move `tensor` from Q16.16 to f32/f64 internally, with a temporary compatibility layer before retiring the old representation.
 
 **Exit criteria:** fixpoint still passes; `examples/native_floats.vyu` compiles and matches tree-walk output; `math.*` outputs are bit-identical to tree-walk on roughly 30 expressions.
 
@@ -160,7 +160,7 @@ After self-hosting, the roadmap continues through developer tooling, GUI/window/
 
 **[VCB](https://github.com/NotY215/VCB) is a companion project and planned native backend component of the Vayu compiler ecosystem.**
 
-VCB is designed to provide a clean boundary between Vayu's frontend/IR and machine-code generation:
+VCB is designed to provide a clean boundary between Vayu's frontend/IR and machine-code generation. The Vayu compiler currently selects QBE by default, while VCB is selectable and developed as a separate project:
 
 ```text
 Vayu Source
