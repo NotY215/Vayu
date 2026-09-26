@@ -1,43 +1,40 @@
 # Vayu for VS Code
 
-Language support for Vayu (`.vyu` files) — works with **VS Code** and
-**VS Code - OSS / Community**.
+Language support for Vayu (.vyu) in Visual Studio Code and VS Code-compatible editors.
 
 ## Features
 
-- **Syntax highlighting** — keywords, types, builtins, operators, strings,
-  comments.
-- **Diagnostics** — parse errors and type errors shown inline as you type,
-  powered by `vls.exe`.
-- **Hover** — markdown tooltip with the declaration location.
-- **Goto definition** — Ctrl-click a name to jump to its declaration.
-- **Completion** — `.` triggers a list of builtins and top-level names.
-- **Format file** — Ctrl+Shift+P → "Vayu: Format File" (uses `vfmt.exe`).
-- **Lint file** — "Vayu: Lint File" (uses `vlint.exe`).
-- **Restart server** — "Vayu: Restart Language Server".
+- Syntax highlighting for the current Vayu grammar
+- Language Server Protocol integration through `vls`
+- Inline diagnostics
+- Hover information
+- Go to definition
+- Completion
+- Formatter integration through `vfmt`
+- Linter integration through `vlint`
+- Restart-language-server command
 
-## Setup
+## Toolchain
 
-1. Build the toolchain:
-```
-cmake --build build/x64-debug
-```
-This produces `vls.exe`, `vfmt.exe`, `vlint.exe` under
-`build/x64-debug/bin/`.
+Build the Vayu compiler/tooling from the repository root:
 
-2. Install this extension (or the packaged `.vsix`).
+    cmake --build build/x64-debug
 
-3. Reload VS Code, open any `.vyu` file.
+The debug build provides:
+
+    build/x64-debug/bin/vls.exe
+    build/x64-debug/bin/vfmt.exe
+    build/x64-debug/bin/vlint.exe
+
+The extension can auto-detect these paths from the workspace or use explicit settings.
 
 ## Settings
 
-| Key | Default | Meaning |
+| Setting | Default | Purpose |
 |---|---|---|
-| `vayu.vlsPath`  | `build/x64-debug/bin/vls.exe`  | Language server |
-| `vayu.vfmtPath` | `build/x64-debug/bin/vfmt.exe` | Formatter |
-| `vayu.vlintPath`| `build/x64-debug/bin/vlint.exe`| Linter |
-
-Paths are resolved relative to the workspace root unless absolute.
+| `vayu.vlsPath` | empty | Path to `vls`; empty enables workspace auto-detection |
+| `vayu.vfmtPath` | empty | Path to `vfmt`; empty enables auto-detection |
+| `vayu.vlintPath` | empty | Path to `vlint`; empty enables auto-detection |
 
 ## Commands
 
@@ -46,13 +43,14 @@ Paths are resolved relative to the workspace root unless absolute.
 - `Vayu: Restart Language Server`
 
 ## Packaging
-```
-npm install -g @vscode/vsce
-cd vscode-vayu-Extention
-vsce package
-```
 
-Produces `vayu-%version%.vsix`, installable in both VS Code and VS Code - OSS.
+This is a normal VS Code extension and uses `@vscode/vsce`:
+
+    npm install -g @vscode/vsce
+    cd vscode-vayu-Extention
+    vsce package
+
+The current package version is `1.0.0` and the Marketplace publisher is `Fliczo`.
 
 ## Repository
 
