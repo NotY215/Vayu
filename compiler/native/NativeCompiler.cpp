@@ -45,9 +45,9 @@ namespace vayu {
         if (const char* p = std::getenv("VAYU_CC_OPT")) {
             int n = std::atoi(p);
             if (n >= 0 && n <= 3) optLevel_ = n;
+        }
         if (vcbPath_.empty()) vcbPath_ = "vcb.exe";
         if (const char* p = std::getenv("VAYU_VCB")) vcbPath_ = p;
-        }
         /* Phase 25.0a - -O3.  The 25.0 benchmark showed native ~2.8x slower
            than hand-written C++ at -O2; -O3 recovers most of that on tight
            numeric loops.  Overridable via --opt / VAYU_CC_OPT. */
@@ -15712,6 +15712,8 @@ int main(int argc, char** argv) {
     int NativeCompiler::compileAndRun(const Block& program,
         const std::string& sourceDir) {
         lastError_.clear();
+        if (backend_ == NativeBackend::Vcb)
+            return compileAndRunVcb(program, sourceDir);
 
         std::string il;
         try { il = buildQBE(program, sourceDir); }
@@ -15832,6 +15834,73 @@ int main(int argc, char** argv) {
         bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
         if (!keep) tryRemove(exePath);
 
+        if (runRc != 0) {
+            lastError_ = "program exited " + std::to_string(runRc);
+            return 1;
+        }
+        return 0;
+    }
+
+    void NativeCompiler::dumpIRVcb(const Block& program,
+                                   const std::string& sourceDir) {
+        try {
+            VcbLower lower;
+            std::string ir = lower.lower(program, sourceDir);
+            std::fwrite(ir.data(), 1, ir.size(), stdout);
+        }
+        catch (const std::exception& e) {
+            lastError_ = e.what();
+            std::fprintf(stderr, "vcb-lower: %s\n", e.what());
+        }
+    }
+
+    int NativeCompiler::compileAndRunVcb(const Block& program,
+                                         const std::string& sourceDir) {
+        std::string ir;
+        try {
+            VcbLower lower;
+            ir = lower.lower(program, sourceDir);
+        }
+        catch (const std::exception& e) {
+            lastError_ = e.what();
+            std::fprintf(stderr, "vcb-lower: %s\n", e.what());
+            return 1;
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories("_vayu_tmp", ec);
+#ifdef _WIN32
+        std::string base = "_vayu_tmp\\_vayu_" + std::to_string(VAYU_GETPID());
+#else
+        std::string base = "_vayu_tmp/_vayu_" + std::to_string(VAYU_GETPID());
+#endif
+        std::string irPath  = base + ".vcbir";
+        std::string exePath = outputExe_.empty() ? (base + ".exe") : outputExe_;
+        const bool  compileOnly = !outputExe_.empty();
+
+        {
+            std::ofstream out(irPath, std::ios::binary);
+            if (!out) { lastError_ = "cannot write " + irPath; return 1; }
+            out << ir;
+        }
+
+        std::string cmd = vcbPath_ + " build \"" + irPath +
+                          "\" -o \"" + exePath + "\"";
+        int rc = std::system(cmd.c_str());
+        if (rc != 0) {
+            lastError_ = "vcb.exe failed (exit " + std::to_string(rc) +
+                         "). IR at " + irPath;
+            std::fprintf(stderr, "native: %s\n", lastError_.c_str());
+            return 1;
+        }
+
+        tryRemove(irPath);
+
+        if (compileOnly) return 0;
+
+        int runRc = std::system((("\"" + exePath + "\"")).c_str());
+        bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
+        if (!keep) tryRemove(exePath);
         if (runRc != 0) {
             lastError_ = "program exited " + std::to_string(runRc);
             return 1;
