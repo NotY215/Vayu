@@ -102,7 +102,7 @@ Vayu Source (.vyu)
     Executable
 ```
 
-VCB is being developed separately as the native backend project and is the planned replacement for the QBE/GCC backend chain.
+VCB is developed as a separate backend project. The Vayu compiler already exposes a selectable `--backend qbe|vcb` interface, but QBE remains the default native backend until VCB is ready to replace the existing QBE + GCC path.
 
 ---
 
@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is moving toward compiler independence and self-hosting, with native floating-point support now preceding the benchmark and VCB stages.
+The current project is moving from completed native-float work into the VCB native-backend transition. Phase 25 benchmarking is intentionally skipped for now and will be performed after VCB-built binaries are working.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -883,12 +883,13 @@ C++ bootstrap can eventually be retired
 | **22** | Package ecosystem and runtime/UI optimization. **Completed development phase.** |
 | **23** | Single-binary native toolchain direction; VCB established as a separate backend project. **Completed phase direction.** |
 | **24** | **Native floats** — float ABI, math/collections, tensor migration. **Current.** |
-| **25** | Benchmarking Round 1 before VCB. |
-| **26** | Version cut 1: cross-platform builds, SDL3, VS Community LSP, Marketplace/Open VSIX, Vayu tooling rewrite and release. |
-| **27** | VCB separate project: PE, direct codegen, linker/runtime merge, ELF/Mach-O, ARM64. |
-| **28** | Benchmarking Round 2 after VCB, including delta and regression reports. |
-| **29** | Version cut 2: single-binary VCB-era release, QBE/GCC retired, target `v1.0`. |
-| **30+** | Open parking lot: shaders, escape analysis, multi-input ONNX, GPU tensors and future ML/runtime additions. |
+| **25** | **Skipped for now** — benchmarking postponed until after VCB. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, `vcb dump`. |
+| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and `vayuc` migration from QBE+GCC to VCB. |
+| **27** | ELF writer and Linux target. |
+| **28** | Full benchmarking on VCB-built binaries. |
+| **29** | Version cut. |
+| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
 Detailed phase specifications are maintained in [docs/vision.md](docs/vision.md).
 
@@ -962,3 +963,14 @@ When implementation and documentation differ, the compiler source and tests are 
 [🌐 vayu.gt.tc](https://vayu.gt.tc)
 
 </div>
+
+
+## Current Codebase Notes
+
+The compiler driver currently supports tree-walk execution, bytecode VM execution, type-check-only mode, token/AST/bytecode/IR inspection, native compilation, benchmarking, and native-runtime emission.
+
+Native compilation exposes `--backend qbe|vcb`, `--native`, `--native-out <path>`, `--dump-ir`, and `--opt 0-3`. `--emit-runtime <path>` exports the native runtime C source.
+
+The QBE backend is still the default. VCB is a selectable backend boundary and is developed separately in the VCB repository.
+
+Phase 24.0 adds native `float` values and mixed integer/float arithmetic. Phase 24.1 adds the native math module and float-aware collections. Tensor storage migration remains Phase 24.2.

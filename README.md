@@ -67,11 +67,13 @@ Vayu includes benchmarking as part of its development and performance evaluation
 
 ---
 
-## 🧩 VS Code Extension
+## 🧩 Editor Support
 
-Vayu now has official Visual Studio Code tooling for `.vyu` source files.
+Vayu has editor tooling for `.vyu` source files through the VS Code extension and a native Visual Studio Community TextMate/VSIX extension.
 
 **[🛒 Install Vayu from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+
+**Visual Studio Community:** build `vscommunity-vayu-Extention` with its `build.ps1` script and install the generated `vayu-lang-support-1.0.0.vsix`.
 
 **[⚡ Install directly in VS Code](vscode:extension/Fliczo.vayu)**
 
@@ -534,7 +536,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 24 is now the current development phase: native floating-point support, math/runtime integration, and tensor migration.**
+**Phase 26 Part 2 is the current development phase. Phase 25 is intentionally skipped for now; benchmarking will resume after the VCB transition. Phase 26 Part 1 is complete, while Part 2 is implementing native x86-64 code generation and replacing the QBE+GCC path in `vayuc`.**
 
 Current implemented areas include:
 
@@ -551,6 +553,9 @@ Current implemented areas include:
 - raw pointers, references, pointer arithmetic, `malloc()` and `free()`
 - C FFI, function pointers, external-library linking and supported struct-by-value FFI
 - runtime modules including math, filesystem/OS, regex, threading, networking, crypto, random, time and JSON
+- native floating-point values, mixed int/float arithmetic, comparisons and conversions
+- native `math.*` operations, float lists and float-valued maps
+- selectable QBE/VCB native backend interface, with QBE currently remaining the default
 - native CPython loading and expanded Python value/call interoperability
 
 ### Current Development Direction
@@ -561,7 +566,7 @@ The next major backend/runtime milestone is native floating-point support. Vayu'
 
 **Phase 23 — Single-binary native toolchain — Completed**
 
-Phase 23 established the transition from the QBE + GCC backend chain toward VCB as the dedicated native backend project. VCB is now treated as a separate sister project with its own repository and roadmap.
+Phase 23 established the VCB backend boundary and the transition plan away from the QBE + GCC backend chain. The current compiler still supports QBE as the default native backend and exposes VCB through `--backend vcb`; VCB remains a separate sister project until it is ready to replace the existing backend path.
 
 **Phase 18 — Vayu developer tooling**
 
@@ -583,12 +588,13 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **22** | Package ecosystem and continued native/UI performance work. **Completed development phase.** |
 | **23** | **Single-binary native toolchain / VCB direction.** Retire the QBE + GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
 | **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
-| **25** | **Benchmarking Round 1 (pre-VCB)** — dedicated harness, control programs, compute-heavy and allocation-heavy workloads. |
-| **26** | **Version cut 1** — cross-platform toolchain builds, SDL3, VS Community LSP, Marketplace/Open VSX publishing, Vayu rewrites of Python tools, documentation and release. |
-| **27** | **VCB — separate project** — PE object emitter, direct codegen, linker/runtime merge, ELF/Mach-O and ARM64. |
-| **28** | **Benchmarking Round 2 (post-VCB)** — same suite and comparison languages, with a VCB delta report. |
-| **29** | **Version cut 2** — VCB-era single-binary toolchain release; QBE/GCC retired from docs and packaging; target v1.0. |
-| **30+** | **Open / parking lot** — shaders, escape analysis, multi-input ONNX, GPU tensors, optimizer/loss additions and other future work. |
+| **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
+| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and migration of `vayuc` from QBE+GCC to VCB. |
+| **27** | ELF writer and Linux target. |
+| **28** | Full benchmarking on VCB-built binaries. |
+| **29** | Version cut. |
+| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
 #### Full map from Phase 24
 

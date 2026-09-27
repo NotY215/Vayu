@@ -1,69 +1,73 @@
-# Vayu benchmarks
+# Vayu Benchmarks
 
-Cross-language comparison for the same small programs, one folder per
-language:
+The benchmark suite compares the current Vayu execution paths with C++, Java, and CPython using the same small workloads.
+
+## Layout
 
     benchmarks/
-      run.ps1            builds everything, runs 5x, prints a table
-      vayu/              .vyu sources
-      cpp/               .cpp sources
-      java/              .java sources
-      python/            .py sources
+      run.ps1
+      vayu/
+      cpp/
+      java/
+      python/
 
-## Programs
+## Current programs
 
     arith     integer + float arithmetic in two hot loops
-    fib       naive recursive fib (function-call overhead)
-    startup   empty program (process launch + runtime boot)
+    fib       naive recursive fib
+    startup   empty program / process startup
+
+This is the implemented control suite. The larger compute-heavy and allocation-heavy workloads described in the Phase 25 roadmap are not yet part of this directory.
 
 ## Running
 
-From a Windows shell at the repo root:
+From the repository root on Windows:
 
     powershell -ExecutionPolicy Bypass -File benchmarks\run.ps1
 
-The runner auto-detects `g++`, `javac`, `java`, and `python` on PATH.
-Anything missing is skipped; the column is just absent from the table.
-`vayuc.exe` is located at `build\x64-debug\bin\vayuc.exe` relative to
-the repo root, or on PATH.
+The runner detects `g++`, `javac`, `java`, and `python` on PATH. Missing tools are skipped.
+
+Vayu native compilation uses `vayuc --native-out <path>`. The runner locates `vayuc.exe` under `build\x64-debug\bin\vayuc.exe` or through PATH.
+
+## Vayu execution paths
+
+The benchmark harness reports:
+
+- `vayu-native` — native compilation/execution
+- `vayu-vm` — bytecode VM
+- `vayu-tree` — tree-walking interpreter
+
+The harness can include the slower tree-walk Fibonacci case with `-IncludeSlow`.
 
 ## Methodology
 
-  - 5 runs per program per language; the *best* (minimum) wall-clock
-    time is reported.  Best-of-N is the standard for AOT-compiled
-    languages where a warm disk cache is the norm; it also avoids the
-    JIT-warmup penalty that would unfairly penalise Java.
-  - C++ is built with `g++ -O3 -march=native` (no debug symbols).
-  - Java is JDK 17 or newer, default JIT, no `-Xint`/`-Xcomp` override.
-  - Python is CPython 3.12 or newer (no PyPy, no `-O`).
-  - Vayu native is built via `vayuc --native-out` — once, before the
-    timing loop.  Vayu VM and tree-walk are invoked through `vayuc`
-    each run, so they include the frontend cost.
-  - GCC optimisation level for Vayu native is the compiler's default
-    (`--opt 2`).  Pass `--opt 3` and rebuild to compare.
+- 5 runs are used for the default measurements.
+- The best wall-clock time is reported.
+- C++ uses `g++ -O3 -march=native`.
+- Java uses the default JIT on JDK 17+.
+- Python uses CPython 3.12+.
+- Vayu native is compiled before the timed native execution loop.
+- Vayu optimization is controlled by `--opt`; the current runner uses the compiler default.
 
-## Reading the table
+The suite is intended for reproducible comparisons on the same machine, not as a universal language ranking.
 
-`vayu-native` is the number that matters for comparing Vayu-the-compiler
-against C++/Java/Python.  `vayu-vm` and `vayu-tree` are there to show
-the interpreter-vs-AOT gap on identical source — that's Vayu's three-tier
-story.
+## Adding a benchmark
 
-Tree-walk is intentionally absent from `fib` in the default runner
-because it takes several minutes at fib(28).  Pass `-IncludeSlow` to add
-it.
+Add matching source files to:
 
-## Adding a program
+    benchmarks/vayu/
+    benchmarks/cpp/
+    benchmarks/java/
+    benchmarks/python/
 
-Drop `name.vyu`, `name.cpp`, `Name.java`, and `name.py` in the four
-folders, then add `name` to the `$programs` array in `run.ps1`.  Keep
-output identical across languages — the runner does not compare
-outputs, but a mismatch means you're benchmarking different work.
+Then add the program name to the `$programs` array in `run.ps1`.
 
-## What this is not
+Keep the work and output equivalent across languages. The runner measures time but does not prove semantic equivalence.
 
-It is not a language shootout.  The programs are short and self-
-contained.  They measure specific things (arithmetic throughput,
-call overhead, process launch) and their absolute numbers are shaped
-by the machine you run them on.  What matters is the ratio between
-languages on the same machine, averaged over a few runs.
+## Backend note
+
+The compiler supports `--backend qbe|vcb`, but QBE remains the default native backend. VCB is developed separately. Benchmark results should record the backend used so QBE and VCB measurements are not mixed.
+
+## Roadmap
+
+Phase 25 expands this into the full pre-VCB suite. Phase 28 reuses the same workloads after the VCB backend transition and records the before/after delta.

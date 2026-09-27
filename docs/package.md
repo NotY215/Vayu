@@ -1,18 +1,35 @@
 # Vayu Package System
 
-> Current implementation status: **package ecosystem foundation present; full registry/resolver workflow is still roadmap work.**
+> Current implementation status: **the `nva` tool now contains semver matching, local/remote registry operations, publishing/search, installation/update flows, Git dependencies, and dependency-tree/conflict handling. The ecosystem remains under active development.**
 
 Vayu is intended to have a dedicated package ecosystem for distributing libraries, applications, native integrations, and reusable language components.
 
 ## Package Command
 
-The planned command style is:
+The current `nva` tool supports command families including:
 
 ```text
-nva install <package>
+nva new <name>
+nva init
+nva add <name> [version]
+nva remove <name>
+nva list
+nva build
+nva run
+nva clean
+nva registry [--set <path>]
+nva registry-remote [--set <url>]
+nva publish-local [--registry <path>]
+nva publish [--remote <url>]
+nva install <name> [range] [--registry <path>]
+nva search <query> [--registry <path>]
+nva search-remote <query> [--remote <url>]
+nva add-git <name> <url> [--tag|--branch|--rev <value>]
+nva tree
+nva update
 ```
 
-The package-manager command and implementation details may evolve as the compiler and ecosystem mature.
+The implementation is currently provided by `tools/nva.vyu`; its self-hosted evolution and registry protocol can continue to change as the compiler matures.
 
 ## Planned Capabilities
 
@@ -58,7 +75,7 @@ The package ecosystem remains under development. The current repository already 
 - CPython interoperability
 - compiler and developer tooling through `vls`, `vfmt`, and `vlint`
 
-The complete package registry, dependency resolver, lockfile workflow, publishing pipeline, and reproducible package-build system are **not yet complete**.
+The package tool already contains semantic-version matching, local/remote registry configuration, local/remote publish and search operations, install/update flows, Git dependencies, transitive dependency traversal, conflict detection, and dependency-tree output. The registry ecosystem and reproducible package-build story are still evolving.
 
 For current project status and roadmap updates, visit the [official Vayu website](https://vayu.gt.tc).
 
@@ -71,7 +88,7 @@ Vayu already has source modules, `import`/`from ... import ...`, aliases, built-
 
 The following remain planned rather than complete: project manifests, dependency resolution, lock files, package registry, `nva install`, publishing, package caching, reproducible package builds, and platform-aware native dependency resolution.
 
-The current `nva install <package>` syntax describes the intended package-manager workflow; it should not be interpreted as proof that the full registry/installer is already implemented.
+The `nva install` workflow is implemented in `tools/nva.vyu`; it resolves registry packages and Git dependencies according to the project's current manifest and resolver logic.
 
 
 ## Roadmap Alignment

@@ -692,6 +692,8 @@ The official VS Code extension integrates `.vyu` files with the language server 
 
 VS Code extension: https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu
 
+Visual Studio Community support is provided by `vscommunity-vayu-Extention` as a native VSIX/TextMate package.
+
 Direct VS Code installation URI: `vscode:extension/Fliczo.vayu`
 
 ## Compiler CLI
@@ -848,4 +850,4 @@ Raster matrix, position, normal, UV and lighting values use the native Q16.16/fi
 
 # 27. Current Syntax Status
 
-Phase 21 expands the native callable API surface without adding a new core-language keyword. The frontend syntax remains shared across the interpreter/VM and native compiler, while `gui` and `raster` are native-oriented modules.
+Phase 24 expands the numeric syntax and native callable surface without adding a new core-language keyword. The frontend syntax remains shared across tree-walk, VM, and native compilation. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are now implemented. `gui` and `raster` remain native-oriented modules.
