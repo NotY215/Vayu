@@ -15852,15 +15852,23 @@ int main(int argc, char** argv) {
         if (compileOnly) return 0;
 
         int runRc = std::system(("\"" + exePath + "\"").c_str());
-
         bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
         if (!keep) tryRemove(exePath);
 
-        if (runRc != 0) {
-            lastError_ = "program exited " + std::to_string(runRc);
+        // system() returns the child's exit code.  Propagate it so
+        // `vayuc --native foo.vyu` returns the same value a direct
+        // invocation of the compiled exe would.  A non-zero value
+        // here is the *program's* result, not a compile failure.
+#ifdef _WIN32
+        return runRc;
+#else
+        if (runRc == -1) {
+            lastError_ = "failed to launch compiled executable";
             return 1;
         }
-        return 0;
+        if (WIFEXITED(runRc)) return WEXITSTATUS(runRc);
+        return 128 + WTERMSIG(runRc);
+#endif
     }
 
     void NativeCompiler::dumpIRVcb(const Block& program,
@@ -16003,13 +16011,20 @@ int main(int argc, char** argv) {
         if (compileOnly) return 0;
 
         int runRc = std::system(("\"" + exePath + "\"").c_str());
+
         bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
         if (!keep) tryRemove(exePath);
-        if (runRc != 0) {
-            lastError_ = "program exited " + std::to_string(runRc);
+
+#ifdef _WIN32
+        return runRc;
+#else
+        if (runRc == -1) {
+            lastError_ = "failed to launch compiled executable";
             return 1;
         }
-        return 0;
+        if (WIFEXITED(runRc)) return WEXITSTATUS(runRc);
+        return 128 + WTERMSIG(runRc);
+#endif
     }
 
 } // namespace vayu

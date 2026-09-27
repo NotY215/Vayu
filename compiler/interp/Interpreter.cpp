@@ -2540,6 +2540,13 @@ namespace vayu {
             }
             std::cout << '\n'; return Value();
         }
+        Value bi_exit(const std::vector<Value>& args) {
+            int code = 0;
+            if (!args.empty() && args[0].isInt())
+                code = (int)args[0].asInt();
+            std::exit(code);
+            return Value();   // unreachable
+        }
         Value bi_str(const std::vector<Value>& a) { return a.empty() ? Value("") : Value(a[0].toString()); }
         Value bi_bool(const std::vector<Value>& a) { return a.empty() ? Value(false) : Value(a[0].truthy()); }
         Value bi_int(const std::vector<Value>& a) {
@@ -3387,6 +3394,7 @@ namespace vayu {
             globals_->define(name, Value(c));
             };
         add("print", bi_print);
+        add("exit", bi_exit);
         add("str", bi_str);
         add("bool", bi_bool);
         add("int", bi_int);

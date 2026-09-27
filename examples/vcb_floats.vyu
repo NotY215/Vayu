@@ -1,0 +1,24 @@
+# vcb_floats.vyu -- exercises floats through the VCB backend.
+#
+# Expected stdout:
+#   3.5
+#   2.5
+#   6.0
+#   2.0
+#   true
+#   false
+#   7.0
+#   3
+#
+# Expected exit code: 0
+
+a: float = 3.5
+b: float = 1.0
+print(a + b)
+print(a - b)
+print(a * 2.0)
+print(a / 1.75)
+print(a < 4.0)
+print(a > 4.0)
+print(float(7))
+print(int(3.9))

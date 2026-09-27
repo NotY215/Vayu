@@ -1,0 +1,47 @@
+# vcb_flow.vyu -- exercises control flow through the VCB backend.
+# Expected stdout:
+#   1
+#   -1
+#   0
+#   55
+#   6
+#   12
+# Expected exit code: 0
+
+def classify(n: int) -> int:
+    if n > 0:
+        print(1)
+        return 1
+    elif n < 0:
+        print(-1)
+        return 0 - 1
+    else:
+        print(0)
+        return 0
+
+classify(5)
+classify(0 - 5)
+classify(0)
+
+i: int = 1
+acc: int = 0
+while i <= 10:
+    acc = acc + i
+    i = i + 1
+print(acc)
+
+j: int = 0
+s: int = 0
+for j in range(1, 4):
+    s = s + j
+print(s)
+
+k: int = 0
+t: int = 0
+for k in range(1, 100):
+    if k > 5:
+        break
+    if k == 3:
+        continue
+    t = t + k
+print(t)

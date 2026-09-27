@@ -1,0 +1,21 @@
+# vcb_strings.vyu -- exercises bool printing and string literals
+# through the VCB backend.
+#
+# Expected stdout:
+#   3 4
+#   7
+#   true
+#   false
+#   hello, world
+#   42
+#
+# Expected exit code: 0
+
+x: int = 3
+y: int = 4
+print(x, y)
+print(x + y)
+print(x < y)
+print(x > y)
+print("hello, world")
+print(x * 14)

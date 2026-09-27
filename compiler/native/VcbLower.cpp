@@ -9,6 +9,13 @@ namespace vayu {
 
     namespace {
 
+        enum class VType : int {
+            Int = 0,
+            Bool = 1,
+            Str = 2,
+            Float = 3,
+        };
+
         class Lower {
         public:
             std::string run(const Block& program) {
@@ -29,15 +36,24 @@ namespace vayu {
         private:
             std::ostringstream                           out_;
             std::unordered_map<std::string, std::string> fnSlots_;
+            std::unordered_map<std::string, VType>       nameTypes_;
+            std::vector<std::string>                     breakStack_;
+            std::vector<std::string>                     continueStack_;
             int  nextTemp_ = 0;
             int  nextLabel_ = 0;
             bool terminated_ = false;
+            VType lastType_ = VType::Int;
 
             std::string fresh() { return "%t" + std::to_string(nextTemp_++); }
+            std::string freshLabel(const std::string& prefix) {
+                return "bb_" + prefix + "_" + std::to_string(nextLabel_++);
+            }
 
             void emit(const std::string& s) {
                 out_ << "  " << s << "\n";
-                terminated_ = (s.rfind("ret", 0) == 0);
+                size_t sp = s.find(' ');
+                std::string op = (sp == std::string::npos) ? s : s.substr(0, sp);
+                terminated_ = (op == "ret" || op == "jmp" || op == "br");
             }
             void emitLabel(const std::string& l) {
                 out_ << l << ":\n";
@@ -45,15 +61,16 @@ namespace vayu {
             }
             void emitRaw(const std::string& s) { out_ << s << "\n"; }
 
-            std::string declareSlot(const std::string& name) {
+            std::string declareSlot(const std::string& name, VType t) {
                 auto it = fnSlots_.find(name);
-                if (it != fnSlots_.end()) return it->second;
+                if (it != fnSlots_.end()) {
+                    nameTypes_[name] = t;
+                    return it->second;
+                }
                 std::string slot = "%v_" + name;
                 fnSlots_[name] = slot;
+                nameTypes_[name] = t;
                 emit("i64 " + slot + " = alloca i64");
-                std::string z = fresh();
-                emit("i64 " + z + " = const.i64 0");
-                emit("store " + z + ", " + slot);
                 return slot;
             }
 
@@ -64,8 +81,12 @@ namespace vayu {
                         "VcbLower: undefined name '" + name + "'");
                 std::string t = fresh();
                 emit("i64 " + t + " = load " + it->second);
+                auto tit = nameTypes_.find(name);
+                lastType_ = (tit != nameTypes_.end()) ? tit->second : VType::Int;
                 return t;
             }
+
+            bool isFloat(VType t) const { return t == VType::Float; }
 
             std::string emitExpr(const Expr* e) {
                 if (!e) throw std::runtime_error("VcbLower: null expression");
@@ -75,17 +96,45 @@ namespace vayu {
                     auto* n = static_cast<const IntLitExpr*>(e);
                     std::string t = fresh();
                     emit("i64 " + t + " = const.i64 " + std::to_string(n->value));
+                    lastType_ = VType::Int;
+                    return t;
+                }
+                case ExprKind::FloatLit: {
+                    auto* n = static_cast<const FloatLitExpr*>(e);
+                    char buf[64];
+                    std::snprintf(buf, sizeof(buf), "%.17g", n->value);
+                    std::string t = fresh();
+                    emit("f64 " + t + " = const.f64 " + buf);
+                    lastType_ = VType::Float;
                     return t;
                 }
                 case ExprKind::BoolLit: {
                     auto* n = static_cast<const BoolLitExpr*>(e);
                     std::string t = fresh();
                     emit("i64 " + t + " = const.i64 " + (n->value ? "1" : "0"));
+                    lastType_ = VType::Bool;
                     return t;
                 }
                 case ExprKind::NoneLit: {
                     std::string t = fresh();
                     emit("i64 " + t + " = const.i64 0");
+                    lastType_ = VType::Int;
+                    return t;
+                }
+                case ExprKind::StringLit: {
+                    auto* n = static_cast<const StringLitExpr*>(e);
+                    std::string esc;
+                    for (char c : n->value) {
+                        if (c == '\\') esc += "\\\\";
+                        else if (c == '"')  esc += "\\\"";
+                        else if (c == '\n') esc += "\\n";
+                        else if (c == '\t') esc += "\\t";
+                        else if (c == '\r') esc += "\\r";
+                        else                esc += c;
+                    }
+                    std::string t = fresh();
+                    emit("i64 " + t + " = const.str \"" + esc + "\"");
+                    lastType_ = VType::Str;
                     return t;
                 }
                 case ExprKind::Grouping:
@@ -100,13 +149,21 @@ namespace vayu {
                 case ExprKind::Unary: {
                     auto* u = static_cast<const UnaryExpr*>(e);
                     std::string v = emitExpr(u->operand.get());
+                    VType operandType = lastType_;
                     switch (u->op) {
                     case UnOp::Pos: return v;
                     case UnOp::Neg: {
+                        if (isFloat(operandType)) {
+                            std::string t = fresh();
+                            emit("f64 " + t + " = fneg " + v);
+                            lastType_ = VType::Float;
+                            return t;
+                        }
                         std::string z = fresh();
                         emit("i64 " + z + " = const.i64 0");
                         std::string t = fresh();
                         emit("i64 " + t + " = sub " + z + ", " + v);
+                        lastType_ = operandType;
                         return t;
                     }
                     case UnOp::Not: {
@@ -114,6 +171,7 @@ namespace vayu {
                         emit("i64 " + z + " = const.i64 0");
                         std::string t = fresh();
                         emit("i64 " + t + " = eq " + v + ", " + z);
+                        lastType_ = VType::Bool;
                         return t;
                     }
                     default:
@@ -126,26 +184,82 @@ namespace vayu {
                 case ExprKind::Binary: {
                     auto* b = static_cast<const BinaryExpr*>(e);
                     std::string l = emitExpr(b->lhs.get());
+                    VType lt = lastType_;
                     std::string r = emitExpr(b->rhs.get());
+                    VType rt = lastType_;
+                    bool floatCtx = isFloat(lt) || isFloat(rt);
+
                     std::string op;
+                    VType resultType = VType::Int;
                     switch (b->op) {
-                    case BinOp::Add:      op = "add"; break;
-                    case BinOp::Sub:      op = "sub"; break;
-                    case BinOp::Mul:      op = "mul"; break;
-                    case BinOp::Div:      op = "div"; break;
-                    case BinOp::FloorDiv: op = "div"; break;
-                    case BinOp::Mod:      op = "mod"; break;
-                    case BinOp::Eq:       op = "eq";  break;
-                    case BinOp::NotEq:    op = "ne";  break;
-                    case BinOp::Lt:       op = "lt";  break;
-                    case BinOp::LtEq:     op = "le";  break;
-                    case BinOp::Gt:       op = "gt";  break;
-                    case BinOp::GtEq:     op = "ge";  break;
-                    case BinOp::BAnd:     op = "and"; break;
-                    case BinOp::BOr:      op = "or";  break;
-                    case BinOp::BXor:     op = "xor"; break;
-                    case BinOp::Shl:      op = "shl"; break;
-                    case BinOp::Shr:      op = "shr"; break;
+                    case BinOp::Add:
+                    case BinOp::Sub:
+                    case BinOp::Mul:
+                    case BinOp::Div:
+                    case BinOp::Mod:
+                    case BinOp::FloorDiv:
+                        if (floatCtx) {
+                            switch (b->op) {
+                            case BinOp::Add: op = "fadd"; break;
+                            case BinOp::Sub: op = "fsub"; break;
+                            case BinOp::Mul: op = "fmul"; break;
+                            case BinOp::Div: op = "fdiv"; break;
+                            default:
+                                throw std::runtime_error(
+                                    "VcbLower: float '%' or '//' not yet "
+                                    "supported at line " +
+                                    std::to_string(e->loc.line));
+                            }
+                            resultType = VType::Float;
+                        }
+                        else {
+                            switch (b->op) {
+                            case BinOp::Add: op = "add"; break;
+                            case BinOp::Sub: op = "sub"; break;
+                            case BinOp::Mul: op = "mul"; break;
+                            case BinOp::Div: op = "div"; break;
+                            case BinOp::Mod: op = "mod"; break;
+                            case BinOp::FloorDiv: op = "div"; break;
+                            default: break;
+                            }
+                            resultType = VType::Int;
+                        }
+                        break;
+                    case BinOp::Eq:
+                    case BinOp::NotEq:
+                    case BinOp::Lt:
+                    case BinOp::LtEq:
+                    case BinOp::Gt:
+                    case BinOp::GtEq:
+                        if (floatCtx) {
+                            switch (b->op) {
+                            case BinOp::Eq:    op = "fcmp_eq"; break;
+                            case BinOp::NotEq: op = "fcmp_ne"; break;
+                            case BinOp::Lt:    op = "fcmp_lt"; break;
+                            case BinOp::LtEq:  op = "fcmp_le"; break;
+                            case BinOp::Gt:    op = "fcmp_gt"; break;
+                            case BinOp::GtEq:  op = "fcmp_ge"; break;
+                            default: break;
+                            }
+                        }
+                        else {
+                            switch (b->op) {
+                            case BinOp::Eq:    op = "eq"; break;
+                            case BinOp::NotEq: op = "ne"; break;
+                            case BinOp::Lt:    op = "lt"; break;
+                            case BinOp::LtEq:  op = "le"; break;
+                            case BinOp::Gt:    op = "gt"; break;
+                            case BinOp::GtEq:  op = "ge"; break;
+                            default: break;
+                            }
+                        }
+                        resultType = VType::Bool;
+                        break;
+                    case BinOp::BAnd:     op = "and"; resultType = VType::Int; break;
+                    case BinOp::BOr:      op = "or";  resultType = VType::Int; break;
+                    case BinOp::BXor:     op = "xor"; resultType = VType::Int; break;
+                    case BinOp::Shl:      op = "shl"; resultType = VType::Int; break;
+                    case BinOp::Shr:      op = "shr"; resultType = VType::Int; break;
                     default:
                         throw std::runtime_error(
                             "VcbLower: binary op '" +
@@ -155,6 +269,7 @@ namespace vayu {
                     }
                     std::string t = fresh();
                     emit("i64 " + t + " = " + op + " " + l + ", " + r);
+                    lastType_ = resultType;
                     return t;
                 }
 
@@ -178,28 +293,73 @@ namespace vayu {
 
             std::string emitCall(const std::string& name, const CallExpr* c) {
                 std::vector<std::string> args;
+                std::vector<VType>       argTypes;
                 for (auto& a : c->args) {
                     if (!a.name.empty())
                         throw std::runtime_error(
                             "VcbLower: keyword arguments not supported");
                     args.push_back(emitExpr(a.value.get()));
+                    argTypes.push_back(lastType_);
                 }
 
                 if (name == "print") {
-                    for (auto& a : args)
-                        emit("call vayu_print_int(" + a + ")");
+                    for (size_t i = 0; i < args.size(); ++i) {
+                        if (i > 0) emit("call vayu_print_space()");
+                        switch (argTypes[i]) {
+                        case VType::Bool:
+                            emit("call vayu_print_bool(" + args[i] + ")");
+                            break;
+                        case VType::Str:
+                            emit("call vayu_print_str(" + args[i] + ")");
+                            break;
+                        case VType::Float:
+                            emit("call vayu_print_float(" + args[i] + ")");
+                            break;
+                        case VType::Int:
+                        default:
+                            emit("call vayu_print_int(" + args[i] + ")");
+                            break;
+                        }
+                    }
                     emit("call vayu_print_ln()");
                     std::string z = fresh();
                     emit("i64 " + z + " = const.i64 0");
+                    lastType_ = VType::Int;
                     return z;
                 }
                 if (name == "exit") {
                     if (args.size() != 1)
-                        throw std::runtime_error("VcbLower: exit() takes one int");
+                        throw std::runtime_error(
+                            "VcbLower: exit() takes one int");
                     emit("call vayu_exit(" + args[0] + ")");
                     std::string z = fresh();
                     emit("i64 " + z + " = const.i64 0");
+                    lastType_ = VType::Int;
                     return z;
+                }
+                if (name == "int") {
+                    if (args.size() != 1)
+                        throw std::runtime_error("VcbLower: int() takes one arg");
+                    if (argTypes[0] == VType::Float) {
+                        std::string t = fresh();
+                        emit("i64 " + t + " = fptosi " + args[0]);
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    lastType_ = VType::Int;
+                    return args[0];
+                }
+                if (name == "float") {
+                    if (args.size() != 1)
+                        throw std::runtime_error("VcbLower: float() takes one arg");
+                    if (argTypes[0] == VType::Float) {
+                        lastType_ = VType::Float;
+                        return args[0];
+                    }
+                    std::string t = fresh();
+                    emit("i64 " + t + " = sitof " + args[0]);
+                    lastType_ = VType::Float;
+                    return t;
                 }
 
                 std::string argstr;
@@ -209,6 +369,7 @@ namespace vayu {
                 }
                 std::string t = fresh();
                 emit("i64 " + t + " = call " + name + "(" + argstr + ")");
+                lastType_ = VType::Int;
                 return t;
             }
 
@@ -221,7 +382,6 @@ namespace vayu {
                     emitExpr(n->expr.get());
                     return;
                 }
-
                 case StmtKind::Return: {
                     auto* n = static_cast<const ReturnStmt*>(s);
                     if (n->value) {
@@ -235,7 +395,6 @@ namespace vayu {
                     }
                     return;
                 }
-
                 case StmtKind::AnnotAssign: {
                     auto* n = static_cast<const AnnotAssignStmt*>(s);
                     if (!n->value)
@@ -243,11 +402,10 @@ namespace vayu {
                             "VcbLower: uninitialized annotation at line " +
                             std::to_string(s->loc.line));
                     std::string v = emitExpr(n->value.get());
-                    std::string slot = declareSlot(n->name);
+                    std::string slot = declareSlot(n->name, lastType_);
                     emit("store " + v + ", " + slot);
                     return;
                 }
-
                 case StmtKind::Assign: {
                     auto* n = static_cast<const AssignStmt*>(s);
                     if (n->target->kind != ExprKind::NameRef)
@@ -257,19 +415,166 @@ namespace vayu {
                     const std::string& nm =
                         static_cast<const NameRefExpr*>(n->target.get())->name;
                     std::string v = emitExpr(n->value.get());
-                    std::string slot = declareSlot(nm);
+                    std::string slot = declareSlot(nm, lastType_);
                     emit("store " + v + ", " + slot);
                     return;
                 }
-
+                case StmtKind::If: {
+                    emitIf(static_cast<const IfStmt*>(s));
+                    return;
+                }
+                case StmtKind::While: {
+                    emitWhile(static_cast<const WhileStmt*>(s));
+                    return;
+                }
+                case StmtKind::For: {
+                    emitFor(static_cast<const ForStmt*>(s));
+                    return;
+                }
+                case StmtKind::Break: {
+                    if (breakStack_.empty())
+                        throw std::runtime_error(
+                            "VcbLower: 'break' outside loop at line " +
+                            std::to_string(s->loc.line));
+                    emit("jmp " + breakStack_.back());
+                    return;
+                }
+                case StmtKind::Continue: {
+                    if (continueStack_.empty())
+                        throw std::runtime_error(
+                            "VcbLower: 'continue' outside loop at line " +
+                            std::to_string(s->loc.line));
+                    emit("jmp " + continueStack_.back());
+                    return;
+                }
                 case StmtKind::Pass:
                     return;
-
                 default:
                     throw std::runtime_error(
                         "VcbLower: statement kind not yet supported at line " +
                         std::to_string(s->loc.line));
                 }
+            }
+
+            void emitIf(const IfStmt* n) {
+                std::string merge = freshLabel("if_merge");
+                struct Branch { const Expr* cond; const Block* body; };
+                std::vector<Branch> branches;
+                branches.push_back({ n->cond.get(), &n->thenBody });
+                for (auto& ec : n->elifs)
+                    branches.push_back({ ec.cond.get(), &ec.body });
+                const Block* elseB = n->elseBody ? &*n->elseBody : nullptr;
+
+                for (size_t i = 0; i < branches.size(); ++i) {
+                    bool isLast = (i + 1 == branches.size());
+                    std::string thenL = freshLabel("if_then");
+                    std::string nextL = (!isLast || elseB)
+                        ? freshLabel("if_next") : merge;
+                    std::string condReg = emitExpr(branches[i].cond);
+                    emit("br " + condReg + ", " + thenL + ", " + nextL);
+                    emitLabel(thenL);
+                    emitBlock(*branches[i].body);
+                    if (!terminated_) emit("jmp " + merge);
+                    if (nextL != merge) emitLabel(nextL);
+                }
+                if (elseB) {
+                    emitBlock(*elseB);
+                    if (!terminated_) emit("jmp " + merge);
+                }
+                emitLabel(merge);
+            }
+
+            void emitWhile(const WhileStmt* n) {
+                std::string topL = freshLabel("while_top");
+                std::string bodyL = freshLabel("while_body");
+                std::string exitL = freshLabel("while_exit");
+                emit("jmp " + topL);
+                emitLabel(topL);
+                std::string cond = emitExpr(n->cond.get());
+                emit("br " + cond + ", " + bodyL + ", " + exitL);
+                emitLabel(bodyL);
+                breakStack_.push_back(exitL);
+                continueStack_.push_back(topL);
+                emitBlock(n->body);
+                continueStack_.pop_back();
+                breakStack_.pop_back();
+                if (!terminated_) emit("jmp " + topL);
+                emitLabel(exitL);
+            }
+
+            void emitFor(const ForStmt* n) {
+                if (n->iterable->kind != ExprKind::Call)
+                    throw std::runtime_error(
+                        "VcbLower: `for` requires `range(...)` at line " +
+                        std::to_string(n->loc.line));
+                auto* call = static_cast<const CallExpr*>(n->iterable.get());
+                if (call->callee->kind != ExprKind::NameRef ||
+                    static_cast<const NameRefExpr*>(call->callee.get())->name
+                    != "range")
+                    throw std::runtime_error(
+                        "VcbLower: `for` requires `range(...)` at line " +
+                        std::to_string(n->loc.line));
+                if (call->args.empty() || call->args.size() > 3)
+                    throw std::runtime_error(
+                        "VcbLower: range() takes 1-3 arguments at line " +
+                        std::to_string(n->loc.line));
+
+                std::vector<std::string> argVals;
+                for (auto& a : call->args) {
+                    if (!a.name.empty())
+                        throw std::runtime_error(
+                            "VcbLower: keyword args to range() not supported");
+                    argVals.push_back(emitExpr(a.value.get()));
+                }
+                std::string startReg, stopReg;
+                if (argVals.size() == 1) {
+                    std::string z = fresh();
+                    emit("i64 " + z + " = const.i64 0");
+                    startReg = z;
+                    stopReg = argVals[0];
+                }
+                else {
+                    startReg = argVals[0];
+                    stopReg = argVals[1];
+                    if (argVals.size() == 3)
+                        throw std::runtime_error(
+                            "VcbLower: range() with 3 args not yet supported "
+                            "at line " + std::to_string(n->loc.line));
+                }
+
+                std::string slot = declareSlot(n->targetName, VType::Int);
+                emit("store " + startReg + ", " + slot);
+
+                std::string topL = freshLabel("for_top");
+                std::string bodyL = freshLabel("for_body");
+                std::string stepL = freshLabel("for_step");
+                std::string exitL = freshLabel("for_exit");
+
+                emitLabel(topL);
+                std::string iCur = fresh();
+                emit("i64 " + iCur + " = load " + slot);
+                std::string cmp = fresh();
+                emit("i64 " + cmp + " = lt " + iCur + ", " + stopReg);
+                emit("br " + cmp + ", " + bodyL + ", " + exitL);
+
+                emitLabel(bodyL);
+                breakStack_.push_back(exitL);
+                continueStack_.push_back(stepL);
+                emitBlock(n->body);
+                continueStack_.pop_back();
+                breakStack_.pop_back();
+                if (!terminated_) emit("jmp " + stepL);
+
+                emitLabel(stepL);
+                std::string iCur2 = fresh();
+                emit("i64 " + iCur2 + " = load " + slot);
+                std::string one = fresh();
+                emit("i64 " + one + " = const.i64 1");
+                std::string iNxt = fresh();
+                emit("i64 " + iNxt + " = add " + iCur2 + ", " + one);
+                emit("store " + iNxt + ", " + slot);
+                emit("jmp " + topL);
+                emitLabel(exitL);
             }
 
             void emitBlock(const Block& b) {
@@ -281,9 +586,11 @@ namespace vayu {
 
             void emitFn(const DefStmt* d) {
                 fnSlots_.clear();
-                nextTemp_ = 0;
-                nextLabel_ = 0;
-                terminated_ = false;
+                nameTypes_.clear();
+                breakStack_.clear();
+                continueStack_.clear();
+                nextTemp_ = 0; nextLabel_ = 0;
+                terminated_ = false; lastType_ = VType::Int;
 
                 std::ostringstream hdr;
                 hdr << "func " << d->name << "(";
@@ -296,36 +603,34 @@ namespace vayu {
                 emitLabel("entry");
 
                 for (size_t i = 0; i < d->params.size(); ++i) {
-                    std::string slot = declareSlot(d->params[i].name);
+                    // Types of parameters are not tracked in 2d.4; assume Int.
+                    std::string slot = declareSlot(d->params[i].name, VType::Int);
                     emit("store %p" + std::to_string(i) + ", " + slot);
                 }
-
                 emitBlock(d->body);
-
                 if (!terminated_) {
                     std::string z = fresh();
                     emit("i64 " + z + " = const.i64 0");
                     emit("ret " + z);
                 }
-
                 emitRaw("}\n");
             }
 
             void emitMain(const Block& program) {
                 fnSlots_.clear();
-                nextTemp_ = 0;
-                nextLabel_ = 0;
-                terminated_ = false;
+                nameTypes_.clear();
+                breakStack_.clear();
+                continueStack_.clear();
+                nextTemp_ = 0; nextLabel_ = 0;
+                terminated_ = false; lastType_ = VType::Int;
 
                 emitRaw("func main() -> i64 {");
                 emitLabel("entry");
-
                 for (auto& s : program.stmts) {
                     if (s->kind == StmtKind::Def) continue;
                     emitStmt(s.get());
                     if (terminated_) break;
                 }
-
                 if (!terminated_) {
                     std::string z = fresh();
                     emit("i64 " + z + " = const.i64 0");
