@@ -14,6 +14,8 @@ namespace vayu {
             Bool = 1,
             Str = 2,
             Float = 3,
+            List = 4,
+            Map = 5,
         };
 
         class Lower {
@@ -88,6 +90,8 @@ namespace vayu {
 
             bool isFloat(VType t) const { return t == VType::Float; }
 
+            // -------- expressions ----------------------------------------
+
             std::string emitExpr(const Expr* e) {
                 if (!e) throw std::runtime_error("VcbLower: null expression");
                 switch (e->kind) {
@@ -120,6 +124,29 @@ namespace vayu {
                     emit("i64 " + t + " = const.i64 0");
                     lastType_ = VType::Int;
                     return t;
+                }
+                case ExprKind::ListLit: {
+                    auto* n = static_cast<const ListLitExpr*>(e);
+                    std::string lst = fresh();
+                    emit("i64 " + lst + " = call vayu_list_new()");
+                    for (auto& el : n->elements) {
+                        std::string v = emitExpr(el.get());
+                        emit("call vayu_list_push(" + lst + ", " + v + ")");
+                    }
+                    lastType_ = VType::List;
+                    return lst;
+                }
+                case ExprKind::MapLit: {
+                    auto* n = static_cast<const MapLitExpr*>(e);
+                    std::string m = fresh();
+                    emit("i64 " + m + " = call vayu_map_new()");
+                    for (auto& en : n->entries) {
+                        std::string k = emitExpr(en.key.get());
+                        std::string v = emitExpr(en.value.get());
+                        emit("call vayu_map_put(" + m + ", " + k + ", " + v + ")");
+                    }
+                    lastType_ = VType::Map;
+                    return m;
                 }
                 case ExprKind::StringLit: {
                     auto* n = static_cast<const StringLitExpr*>(e);
@@ -183,6 +210,26 @@ namespace vayu {
 
                 case ExprKind::Binary: {
                     auto* b = static_cast<const BinaryExpr*>(e);
+
+                    // `in` is asymmetric: LHS is a scalar, RHS is a
+                    // collection.  Handle it before the general switch.
+                    if (b->op == BinOp::In) {
+                        std::string l = emitExpr(b->lhs.get());
+                        VType lt = lastType_;
+                        std::string r = emitExpr(b->rhs.get());
+                        VType rt = lastType_;
+                        if (rt == VType::Map && lt == VType::Str) {
+                            std::string t = fresh();
+                            emit("i64 " + t + " = call vayu_map_has(" + r +
+                                ", " + l + ")");
+                            lastType_ = VType::Bool;
+                            return t;
+                        }
+                        throw std::runtime_error(
+                            "VcbLower: 'in' only supports map<str, _> on the "
+                            "right, at line " + std::to_string(e->loc.line));
+                    }
+
                     std::string l = emitExpr(b->lhs.get());
                     VType lt = lastType_;
                     std::string r = emitExpr(b->rhs.get());
@@ -214,11 +261,11 @@ namespace vayu {
                         }
                         else {
                             switch (b->op) {
-                            case BinOp::Add: op = "add"; break;
-                            case BinOp::Sub: op = "sub"; break;
-                            case BinOp::Mul: op = "mul"; break;
-                            case BinOp::Div: op = "div"; break;
-                            case BinOp::Mod: op = "mod"; break;
+                            case BinOp::Add:      op = "add"; break;
+                            case BinOp::Sub:      op = "sub"; break;
+                            case BinOp::Mul:      op = "mul"; break;
+                            case BinOp::Div:      op = "div"; break;
+                            case BinOp::Mod:      op = "mod"; break;
                             case BinOp::FloorDiv: op = "div"; break;
                             default: break;
                             }
@@ -275,13 +322,43 @@ namespace vayu {
 
                 case ExprKind::Call: {
                     auto* c = static_cast<const CallExpr*>(e);
-                    if (c->callee->kind != ExprKind::NameRef)
-                        throw std::runtime_error(
-                            "VcbLower: only NameRef callees supported at line " +
-                            std::to_string(e->loc.line));
-                    const std::string& fn =
-                        static_cast<const NameRefExpr*>(c->callee.get())->name;
-                    return emitCall(fn, c);
+                    if (c->callee->kind == ExprKind::NameRef) {
+                        const std::string& fn =
+                            static_cast<const NameRefExpr*>(
+                                c->callee.get())->name;
+                        return emitCall(fn, c);
+                    }
+                    if (c->callee->kind == ExprKind::Attr) {
+                        auto* attr =
+                            static_cast<const AttrExpr*>(c->callee.get());
+                        return emitMethodCall(attr, c);
+                    }
+                    throw std::runtime_error(
+                        "VcbLower: unsupported callee at line " +
+                        std::to_string(e->loc.line));
+                }
+
+                case ExprKind::Index: {
+                    auto* ix = static_cast<const IndexExpr*>(e);
+                    std::string tgt = emitExpr(ix->target.get());
+                    VType tgtType = lastType_;
+                    std::string idx = emitExpr(ix->index.get());
+                    std::string t = fresh();
+                    if (tgtType == VType::List) {
+                        emit("i64 " + t + " = call vayu_list_get(" + tgt +
+                            ", " + idx + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (tgtType == VType::Map) {
+                        emit("i64 " + t + " = call vayu_map_get(" + tgt +
+                            ", " + idx + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    throw std::runtime_error(
+                        "VcbLower: index on non-collection at line " +
+                        std::to_string(e->loc.line));
                 }
 
                 default:
@@ -290,6 +367,8 @@ namespace vayu {
                         std::to_string(e->loc.line));
                 }
             }
+
+            // -------- calls: NameRef callee -------------------------------
 
             std::string emitCall(const std::string& name, const CallExpr* c) {
                 std::vector<std::string> args;
@@ -315,6 +394,12 @@ namespace vayu {
                         case VType::Float:
                             emit("call vayu_print_float(" + args[i] + ")");
                             break;
+                        case VType::List:
+                            emit("call vayu_print_list(" + args[i] + ")");
+                            break;
+                        case VType::Map:
+                            emit("call vayu_print_map(" + args[i] + ")");
+                            break;
                         case VType::Int:
                         default:
                             emit("call vayu_print_int(" + args[i] + ")");
@@ -336,6 +421,27 @@ namespace vayu {
                     emit("i64 " + z + " = const.i64 0");
                     lastType_ = VType::Int;
                     return z;
+                }
+                if (name == "len") {
+                    if (args.size() != 1)
+                        throw std::runtime_error("VcbLower: len() takes one arg");
+                    std::string t = fresh();
+                    switch (argTypes[0]) {
+                    case VType::List:
+                        emit("i64 " + t + " = call vayu_list_len(" +
+                            args[0] + ")");
+                        break;
+                    case VType::Map:
+                        emit("i64 " + t + " = call vayu_map_len(" +
+                            args[0] + ")");
+                        break;
+                    default:
+                        throw std::runtime_error(
+                            "VcbLower: len() on non-collection at line " +
+                            std::to_string(c->loc.line));
+                    }
+                    lastType_ = VType::Int;
+                    return t;
                 }
                 if (name == "int") {
                     if (args.size() != 1)
@@ -372,6 +478,90 @@ namespace vayu {
                 lastType_ = VType::Int;
                 return t;
             }
+
+            // -------- calls: Attr callee (list / map methods) -------------
+
+            std::string emitMethodCall(const AttrExpr* attr, const CallExpr* c) {
+                std::string recv = emitExpr(attr->target.get());
+                VType recvType = lastType_;
+                const std::string& m = attr->name;
+
+                if (recvType == VType::List) {
+                    if (m == "append") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: list.append takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        emit("call vayu_list_push(" + recv + ", " + v + ")");
+                        std::string z = fresh();
+                        emit("i64 " + z + " = const.i64 0");
+                        lastType_ = VType::Int;
+                        return z;
+                    }
+                    if (m == "len") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: list.len takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_list_len(" + recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                }
+
+                if (recvType == VType::Map) {
+                    if (m == "put" || m == "set") {
+                        if (c->args.size() != 2)
+                            throw std::runtime_error(
+                                "VcbLower: map.put takes 2 arguments");
+                        std::string k = emitExpr(c->args[0].value.get());
+                        std::string v = emitExpr(c->args[1].value.get());
+                        emit("call vayu_map_put(" + recv + ", " + k + ", " +
+                            v + ")");
+                        std::string z = fresh();
+                        emit("i64 " + z + " = const.i64 0");
+                        lastType_ = VType::Int;
+                        return z;
+                    }
+                    if (m == "get") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: map.get takes 1 argument");
+                        std::string k = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_map_get(" + recv +
+                            ", " + k + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "has" || m == "contains") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: map.has takes 1 argument");
+                        std::string k = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_map_has(" + recv +
+                            ", " + k + ")");
+                        lastType_ = VType::Bool;
+                        return t;
+                    }
+                    if (m == "len") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: map.len takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_map_len(" + recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                }
+
+                throw std::runtime_error(
+                    "VcbLower: unsupported method '" + m +
+                    "' at line " + std::to_string(c->loc.line));
+            }
+
+            // -------- statements -----------------------------------------
 
             void emitStmt(const Stmt* s) {
                 if (!s) return;
@@ -603,7 +793,6 @@ namespace vayu {
                 emitLabel("entry");
 
                 for (size_t i = 0; i < d->params.size(); ++i) {
-                    // Types of parameters are not tracked in 2d.4; assume Int.
                     std::string slot = declareSlot(d->params[i].name, VType::Int);
                     emit("store %p" + std::to_string(i) + ", " + slot);
                 }

@@ -15719,7 +15719,10 @@ int main(int argc, char** argv) {
 
     void NativeCompiler::dumpIR(const Block& program, const std::string& sourceDir) {
         lastError_.clear();
-        if (backend_ == NativeBackend::Vcb) {
+        NativeBackend eff = effectiveBackend();
+        std::fprintf(stderr, "native: backend=%s\n",
+            eff == NativeBackend::Vcb ? "vcb" : "qbe");
+        if (eff == NativeBackend::Vcb) {
             dumpIRVcb(program, sourceDir);
             return;
         }
@@ -15734,7 +15737,10 @@ int main(int argc, char** argv) {
         const std::string& sourceDir) {
         lastError_.clear();
 
-        if (backend_ == NativeBackend::Vcb)
+        NativeBackend eff = effectiveBackend();
+        std::fprintf(stderr, "native: backend=%s\n",
+            eff == NativeBackend::Vcb ? "vcb" : "qbe");
+        if (eff == NativeBackend::Vcb)
             return compileAndRunVcb(program, sourceDir);
 
         std::string il;
@@ -15882,6 +15888,13 @@ int main(int argc, char** argv) {
             lastError_ = e.what();
             std::fprintf(stderr, "vcb-lower: %s\n", e.what());
         }
+    }
+
+    NativeBackend NativeCompiler::effectiveBackend() const {
+        if (backend_ != NativeBackend::Auto) return backend_;
+        return resolveVcbPath().empty()
+            ? NativeBackend::Qbe
+            : NativeBackend::Vcb;
     }
 
     std::string NativeCompiler::resolveVcbPath() const {

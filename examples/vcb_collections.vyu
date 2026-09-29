@@ -1,0 +1,34 @@
+# vcb_collections.vyu -- exercises lists and maps through VCB.
+#
+# Expected stdout:
+#   [10, 20, 30]
+#   [10, 20, 30, 40]
+#   3
+#   10
+#   20
+#   30
+#   4
+#   {"alice": 30, "bob": 25}
+#   2
+#   30
+#   true
+#   false
+#
+# Expected exit code: 0
+
+xs: list<int> = [10, 20, 30]
+print(xs)
+xs.append(40)
+print(xs)
+print(len(xs))
+print(xs[0])
+print(xs[1])
+print(xs[2])
+print(len(xs))
+
+ages: map<str, int> = {"alice": 30, "bob": 25}
+print(ages)
+print(len(ages))
+print(ages["alice"])
+print("alice" in ages)
+print("nobody" in ages)

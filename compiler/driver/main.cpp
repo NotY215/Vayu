@@ -52,7 +52,7 @@ static void usage() {
         "  --dump-ir            print the QBE IL\n"
         "\n"
         "Flags:\n"
-        "  --backend <qbe|vcb>  native backend (default qbe)\n"
+        "  --backend <auto|qbe|vcb>  native backend (default auto)\n"
         "  --opt <0-3>          gcc optimization level (default 2)\n"
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
     bool useOpt = true;
     int  benchRuns = 0;
     std::string nativeOutPath;
-    vayu::NativeBackend g_backend = vayu::NativeBackend::Qbe;
+    vayu::NativeBackend g_backend = vayu::NativeBackend::Auto;
 
     for (int i = 2; i < argc; ++i) {
         const char* a = argv[i];
@@ -160,12 +160,14 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "vayuc: --backend requires qbe or vcb\n");
+                std::fprintf(stderr,
+                    "vayuc: --backend requires auto, qbe or vcb\n");
                 return 1;
             }
             std::string b = argv[++i];
-            if (b == "vcb")      g_backend = vayu::NativeBackend::Vcb;
-            else if (b == "qbe") g_backend = vayu::NativeBackend::Qbe;
+            if (b == "vcb")  g_backend = vayu::NativeBackend::Vcb;
+            else if (b == "qbe")  g_backend = vayu::NativeBackend::Qbe;
+            else if (b == "auto") g_backend = vayu::NativeBackend::Auto;
             else {
                 std::fprintf(stderr, "vayuc: unknown backend '%s'\n", b.c_str());
                 return 1;

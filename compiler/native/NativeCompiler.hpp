@@ -4,7 +4,9 @@
 
 namespace vayu {
 
-    enum class NativeBackend { Qbe, Vcb };
+    // Auto: pick VCB when tools\vcb.exe is resolvable from cwd, else
+    // fall back to QBE.  Qbe and Vcb force the specific backend.
+    enum class NativeBackend { Auto, Qbe, Vcb };
 
     class NativeCompiler {
     public:
@@ -17,6 +19,7 @@ namespace vayu {
         void setOptLevel(int n) { if (n >= 0 && n <= 3) optLevel_ = n; }
         void setBackend(NativeBackend b) { backend_ = b; }
         NativeBackend backend() const { return backend_; }
+        NativeBackend effectiveBackend() const;
 
         bool writeRuntimeC(const std::string& path) const;
 
@@ -34,14 +37,12 @@ namespace vayu {
         std::string   vcbPath_;
         std::string   outputExe_;
         int           optLevel_ = 2;
-        NativeBackend backend_ = NativeBackend::Qbe;
+        NativeBackend backend_ = NativeBackend::Auto;
 
         std::string buildQBE(const Block& program, const std::string& sourceDir);
 
-        // Resolve vcb.exe from the filesystem.  Prefers the relative
-        // path tools\vcb.exe (or tools/vcb), walking up a few levels
-        // if the current directory is not the project root.  Returns
-        // an empty string when no candidate exists.
+        // Returns the resolved relative or absolute path to vcb.exe,
+        // or empty if none is found.
         std::string resolveVcbPath() const;
 
         int  compileAndRunVcb(const Block& program, const std::string& sourceDir);
