@@ -57,7 +57,7 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
-Vayu has completed the GUI and graphics foundation through Phase 21. The Phase 22 package-ecosystem direction is now a completed development phase. The current direction is the VCB-backed native toolchain, with Phase 27 Part 2 focused on Linux runtime support. Phase 25 benchmarking remains intentionally skipped until the VCB transition is sufficiently complete.
+Vayu has completed the GUI and graphics foundation through Phase 21. The Phase 22 package-ecosystem direction is now a completed development phase. The current direction is the VCB-backed native toolchain, with Phase 27.4 focuses on PE correctness while the Phase 27 Linux/ELF work remains part of the same combined phase. Phase 25 benchmarking remains intentionally skipped until the VCB transition is sufficiently complete.
 
 The package ecosystem remains a separate concern from the native graphics APIs: `gui` and `raster` are compiler/runtime capabilities, not package-registry features.
 
