@@ -882,7 +882,7 @@ C++ bootstrap can eventually be retired
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
 | **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
 | **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
-| **27 Part 2** | **This drop** — Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
+| **27 Part 2** | **This drop** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
 | **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
