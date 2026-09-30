@@ -52,8 +52,6 @@ static void usage() {
         "  --dump-ir            print the QBE IL\n"
         "\n"
         "Flags:\n"
-        "  --backend <auto|qbe|vcb>  native backend (default auto)\n"
-        "  --opt <0-3>          gcc optimization level (default 2)\n"
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
         "  --bench [N]          run the program N times (default 5)\n"
@@ -106,33 +104,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Pre-scan for --opt <n>.  Removed from the argument list so the rest of
-    // main can keep treating argv[1] as the input file regardless of where
-    // --opt appeared.
-    int g_optLevel = 2;
-    std::vector<char*> nargv;
-    nargv.push_back(argv[0]);
-    for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--opt") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "vayuc: --opt requires a level (0-3)\n");
-                return 1;
-            }
-            char* end = nullptr;
-            long v = std::strtol(argv[i + 1], &end, 10);
-            if (!end || *end != '\0' || v < 0 || v > 3) {
-                std::fprintf(stderr, "vayuc: --opt level must be 0, 1, 2, or 3\n");
-                return 1;
-            }
-            g_optLevel = (int)v;
-            ++i;
-            continue;
-        }
-        nargv.push_back(argv[i]);
-    }
-    argc = (int)nargv.size();
-    argv = nargv.data();
-
     if (argc < 2) { usage(); return 1; }
 
     std::string file = argv[1];
@@ -144,7 +115,6 @@ int main(int argc, char** argv) {
     bool useOpt = true;
     int  benchRuns = 0;
     std::string nativeOutPath;
-    vayu::NativeBackend g_backend = vayu::NativeBackend::Auto;
 
     for (int i = 2; i < argc; ++i) {
         const char* a = argv[i];
@@ -159,17 +129,18 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
+            // Accepted for backwards compatibility.  The only backend
+            // is VCB, so any value other than "vcb" or "auto" errors.
             if (i + 1 >= argc) {
                 std::fprintf(stderr,
-                    "vayuc: --backend requires auto, qbe or vcb\n");
+                    "vayuc: --backend requires an argument\n");
                 return 1;
             }
             std::string b = argv[++i];
-            if (b == "vcb")  g_backend = vayu::NativeBackend::Vcb;
-            else if (b == "qbe")  g_backend = vayu::NativeBackend::Qbe;
-            else if (b == "auto") g_backend = vayu::NativeBackend::Auto;
-            else {
-                std::fprintf(stderr, "vayuc: unknown backend '%s'\n", b.c_str());
+            if (b != "vcb" && b != "auto") {
+                std::fprintf(stderr,
+                    "vayuc: backend '%s' no longer exists; "
+                    "VCB is the only native backend\n", b.c_str());
                 return 1;
             }
         }
@@ -271,8 +242,6 @@ int main(int argc, char** argv) {
     // ---------- dump-ir ----------
     if (mode == Mode::DumpIR) {
         vayu::NativeCompiler nc;
-        nc.setBackend(g_backend);
-        nc.setOptLevel(g_optLevel);
         nc.dumpIR(program, srcDir);
         return nc.lastError().empty() ? 0 : 1;
     }
@@ -281,8 +250,6 @@ int main(int argc, char** argv) {
     if (mode == Mode::Native) {
         if (!nativeOutPath.empty()) {
             vayu::NativeCompiler nc;
-            nc.setBackend(g_backend);
-            nc.setOptLevel(g_optLevel);
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
             if (rc != 0) {
@@ -295,8 +262,6 @@ int main(int argc, char** argv) {
         if (benchRuns > 0) {
             runBenchmark("native (includes compile)", benchRuns, [&]() {
                 vayu::NativeCompiler nc;
-                nc.setBackend(g_backend);
-                nc.setOptLevel(g_optLevel);
                 if (nc.compileAndRun(program, srcDir) != 0) {
                     std::fprintf(stderr, "native: %s\n",
                         nc.lastError().c_str());
@@ -307,8 +272,6 @@ int main(int argc, char** argv) {
         }
 
         vayu::NativeCompiler nc;
-        nc.setBackend(g_backend);
-        nc.setOptLevel(g_optLevel);
         return nc.compileAndRun(program, srcDir);
     }
 

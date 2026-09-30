@@ -10,3 +10,4 @@ tools/Lib/
 benchmarks/java/*.class
 _vayu_tmp
 !tools/*.exe
+code.txt

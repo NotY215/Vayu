@@ -486,6 +486,40 @@ namespace vayu {
                 VType recvType = lastType_;
                 const std::string& m = attr->name;
 
+                if (recvType == VType::Str) {
+                    if (m == "len") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: str.len takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_len(" + recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "upper" || m == "lower") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: str." + m + " takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_" + m + "(" +
+                            recv + ")");
+                        lastType_ = VType::Str;
+                        return t;
+                    }
+                    if (m == "starts_with" || m == "ends_with" ||
+                        m == "contains" || m == "find") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: str." + m + " takes 1 argument");
+                        std::string arg = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_" + m + "(" + recv +
+                            ", " + arg + ")");
+                        lastType_ = (m == "find") ? VType::Int : VType::Bool;
+                        return t;
+                    }
+                }
+
                 if (recvType == VType::List) {
                     if (m == "append") {
                         if (c->args.size() != 1)

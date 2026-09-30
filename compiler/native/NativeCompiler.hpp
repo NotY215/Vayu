@@ -4,10 +4,17 @@
 
 namespace vayu {
 
-    // Auto: pick VCB when tools\vcb.exe is resolvable from cwd, else
-    // fall back to QBE.  Qbe and Vcb force the specific backend.
-    enum class NativeBackend { Auto, Qbe, Vcb };
-
+    // Native compiler.  VCB is the only backend.
+    //
+    // The QBE + gcc pipeline that older versions used has been
+    // removed.  The flow is:
+    //
+    //   AST -> VcbLower -> .vcbir text -> vcb.exe -> .exe
+    //
+    // `setVcbPath` overrides the default `tools\vcb.exe`.  The env
+    // var `VAYU_VCB` also overrides it, provided the value contains a
+    // path separator (a bare filename is ignored on purpose — cmd.exe
+    // would search PATH and produce unhelpful errors).
     class NativeCompiler {
     public:
         NativeCompiler();
@@ -16,37 +23,20 @@ namespace vayu {
         void dumpIR(const Block& program, const std::string& sourceDir = "");
 
         void setOutputExe(const std::string& path) { outputExe_ = path; }
-        void setOptLevel(int n) { if (n >= 0 && n <= 3) optLevel_ = n; }
-        void setBackend(NativeBackend b) { backend_ = b; }
-        NativeBackend backend() const { return backend_; }
-        NativeBackend effectiveBackend() const;
+        void setVcbPath(const std::string& p) { vcbPath_ = p; }
 
+        // Kept for CLI compatibility: writes a stub explaining that
+        // the native runtime is embedded in VCB.
         bool writeRuntimeC(const std::string& path) const;
 
         const std::string& lastError() const { return lastError_; }
-        void setQbePath(const std::string& p) { qbePath_ = p; }
-        void setCcPath(const std::string& p) { ccPath_ = p; }
-        void setQbeTarget(const std::string& t) { qbeTarget_ = t; }
-        void setVcbPath(const std::string& p) { vcbPath_ = p; }
 
     private:
-        std::string   lastError_;
-        std::string   qbePath_;
-        std::string   ccPath_;
-        std::string   qbeTarget_;
-        std::string   vcbPath_;
-        std::string   outputExe_;
-        int           optLevel_ = 2;
-        NativeBackend backend_ = NativeBackend::Auto;
+        std::string lastError_;
+        std::string vcbPath_;
+        std::string outputExe_;
 
-        std::string buildQBE(const Block& program, const std::string& sourceDir);
-
-        // Returns the resolved relative or absolute path to vcb.exe,
-        // or empty if none is found.
         std::string resolveVcbPath() const;
-
-        int  compileAndRunVcb(const Block& program, const std::string& sourceDir);
-        void dumpIRVcb(const Block& program, const std::string& sourceDir);
     };
 
 } // namespace vayu

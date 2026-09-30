@@ -1,5 +1,5 @@
-# vcb_strings.vyu -- exercises bool printing and string literals
-# through the VCB backend.
+# vcb_strings.vyu -- exercises bool printing, string literals, and
+# string methods through the VCB backend.
 #
 # Expected stdout:
 #   3 4
@@ -7,6 +7,13 @@
 #   true
 #   false
 #   hello, world
+#   12
+#   HELLO, WORLD
+#   hello, world
+#   true
+#   false
+#   true
+#   7
 #   42
 #
 # Expected exit code: 0
@@ -18,4 +25,11 @@ print(x + y)
 print(x < y)
 print(x > y)
 print("hello, world")
+print("hello, world".len())
+print("hello, world".upper())
+print("HELLO, WORLD".lower())
+print("hello, world".starts_with("hello"))
+print("hello, world".ends_with("world?"))
+print("hello, world".contains("o, w"))
+print("hello, world".find("world"))
 print(x * 14)
