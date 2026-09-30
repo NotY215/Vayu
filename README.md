@@ -536,7 +536,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 26 Part 2 is the current development phase. Phase 25 is intentionally skipped for now; benchmarking will resume after the VCB transition. Phase 26 Part 1 is complete, while Part 2 is implementing native x86-64 code generation and replacing the QBE+GCC path in `vayuc`.**
+**Phase 27 Part 2 is the current development phase. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete, and Phase 27 Part 1 is done. VCB now provides the native backend path for Vayu, including Windows PE output and Linux ELF output. Phase 27 Part 2 is the current drop, adding Linux heap/runtime support for lists, maps, string methods, and collection printing.**
 
 Current implemented areas include:
 
@@ -555,18 +555,18 @@ Current implemented areas include:
 - runtime modules including math, filesystem/OS, regex, threading, networking, crypto, random, time and JSON
 - native floating-point values, mixed int/float arithmetic, comparisons and conversions
 - native `math.*` operations, float lists and float-valued maps
-- selectable QBE/VCB native backend interface, with QBE currently remaining the default
+- VCB-backed native compilation and executable emission
 - native CPython loading and expanded Python value/call interoperability
 
 ### Current Development Direction
 
-**Phase 24 — Native floats**
+**Current development — VCB-backed native toolchain**
 
-The next major backend/runtime milestone is native floating-point support. Vayu's native path is being extended from integer-centric execution to real `float` values, native arithmetic and comparisons, mixed integer/float operations, math-library coverage, float-aware collections, conversions, and migration of tensors away from Q16.16 storage.
+Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, while Linux work is progressing through VCB's ELF target.
 
-**Phase 23 — Single-binary native toolchain — Completed**
+**Phase 27 Part 2 — Linux runtime expansion**
 
-Phase 23 established the VCB backend boundary and the transition plan away from the QBE + GCC backend chain. The current compiler still supports QBE as the default native backend and exposes VCB through `--backend vcb`; VCB remains a separate sister project until it is ready to replace the existing backend path.
+The current VCB drop adds Linux heap allocation through a `brk`-based bump allocator, list and map runtime support, string-method runtime support, and `print_list` / `print_map`. Phase 27 Part 3 is next: Linux `print_float` and consolidation of `Asm` / `FunctionEmitter` into a shared header.
 
 **Phase 18 — Vayu developer tooling**
 
@@ -580,61 +580,16 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 
 | Phase | Scope |
 |---:|---|
-| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed development phases.** |
-| **18** | LSP, formatter, linter, VS Code extension and compiler/runtime tooling. **Completed.** |
-| **19** | Native window, event, canvas and widget layer. **Completed.** |
-| **20** | 2D graphics, canvas drawing, text, transforms and image/UI primitives. **Completed foundation.** |
-| **21** | Software raster and 3D pipeline: framebuffers, depth, matrices, meshes, textures, mipmaps, lighting and post-processing. **Completed.** |
-| **22** | Package ecosystem and continued native/UI performance work. **Completed development phase.** |
-| **23** | **Single-binary native toolchain / VCB direction.** Retire the QBE + GCC backend chain and establish VCB as the separate native backend project. **Completed phase direction.** |
-| **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
+| **1–24** | Core language, runtime, tooling, graphics, package ecosystem, native floats and related compiler/runtime work. **Completed.** |
 | **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
-| **26 Part 2** | **Completed** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and migration of `vayuc` from QBE+GCC to VCB. |
-| **27** | **Working** — ELF writer and Linux target. |
+| **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
+| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
+| **27 Part 2** | **This drop** — Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
+| **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
-
-#### Full map from Phase 24
-
-    24    Native floats
-    25    Benchmarking Round 1              <- pre-VCB data
-    26    Version cut 1                     <- QBE-era Vayu release
-    ---
-    27    VCB (separate project)
-    28    Benchmarking Round 2              <- VCB delta report
-    29    Version cut 2                     <- single-binary Vayu release
-    ---
-    30+   Parking lot (shaders, escape analysis, multi-input ONNX, ...)
-
-> The roadmap describes the intended development sequence. A phase may require additional stabilization or implementation work before it is production-ready.
-
-For benchmark information and website updates, see the **[official Vayu website](https://vayu.gt.tc)**.
-
----
-
-# 🌱 The Goal
-
-Vayu is not trying to simply become:
-
-> "Python but faster."
-
-or:
-
-> "C++ with Python syntax."
-
-The bigger goal is to create a **unified language ecosystem** where developers can move naturally between:
-
-**simple programs → applications → AI → games → systems → native software**
-
-without needing to completely change languages.
-
----
-
-# ❤️ Special Thanks
-
-Vayu is an independent project, but AI tools played an important role during its development.
 
 ## DeepSeek
 
