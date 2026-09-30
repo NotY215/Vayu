@@ -850,4 +850,4 @@ Raster matrix, position, normal, UV and lighting values use the native Q16.16/fi
 
 # 27. Current Syntax Status
 
-The current syntax is shared across the Vayu frontend and its execution paths. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are implemented. Native compilation now lowers through VCB; Phase 27 Part 2 adds VCB runtime support for Linux heap allocation, lists, maps, string methods, and collection printing. `gui` and `raster` remain native-oriented modules.
+The current syntax is shared across the Vayu frontend and its execution paths. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are implemented. Native compilation now lowers through VCB; Phase 27.2 completed VCB runtime support for Linux heap allocation, lists, maps, string methods, and collection printing. Phase 27.4 is now the current PE-correctness work. `gui` and `raster` remain native-oriented modules.
