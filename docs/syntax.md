@@ -666,7 +666,7 @@ Debugging flags also include `--no-check` and `--no-opt`.
 
 The current project contains tree-walking, bytecode/VM, and native compilation paths. C FFI, raw native integration, and the CPython bridge are native-oriented features.
 
-VCB is the companion backend project being developed toward the future native machine-code layer:
+VCB is the companion backend project that now provides the native machine-code and executable-generation layer:
 
 ```text
 Vayu Source
@@ -727,7 +727,7 @@ Current compiler flags also include:
 
 ## Native / Backend Boundary
 
-The current repository contains tree-walking/interpreter, bytecode/VM, and native compilation paths. Native compilation currently uses the existing native backend/toolchain chain, while **VCB** is being developed as the future direct machine-code backend.
+The current repository contains tree-walking/interpreter, bytecode/VM, and native compilation paths. Native compilation now uses **VCB** for direct native code generation and executable emission.
 
 The intended long-term architecture is:
 
@@ -850,4 +850,4 @@ Raster matrix, position, normal, UV and lighting values use the native Q16.16/fi
 
 # 27. Current Syntax Status
 
-Phase 24 expands the numeric syntax and native callable surface without adding a new core-language keyword. The frontend syntax remains shared across tree-walk, VM, and native compilation. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are now implemented. `gui` and `raster` remain native-oriented modules.
+The current syntax is shared across the Vayu frontend and its execution paths. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are implemented. Native compilation now lowers through VCB; Phase 27 Part 2 adds VCB runtime support for Linux heap allocation, lists, maps, string methods, and collection printing. `gui` and `raster` remain native-oriented modules.
