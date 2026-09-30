@@ -27,81 +27,51 @@ The current source tree demonstrates a substantially expanded language/compiler 
 
 The current development history now records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phase 24.0 native floats and 24.1 native math/float collections are implemented; 24.2 is the remaining tensor-storage migration milestone.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete. Phase 25 is skipped for now. VCB has completed Phase 26 Part 1 and Part 2, and Phase 27 Part 1 is done; Phase 27 Part 2 is the current VCB/Vayu integration drop.
 
 ## Roadmap
 
-The roadmap below records the project's planned development phases. A phase may contain work that is implemented incrementally across multiple commits.
+The roadmap below tracks Vayu and the companion VCB backend together.
 
 | Phase | Scope |
 |---:|---|
-| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed development phases.** |
-| **18** | LSP, formatter, linter, VS Code extension and compiler/runtime tooling. **Completed.** |
-| **19** | Native window / event / widget layer and GUI canvas foundation. **Completed.** |
-| **20** | 2D graphics, transforms, text, image/UI primitives and canvas functionality. **Completed foundation.** |
-| **21** | Software raster + 3D pipeline: framebuffers, depth buffers, Q16.16 matrices, meshes, textures, mipmaps, perspective-correct rasterization, lighting and post-processing. **Completed.** |
-| **22** | Package ecosystem and continued runtime/UI performance work: `vayu install`, `vypy install`, public index, dependency resolution, lockfiles, publishing and optimization. **Completed development phase.** |
-| **23** | **Native backend transition:** establish VCB as a separate backend project and add a selectable Vayu `--backend qbe|vcb` boundary. QBE remains the current default. **Completed direction.** |
-| **24** | **Native floats** — float ABI, math/collections, tensor migration. **Completed.** |
-| **25** | **Skipped for now** — benchmarks postponed until after VCB. |
-| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, `vcb dump`. |
-| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and `vayuc` switches from QBE+GCC to VCB. |
-| **27** | ELF writer and Linux target. |
+| **1–24** | Core language, runtime, tooling, graphics, package ecosystem, native floats and related compiler/runtime work. **Completed.** |
+| **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
+| **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
+| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
+| **27 Part 2** | **This drop** — Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
+| **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
 
-### Phase 24 — Native floats
+### Phase 25 — Skipped for now
 
-Phase 24 is now partially implemented. Native floating-point values have landed in the compiler/runtime, followed by native math and float-aware collections. Tensor storage migration remains the final Phase 24 milestone.
+Benchmarking was intentionally postponed until after the VCB transition. The existing control benchmark suite remains available for later comparison, but Phase 25 is not an active development phase.
 
-- **24.0 — Float type + ABI.** **Implemented.** Native `float` values, arithmetic, comparisons, unary negate, mixed integer/float operations, conversions and formatting.
-- **24.1 — Math library + collections.** **Implemented.** Native `math.*`, `list<float>`, `map<str, float>`, and float/int/string conversions.
-- **24.2 — Tensor migration.** **Remaining.** Move `tensor` from Q16.16 to f32/f64 internally, with a temporary compatibility layer before retiring the old representation.
+### Phase 26 — VCB foundation and native backend transition
 
-**Exit criteria:** fixpoint still passes; `examples/native_floats.vyu` compiles and matches tree-walk output; `math.*` outputs are bit-identical to tree-walk on roughly 30 expressions.
+**26 Part 1 is completed:** VCB IR, parser, printer, and `vcb dump`.
 
-**Why before benchmarks:** integer-only benchmark programs would distort comparisons with C++, Java and Python. Floats land first so the benchmark suite represents the workloads developers would actually write.
+**26 Part 2 is completed:** x86-64 code generation, PE + ELF writers, prebuilt runtime, and the Vayu native compiler transition from the old QBE+GCC chain to VCB.
 
-### Phase 25 — Benchmarking (Round 1, pre-VCB)
+### Phase 27 — Linux VCB target
 
-A dedicated root-level `benchmarks/` tree will contain the methodology, runner, four-language programs and generated results. Vayu runs each program through tree-walk, VM and native execution.
+**27 Part 1 — Done:** ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver-created output directories.
 
-**25.0 — Harness + control programs:** `arith`, `fib`, `startup`.
+**27 Part 2 — This drop:** Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`.
 
-**25.1 — Compute-heavy:** `matmul` (512×512 dense), `nbody` (5-body, 1M steps), `mandelbrot` (2000×2000).
+**27 Part 3 — Next:** Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header.
 
-**25.2 — Allocation-heavy:** `string_concat` (100k `+=`), `hashmap` (1M string→int insert/lookup), `json_parse` (10 MB), `sort` (10M ints).
+### Phase 28 — Benchmarking on VCB
 
-Comparison targets: C++ `-O3 -march=native`, Java 17 with `-Xmx4g`, and CPython 3.12. Each program runs 5×; the best wall-clock time and peak RSS are reported. Results include a markdown table, per-program bars and `results/SUMMARY.md`.
+The benchmark suite returns after the VCB native path is sufficiently complete. Results should distinguish Windows PE and Linux ELF targets and record the VCB revision used.
 
-### Phase 26 — Version cut 1
+### Phase 29 — Version cut
 
-First coherent release cut: Linux + macOS toolchain builds, SDL3 replacing Win32 in the GUI/raster direction, VS Community LSP integration, VS Code Marketplace + Open VSX publication, Vayu rewrites of `tools/*.py`, documentation site and release notes. Target version remains a release decision at cut time (`v0.9` or `v1.0`).
+The VCB-era Vayu toolchain is prepared for a release cut once the required native targets, runtime coverage, packaging and validation are complete.
 
-### Phase 27 — VCB (separate project)
-
-VCB is a sister project, not a Vayu phase in the same tree. Its projected work is:
-
-- **27.0 — Object file emitter:** x86-64 PE `.obj` from the Vayu SSA IL boundary.
-- **27.1 — Direct codegen:** x86-64 machine code from the compiler IR/AST path with Vayu-aware optimization, inlining and register allocation.
-- **27.2 — Linker + runtime merge:** produce executables without invoking GCC.
-- **27.3 — ELF + Mach-O:** Linux and macOS object formats.
-- **27.4 — ARM64:** Apple Silicon and ARM Linux, with other targets considered later.
-
-**Exit criteria:** `vayuc file.vyu --native` can produce an `.exe` without invoking `qbe` or `gcc`; fixpoint still passes with VCB; peak fixpoint RSS falls from roughly 15 GB to under 1 GB.
-
-### Phase 28 — Benchmarking (Round 2, post-VCB)
-
-The same benchmark tree, ten-program suite and comparison languages are reused. Only Vayu's native backend changes from QBE + GCC to VCB. `results/SUMMARY_AFTER_VCB.md` records per-program time/memory deltas and highlights regressions.
-
-### Phase 29 — Version cut 2
-
-Ship the VCB-era toolchain as the single-binary release: bundle VCB for Windows/Linux/macOS, remove QBE and GCC dependency references from docs and packaging, publish the benchmark delta table, and target `v1.0`.
-
-### Beyond Phase 29
-
-Known parking-lot items include escape analysis, programmable shaders, DirectML only if needed, GPU-accelerated tensors beyond CUDA, Adam/cross-entropy/softmax additions, and multi-input ONNX for CNNs and transformers.
 
 ### Phase 19–21 — GUI, 2D Graphics and 3D Raster
 
