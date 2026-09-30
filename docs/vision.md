@@ -40,7 +40,7 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
 | **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
 | **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
-| **27 Part 2** | **This drop** — Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
+| **27 Part 2** | **This drop** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
 | **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
@@ -60,7 +60,7 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 **27 Part 1 — Done:** ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver-created output directories.
 
-**27 Part 2 — This drop:** Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`.
+**27 Part 2 — This drop:** Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`.
 
 **27 Part 3 — Next:** Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header.
 
@@ -131,7 +131,7 @@ After self-hosting, the roadmap continues through developer tooling, GUI/window/
 
 **[VCB](https://github.com/NotY215/VCB) is a companion project and planned native backend component of the Vayu compiler ecosystem.**
 
-VCB is designed to provide a clean boundary between Vayu's frontend/IR and machine-code generation. The Vayu compiler currently selects QBE by default, while VCB is selectable and developed as a separate project:
+VCB provides the native backend boundary between Vayu's frontend/IR and machine-code generation. The Vayu compiler now uses VCB for native compilation, while VCB remains a separate companion repository:
 
 ```text
 Vayu Source
