@@ -590,8 +590,8 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **24** | **Native floats** — 24.0 float type + ABI; 24.1 math + collections; 24.2 tensor migration. **Current.** |
 | **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
-| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and migration of `vayuc` from QBE+GCC to VCB. |
-| **27** | ELF writer and Linux target. |
+| **26 Part 2** | **Completed** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and migration of `vayuc` from QBE+GCC to VCB. |
+| **27** | **Working** — ELF writer and Linux target. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
