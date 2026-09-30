@@ -40,7 +40,7 @@ The planned direction includes:
 
 ## Current Status
 
-Vayu now has native C/FFI and CPython interoperability foundations that are directly relevant to AI/ML integration. A complete native tensor/ML ecosystem is still a roadmap area; Phase 24.2 is the planned tensor-storage migration from Q16.16 to f32/f64 with a temporary compatibility layer.
+Vayu has native C/FFI, CPython interoperability, native floating-point support, and a VCB-backed native compiler. A complete native tensor/ML ecosystem remains future work; tensors, autodiff, ONNX, CUDA/GPU execution, and high-level neural-network APIs are not yet complete.
 
 For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
 
@@ -63,9 +63,9 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 
 ## Phase Position
 
-**Phases 1–23 are complete development phases and Phase 24 is current.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
+**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete, Phase 27 Part 1 is done, and Phase 27 Part 2 is the current VCB/Vayu native-runtime drop.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
 
-Phase 24 now prioritizes native floats before serious benchmark work. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
+Phase 25 remains skipped for now; the native backend/runtime work is currently driven by VCB Phase 27. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
 
 
 ## Current Implementation Status
@@ -76,6 +76,6 @@ The current AI/ML implementation is still foundational rather than a complete ML
 
 These graphics capabilities provide useful infrastructure for future scientific and AI/ML visualization, but they are not an implemented tensor/autodiff/ONNX/CUDA stack.
 
-Phase 24.0/24.1 now provide the numerical foundation needed for later AI work: native float values, mixed int/float operations, conversions, `math.*`, `list<float>`, and `map<str, float>`. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
+The completed native-float work provides the numerical foundation needed for later AI work: native float values, mixed int/float operations, conversions, `math.*`, `list<float>`, and `map<str, float>`. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
 
 The current native raster API includes framebuffers, depth buffers, Q16.16 matrices, mesh and texture resources, mipmaps, filtering, perspective-correct rasterization, lighting, render-to-texture and post-processing. These are native graphics APIs rather than AI/ML APIs.
