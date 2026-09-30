@@ -17,7 +17,7 @@ The benchmark suite compares the current Vayu execution paths with C++, Java, an
     fib       naive recursive fib
     startup   empty program / process startup
 
-This is the implemented control suite. The larger compute-heavy and allocation-heavy workloads described in the Phase 25 roadmap are not yet part of this directory.
+This is the implemented control suite. Phase 25 is currently skipped, so the larger benchmark expansion is postponed until after the VCB transition.
 
 ## Running
 
@@ -66,8 +66,8 @@ Keep the work and output equivalent across languages. The runner measures time b
 
 ## Backend note
 
-The compiler supports `--backend qbe|vcb`, but QBE remains the default native backend. VCB is developed separately. Benchmark results should record the backend used so QBE and VCB measurements are not mixed.
+Native benchmarking should use the VCB backend and record the VCB revision and target used. The older QBE + GCC path is historical and should not be mixed with current VCB measurements.
 
 ## Roadmap
 
-Phase 25 expands this into the full pre-VCB suite. Phase 28 reuses the same workloads after the VCB backend transition and records the before/after delta.
+Phase 25 is skipped for now. Phase 28 will resume the benchmark program set after the VCB native path is sufficiently complete and will record target/backend details for each result.
