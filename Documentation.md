@@ -102,7 +102,7 @@ Vayu Source (.vyu)
     Executable
 ```
 
-VCB is developed as a separate backend project. The Vayu compiler already exposes a selectable `--backend qbe|vcb` interface, but QBE remains the default native backend until VCB is ready to replace the existing QBE + GCC path.
+VCB is developed as a separate backend project. The Vayu compiler now uses VCB for the native path; the older QBE + GCC backend chain is historical.
 
 ---
 
@@ -875,23 +875,18 @@ C++ bootstrap can eventually be retired
 
 # 29. Roadmap
 
-| Phase | Direction |
+| Phase | Scope |
 |---:|---|
-| **1–17** | Core language, runtime, native compilation, self-hosting preparation, ownership, FFI and CPython interoperability. **Completed.** |
-| **18** | Developer tooling: LSP, formatter, linter, VS Code extension. **Completed.** |
-| **19–21** | GUI, 2D graphics, software raster and 3D pipeline. **Completed.** |
-| **22** | Package ecosystem and runtime/UI optimization. **Completed development phase.** |
-| **23** | Single-binary native toolchain direction; VCB established as a separate backend project. **Completed phase direction.** |
-| **24** | **Native floats** — float ABI, math/collections, tensor migration. **Current.** |
-| **25** | **Skipped for now** — benchmarking postponed until after VCB. |
-| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, `vcb dump`. |
-| **26 Part 2** | **Working** — x86-64 codegen, PE + ELF writers, prebuilt runtime, and `vayuc` migration from QBE+GCC to VCB. |
-| **27** | ELF writer and Linux target. |
+| **1–24** | Core language, runtime, tooling, graphics, package ecosystem, native floats and related compiler/runtime work. **Completed.** |
+| **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
+| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
+| **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
+| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
+| **27 Part 2** | **This drop** — Linux heap using a `brk)-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
+| **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
-
-Detailed phase specifications are maintained in [docs/vision.md](docs/vision.md).
 
 # 30. Current Status
 
@@ -971,6 +966,4 @@ The compiler driver currently supports tree-walk execution, bytecode VM executio
 
 Native compilation exposes `--backend qbe|vcb`, `--native`, `--native-out <path>`, `--dump-ir`, and `--opt 0-3`. `--emit-runtime <path>` exports the native runtime C source.
 
-The QBE backend is still the default. VCB is a selectable backend boundary and is developed separately in the VCB repository.
-
-Phase 24.0 adds native `float` values and mixed integer/float arithmetic. Phase 24.1 adds the native math module and float-aware collections. Tensor storage migration remains Phase 24.2.
+VCB is now the native backend used by the Vayu native compiler. The backend flow is Vayu frontend/IR → VCB → native output. VCB provides the Windows PE and Linux ELF writers and its embedded runtime components.
