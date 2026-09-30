@@ -183,6 +183,27 @@ The goal is to provide:
 
 ---
 
+## 🔄 Vayu + VCB Data Flow
+
+Vayu owns the language frontend and lowers supported programs into VCBIR. VCB parses VCBIR, generates x86-64 machine code, emits the required runtime, and writes the final PE or ELF executable.
+
+```mermaid
+flowchart LR
+    S[".vyu Source"] --> F["Vayu Frontend"]
+    F --> L["VcbLower"]
+    L --> I["VCBIR"]
+    I --> V["VCB"]
+    V --> C["x86-64 Codegen + Runtime"]
+    C --> P["PE Writer"]
+    C --> E["ELF Writer"]
+    P --> W["Windows PE"]
+    E --> X["Linux ELF"]
+```
+
+**[→ Full Vayu + VCB Data Flow](docs/data-flow.md)**
+
+---
+
 ## 🧩 Modern Type System
 
 Vayu combines:
