@@ -63,7 +63,7 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 
 ## Phase Position
 
-**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete, Phase 27 Part 1 is done, and Phase 27 Part 2 is the current VCB/Vayu native-runtime drop.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
+**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete, Phase 27 Part 1 is done, and Phase 27.4 is the current VCB/Vayu PE-correctness drop.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
 
 Phase 25 remains skipped for now; the native backend/runtime work is currently driven by VCB Phase 27. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
 
