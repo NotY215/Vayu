@@ -70,7 +70,7 @@ Phase 25 remains skipped for now; the native backend/runtime work is currently d
 
 ## Current Implementation Status
 
-The compiler/runtime has progressed through Phase 24.1. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition boundary, Phase 24.0 added native floats, and Phase 24.1 added native math and float-aware collections.
+The compiler/runtime has completed Phases 1–24 and has moved into the VCB-backed native toolchain. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition direction, and Phase 24 completed the native-float and related numerical foundation. Phase 25 is skipped for now; VCB Phase 27 is the current backend/runtime development track.
 
 The current AI/ML implementation is still foundational rather than a complete ML framework. Native C FFI and CPython interoperability exist, while tensors, autodiff, ONNX integration, CUDA/GPU execution, and high-level neural-network APIs remain development work.
 
