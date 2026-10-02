@@ -881,9 +881,19 @@ C++ bootstrap can eventually be retired
 | **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
 | **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
-| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
-| **27 Part 2** | **This drop** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
-| **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
+| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset. |
+| **27 Part 2** | **Done** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support. |
+| **27 Part 3** | **Done** — PE padding heuristic. |
+| **27 Part 4** | **Done** — `DYNAMIC_BASE` disabled, dynamic sections, shadow space in `vayu_exit`. |
+| **27 Part 5+6** | **Done** — Minimal `.reloc` + ASLR re-enabled; `.pdata` / `.xdata`. |
+| **27 Part 7+8** | **Done** — kernel32 heap APIs, Linux `vayu_print_float`. |
+| **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
+| **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
+| **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
+| **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
+| **27 Part 12** | **Done** — Import-table construction moved into `writePe`; runtime emitter `.pdata` entries; `UnwindEntry` extended for runtime functions. |
+| **27 Part 13** | **Current** — Consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`. |
+| **27 Part 14** | **Current** — PE + Linux test matrix covering 11 programs on both targets. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
