@@ -557,7 +557,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 27 Part 2 is the current development phase. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete, and Phase 27 Part 1 is done. VCB now provides the native backend path for Vayu, including Windows PE output and Linux ELF output. Phase 27 Part 2 is the current drop, adding Linux heap/runtime support for lists, maps, string methods, and collection printing.**
+**Phase 27 Parts 1–12 are complete, and Parts 13 and 14 are the current development work. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB now provides the native backend path for Vayu, including Windows PE output and Linux ELF output. Part 13 is consolidating the shared x86-64 emitter, while Part 14 is building the PE + Linux test matrix.**
 
 Current implemented areas include:
 
@@ -585,9 +585,13 @@ Current implemented areas include:
 
 Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, while Linux work is progressing through VCB's ELF target.
 
-**Phase 27 Part 2 — Linux runtime expansion**
+**Phase 27 Parts 1–12 — Done**
 
-The current VCB drop adds Linux heap allocation through a `brk`-based bump allocator, list and map runtime support, string-method runtime support, and `print_list` / `print_map`. Phase 27 Part 3 is next: Linux `print_float` and consolidation of `Asm` / `FunctionEmitter` into a shared header.
+The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, import-table construction, and runtime unwind coverage.
+
+**Phase 27 Part 13 — Current:** consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`.
+
+**Phase 27 Part 14 — Current:** PE + Linux test matrix covering 11 programs on both targets.
 
 **Phase 18 — Vayu developer tooling**
 
@@ -605,9 +609,19 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
 | **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
-| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset, `--target elf`, `vcb elfheaders`, and driver output-directory creation. |
-| **27 Part 2** | **This drop** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support, and `print_list` / `print_map`. |
-| **27 Part 3** | **Next** — Linux `print_float`; consolidate `Asm` / `FunctionEmitter` into a shared header. |
+| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset. |
+| **27 Part 2** | **Done** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support. |
+| **27 Part 3** | **Done** — PE padding heuristic. |
+| **27 Part 4** | **Done** — `DYNAMIC_BASE` disabled, dynamic sections, shadow space in `vayu_exit`. |
+| **27 Part 5+6** | **Done** — Minimal `.reloc` + ASLR re-enabled; `.pdata` / `.xdata`. |
+| **27 Part 7+8** | **Done** — kernel32 heap APIs, Linux `vayu_print_float`. |
+| **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
+| **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
+| **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
+| **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
+| **27 Part 12** | **Done** — Import-table construction moved into `writePe`; runtime emitter `.pdata` entries; `UnwindEntry` extended for runtime functions. |
+| **27 Part 13** | **Current** — Consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`. |
+| **27 Part 14** | **Current** — PE + Linux test matrix covering 11 programs on both targets. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
