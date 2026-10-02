@@ -63,14 +63,14 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 
 ## Phase Position
 
-**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete, Phase 27 Part 1 is done, and Phase 27.4 is the current VCB/Vayu PE-correctness drop.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
+**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete, and VCB Phase 27 Parts 1–12 are done. Phase 27 Parts 13 and 14 are the current VCB/Vayu development work.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
 
 Phase 25 remains skipped for now; the native backend/runtime work is currently driven by VCB Phase 27. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
 
 
 ## Current Implementation Status
 
-The compiler/runtime has completed Phases 1–24 and has moved into the VCB-backed native toolchain. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition direction, and Phase 24 completed the native-float and related numerical foundation. Phase 25 is skipped for now; VCB Phase 27 is the current backend/runtime development track.
+The compiler/runtime has completed Phases 1–24 and has moved into the VCB-backed native toolchain. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition direction, and Phase 24 completed the native-float and related numerical foundation. Phase 25 is skipped for now; VCB Phase 27 Parts 1–12 are complete, with Parts 13 and 14 currently focused on backend consolidation and the PE/Linux test matrix.
 
 The current AI/ML implementation is still foundational rather than a complete ML framework. Native C FFI and CPython interoperability exist, while tensors, autodiff, ONNX integration, CUDA/GPU execution, and high-level neural-network APIs remain development work.
 
