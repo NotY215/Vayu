@@ -557,7 +557,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 27 Parts 1–12 are complete, and Parts 13 and 14 are the current development work. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB now provides the native backend path for Vayu, including Windows PE output and Linux ELF output. Part 13 is consolidating the shared x86-64 emitter, while Part 14 is building the PE + Linux test matrix.**
+**Phase 27 Parts 1–16 are complete, and Part 17 is the next backend milestone. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
 
 Current implemented areas include:
 
@@ -587,11 +587,11 @@ Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses V
 
 **Phase 27 Parts 1–12 — Done**
 
-The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, import-table construction, and runtime unwind coverage.
+The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, shared x86-64 emitter extraction, the 11-program PE matrix, runtime `.pdata` / `.xdata` coverage, and the Linux ELF matrix.
 
-**Phase 27 Part 13 — Current:** consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`.
+**Phase 27 Parts 1–16 — Done.**
 
-**Phase 27 Part 14 — Current:** PE + Linux test matrix covering 11 programs on both targets.
+**Phase 27 Part 17 — Next:** move import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame`.
 
 **Phase 18 — Vayu developer tooling**
 
@@ -613,15 +613,20 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **27 Part 2** | **Done** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support. |
 | **27 Part 3** | **Done** — PE padding heuristic. |
 | **27 Part 4** | **Done** — `DYNAMIC_BASE` disabled, dynamic sections, shadow space in `vayu_exit`. |
-| **27 Part 5+6** | **Done** — Minimal `.reloc` + ASLR re-enabled; `.pdata` / `.xdata`. |
-| **27 Part 7+8** | **Done** — kernel32 heap APIs, Linux `vayu_print_float`. |
+| **27 Part 5** | **Done** — Minimal `.reloc` support. |
+| **27 Part 6** | **Done** — ASLR re-enabled; `.pdata` / `.xdata` for user functions and the entry stub. |
+| **27 Part 7** | **Done** — kernel32 heap APIs. |
+| **27 Part 8** | **Done** — Linux `vayu_print_float`. |
 | **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
 | **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
 | **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
 | **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
-| **27 Part 12** | **Done** — Import-table construction moved into `writePe`; runtime emitter `.pdata` entries; `UnwindEntry` extended for runtime functions. |
-| **27 Part 13** | **Current** — Consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`. |
-| **27 Part 14** | **Current** — PE + Linux test matrix covering 11 programs on both targets. |
+| **27 Part 12** | **Done** — Import-table construction stays in `X64.cpp` for now; runtime `.pdata` deferred to Part 15. |
+| **27 Part 13** | **Done** — `X64Common.hpp` extracted; `X64.cpp` reduced to a thin wrapper. |
+| **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
+| **27 Part 15** | **Done** — Runtime `.pdata` via `emitRuntime(..., &unwindEntries)`; `.xdata` built from all entries. |
+| **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
+| **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
