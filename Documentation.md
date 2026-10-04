@@ -96,7 +96,7 @@ Vayu Source (.vyu)
    Native backend
         |
         v
-      VCB (planned)
+      VCB
         |
         v
     Executable
@@ -833,9 +833,9 @@ Native Assembly
 Executable
 ```
 
-VCB is intended to provide a focused backend boundary so frontend/language development and machine-level compiler engineering can evolve independently.
+VCB provides the backend boundary so frontend/language development and machine-level compiler engineering can evolve independently.
 
-Planned backend responsibilities include:
+Current backend responsibilities include:
 
 - IR analysis
 - control-flow analysis
@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is moving from completed native-float work into the VCB native-backend transition. Phase 25 benchmarking is intentionally skipped for now and will be performed after VCB-built binaries are working.
+The current project is in the VCB native-backend hardening stage. Phase 25 benchmarking is intentionally skipped for now and will resume as Phase 28 after the VCB-built PE/Linux path and validation matrix are sufficiently complete.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -885,15 +885,20 @@ C++ bootstrap can eventually be retired
 | **27 Part 2** | **Done** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support. |
 | **27 Part 3** | **Done** — PE padding heuristic. |
 | **27 Part 4** | **Done** — `DYNAMIC_BASE` disabled, dynamic sections, shadow space in `vayu_exit`. |
-| **27 Part 5+6** | **Done** — Minimal `.reloc` + ASLR re-enabled; `.pdata` / `.xdata`. |
-| **27 Part 7+8** | **Done** — kernel32 heap APIs, Linux `vayu_print_float`. |
+| **27 Part 5** | **Done** — Minimal `.reloc` support. |
+| **27 Part 6** | **Done** — ASLR re-enabled; `.pdata` / `.xdata` for user functions and the entry stub. |
+| **27 Part 7** | **Done** — kernel32 heap APIs. |
+| **27 Part 8** | **Done** — Linux `vayu_print_float`. |
 | **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
 | **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
 | **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
 | **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
-| **27 Part 12** | **Done** — Import-table construction moved into `writePe`; runtime emitter `.pdata` entries; `UnwindEntry` extended for runtime functions. |
-| **27 Part 13** | **Current** — Consolidate `Asm` / `FunctionEmitter` into `X64Common.hpp`. |
-| **27 Part 14** | **Current** — PE + Linux test matrix covering 11 programs on both targets. |
+| **27 Part 12** | **Done** — Import-table construction stays in `X64.cpp` for now; runtime `.pdata` deferred to Part 15. |
+| **27 Part 13** | **Done** — `X64Common.hpp` extracted; `X64.cpp` reduced to a thin wrapper. |
+| **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
+| **27 Part 15** | **Done** — Runtime `.pdata` via `emitRuntime(..., &unwindEntries)`; `.xdata` built from all entries. |
+| **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
+| **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
 | **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
