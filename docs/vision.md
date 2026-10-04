@@ -50,7 +50,7 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
 | **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
 | **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
-| **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
+| **27 Part 11** | **Partial** — WDAC supplemental policy requires `-UserPEs` and a Microsoft-trusted signer; full acceptance requires a CA-trusted certificate or a machine without the inbox policy. |
 | **27 Part 12** | **Done** — Import-table construction remains in `X64.cpp` for now; runtime `.pdata` deferred to Part 15. |
 | **27 Part 13** | **Done** — `X64Common.hpp` extracted; `X64.cpp` reduced to a thin wrapper. |
 | **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
@@ -73,7 +73,7 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 ### Phase 27 — VCB native backend correctness and validation
 
-**27 Parts 1–16 — Done:** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
+**27 Parts 1–10 and 12–16 — Done; Part 11 — Partial.** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, WDAC supplemental-policy generation, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
 
 **27 Part 17 — Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
 
