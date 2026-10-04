@@ -714,13 +714,20 @@ def find_up(rel_path: str) -> str:
     return ""
 
 def find_vayuc() -> str:
-    p = find_up("build\\x64-debug\\bin\\vayuc.exe")
+    p = find_up("build\\x64-Release\\bin\\vayuc.exe")
+    if p == "":
+        p = find_up("build\\x64-release\\bin\\vayuc.exe")
+    if p == "":
+        p = find_up("build\\x64-debug\\bin\\vayuc.exe")
     if p == "":
         return "vayuc.exe"
     return p
 
 def find_qbe() -> str:
-    return find_up("tools\\qbe.exe")
+    # QBE is no longer part of the pipeline (VCB replaced it in
+    # Phase 26 Part 2.9e).  Kept as a stub for backwards compatibility
+    # with any external scripts that still call it.
+    return ""
 
 def find_dep_dir(name: str, root: str) -> str:
     p1 = join_path(join_path(root, "nova_modules"), name)
@@ -1434,8 +1441,6 @@ def cmd_build() -> str:
         print("nva: falling back to PATH lookup")
 
     qbe = find_qbe()
-    if qbe == "":
-        print("nva: warning: tools/qbe.exe not found by walking up")
 
     prefix = ""
     if len(mod_path) > 0:

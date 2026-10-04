@@ -13,7 +13,7 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# QBE is an external executable, not a library.  Nothing to find here.
-# At runtime, vayuc will invoke `qbe` and `gcc` from PATH.
+# The native backend is VCB (E:\VCB), invoked at runtime as
+# tools\vcb.exe.  QBE and gcc are no longer part of the pipeline.
 
 add_subdirectory(compiler)

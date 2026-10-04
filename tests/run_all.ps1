@@ -16,7 +16,7 @@ $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 
-$vayuc = "build\x64-debug\bin\vayuc.exe"
+$vayuc = "build\x64-Release\bin\vayuc.exe"
 if (-not (Test-Path $vayuc)) {
     Write-Host "FATAL: $vayuc not found. Build first." -ForegroundColor Red
     exit 2
