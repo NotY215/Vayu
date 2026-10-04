@@ -557,7 +557,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 27 Parts 1–16 are complete, and Part 17 is the next backend milestone. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
+**Phase 27 Parts 1–10 and 12–16 are complete; Part 11 is partial, and Part 17 is the next backend milestone. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
 
 Current implemented areas include:
 
