@@ -620,7 +620,7 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
 | **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
 | **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
-| **27 Part 11** | **Done** — WDAC supplemental policy generator and deployment documentation. |
+| **27 Part 11** | **Partial** — WDAC supplemental policy requires `-UserPEs` and a Microsoft-trusted signer; full acceptance requires a CA-trusted certificate or a machine without the inbox policy. |
 | **27 Part 12** | **Done** — Import-table construction stays in `X64.cpp` for now; runtime `.pdata` deferred to Part 15. |
 | **27 Part 13** | **Done** — `X64Common.hpp` extracted; `X64.cpp` reduced to a thin wrapper. |
 | **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
