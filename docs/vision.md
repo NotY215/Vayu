@@ -27,7 +27,7 @@ The current source tree demonstrates a substantially expanded language/compiler 
 
 The current development history records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phase 26 Part 1 and Part 2 are complete. Phase 27 Parts 1–16 are complete, with Part 17 as the next backend milestone.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phase 26 Part 1 and Part 2 are complete. Phase 27 Parts 1–10 and 12–16 are complete; Part 11 is partial, with Part 17 as the next backend milestone.
 
 ## Roadmap
 
