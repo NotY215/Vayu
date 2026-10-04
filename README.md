@@ -583,9 +583,9 @@ Current implemented areas include:
 
 **Current development — VCB-backed native toolchain**
 
-Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, while Linux work is progressing through VCB's ELF target.
+Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, and the Linux path is covered by VCB's ELF target and the Phase 27 ELF matrix.
 
-**Phase 27 Parts 1–12 — Done**
+**Phase 27 Parts 1–16 — Done**
 
 The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, shared x86-64 emitter extraction, the 11-program PE matrix, runtime `.pdata` / `.xdata` coverage, and the Linux ELF matrix.
 
@@ -626,6 +626,7 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
 | **27 Part 15** | **Done** — Runtime `.pdata` via `emitRuntime(..., &unwindEntries)`; `.xdata` built from all entries. |
 | **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
+| **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
 | **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
 | **28** | Full benchmarking on VCB-built binaries. |
 | **29** | Version cut. |
