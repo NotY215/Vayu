@@ -71,7 +71,7 @@ flowchart LR
     VCB --> EXE["Native Executable"]
 ```
 
-The current native implementation uses compiler/native/NativeCompiler.cpp and compiler/native/VcbLower.cpp.
+The current native implementation uses `compiler/native/NativeCompiler.cpp` and `compiler/native/VcbLower.cpp`.
 
 NativeCompiler locates VCB, writes the generated IR, invokes vcb build, and can run the resulting executable. The VAYU_VCB environment variable can override the VCB executable path.
 
@@ -125,7 +125,7 @@ flowchart TD
     ELF --> LIN["Linux executable"]
 ```
 
-The backend currently handles integer and floating-point operations, comparisons, loads/stores, stack allocation, branches, jumps, phi handling, calls, returns, and string constants.
+The backend currently handles integer and floating-point operations, comparisons, loads/stores, stack allocation, branches, jumps, phi handling, calls, returns, string constants, runtime dependency emission, and target-specific executable writing.
 
 ## Runtime Flow
 
@@ -189,6 +189,7 @@ flowchart TD
     TEXT --> W["PE Writer"]
     DATA --> W
     IDATA --> W
+    UNW[".pdata / .xdata from unwindEntries"] --> W
     W --> EXE["Windows PE executable"]
 ```
 
@@ -204,10 +205,11 @@ flowchart TD
     CG --> DATA["Read-only data"]
     TEXT --> W["ELF Writer"]
     DATA --> W
+    TEST["tests\\elf_matrix.ps1"] --> W
     W --> EXE["Linux x86-64 ELF executable"]
 ```
 
-The Linux entry code calls main, transfers its result to the Linux exit-code register, and invokes the Linux exit syscall.
+The Linux entry code calls main, transfers its result to the Linux exit-code register, and invokes the Linux exit syscall. The current ELF matrix validates the generated Linux path; Linux `.eh_frame` support is the next unwind-related target.
 
 ## Inspection and Debug Flow
 
@@ -238,3 +240,30 @@ VCB
 ```
 
 The .vcbir representation is the contract between the two repositories: Vayu owns language semantics and lowering, while VCB owns native backend generation and executable writing.
+
+
+## Phase 27 Backend Status
+
+Phase 27 Parts 1–16 are complete. The current VCB backend includes:
+
+- Windows PE emission and validation
+- Linux x86-64 ELF emission and the ELF test matrix
+- Runtime `.pdata` / `.xdata` coverage through the shared unwind-entry collection
+- `X64Common.hpp` as the shared x86-64 emitter layer
+- VCB signing and verification commands
+- WDAC supplemental-policy tooling
+- Linux runtime support for syscalls, heap allocation, lists, maps, strings, and float printing
+
+The next milestone is Phase 27 Part 17:
+
+```text
+Import construction
+      ↓
+move into writePe
+      ↓
+remove kIdataRva hardcode
+
+Linux unwind path
+      ↓
+add .eh_frame
+```
