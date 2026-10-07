@@ -70,4 +70,10 @@ Native benchmarking should use the VCB backend and record the VCB revision and t
 
 ## Roadmap
 
-Phase 25 is skipped for now. Phase 28 will resume the benchmark program set after the VCB native path is sufficiently complete and will record target/backend details for each result.
+Phase 25 is skipped for now.
+
+**Phase 28 Part 1 — Working:** benchmark foundation and VCB benchmark preparation.
+
+**Phase 28 Part 2 — Pending:** benchmark suite with a checkpointed runner, recording target, backend, VCB revision, and checkpointed results for each measurement.
+
+**Phase 29:** version cut after Phase 28.
