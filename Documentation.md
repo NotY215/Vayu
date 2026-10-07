@@ -881,34 +881,43 @@ C++ bootstrap can eventually be retired
 | **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
 | **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
 | **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
-| **27 Part 1** | **Done** — ELF writer, Linux syscall runtime subset. |
-| **27 Part 2** | **Done** — Linux heap using a `brk`-based bump allocator, list + map + string-method runtime support. |
-| **27 Part 3** | **Done** — PE padding heuristic. |
-| **27 Part 4** | **Done** — `DYNAMIC_BASE` disabled, dynamic sections, shadow space in `vayu_exit`. |
-| **27 Part 5** | **Done** — Minimal `.reloc` support. |
-| **27 Part 6** | **Done** — ASLR re-enabled; `.pdata` / `.xdata` for user functions and the entry stub. |
-| **27 Part 7** | **Done** — kernel32 heap APIs. |
-| **27 Part 8** | **Done** — Linux `vayu_print_float`. |
-| **27 Part 9** | **Done** — Always emit `.rdata`, always pad, `RELOCS_STRIPPED` + ASLR off. |
-| **Diagnosis** | **Done** — Block identified as inbox WDAC (`VerifiedAndReputableDesktop`). |
-| **27 Part 10** | **Done** — `vcb sign` / `vcb verify` / `vcb build --sign`. |
-| **27 Part 11** | **Partial** — WDAC supplemental policy requires `-UserPEs` and a Microsoft-trusted signer; full acceptance requires a CA-trusted certificate or a machine without the inbox policy. |
-| **27 Part 12** | **Done** — Import-table construction stays in `X64.cpp` for now; runtime `.pdata` deferred to Part 15. |
-| **27 Part 13** | **Done** — `X64Common.hpp` extracted; `X64.cpp` reduced to a thin wrapper. |
-| **27 Part 14** | **Done** — PE test matrix covering 11 programs; `t10` fixed. |
-| **27 Part 15** | **Done** — Runtime `.pdata` via `emitRuntime(..., &unwindEntries)`; `.xdata` built from all entries. |
-| **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
-| **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
-| **28 Part 1** | **Working** — benchmark foundation and VCB benchmark preparation. |
-| **28 Part 2** | **Pending** — benchmark suite with checkpointed runner. |
-| **29** | **After 28** — version cut. |
-| **30** | **Planned** — structs + classes + inheritance in VCB. |
-| **31** | **Planned** — exceptions in VCB. |
-| **32** | **Planned** — generators in VCB. |
-| **33** | **Planned** — lambdas / closures in VCB. |
-| **34** | **Planned** — tuples, sets, slicing, `range(a,b,c)`, `str(x)` dispatch. |
-| **35** | **Planned** — self-hosting on VCB IR; fixpoint re-enabled in harness. |
-
+| **27 Parts 1–17** | **Done** | ELF writer, Linux runtime, PE correctness, validator |
+| **WDAC structural fix** | **Done** | `.rsrc`, Rich header, 32 KB minimum image; sufficient for `concat_test.exe`, intermittent for others |
+| **Signing** | **Removed** | Not needed once the object + external-linker path lands |
+| **28** | **Next** | **Object emission + external link** |
+| **28.1** | | COFF `.obj` emitter on Windows: sections, symbols, relocations, no headers |
+| **28.2** | | ELF `.o` emitter on Linux: same shape, `.rela.text`, `.symtab`, `.strtab` |
+| **28.3** | | `vcb emit-obj <file.vcbir> -o out.obj` subcommand |
+| **28.4** | | `vcb link <file.obj> -o out.exe` wrapper: finds `link.exe`, `lld-link`, `gcc`, or `clang` |
+| **28.5** | | `vayuc --native --link=external`; default in `NativeCompiler`, with `--link=embedded` retained for the current path |
+| **28.6** | | VcbLower builtin guard: unknown Vayu builtins throw at lowering time instead of emitting unresolved `call` |
+| **29** | **Planned** | MAC compliance helper: no bypass, policy templates only |
+| **29.1** | | `vcb policy wdac <out.xml>`: supplemental WDAC policy template scoped to `_out\\` |
+| **29.2** | | `vcb policy selinux <out.te>`: SELinux type-enforcement module skeleton |
+| **29.3** | | `vcb policy apparmor <out.profile>`: AppArmor profile skeleton |
+| **29.4** | | `vcb policy ima`: documents the IMA signing flow and prints the exact command |
+| **29.5** | | Documentation for each mechanism: what it enforces, what the user does, and why VCB cannot bypass it |
+| **30** | **Planned** | Small VcbLower additions |
+| **30.1** | | Unary `&`, `*`, `~` |
+| **30.2** | | Short-circuit `and` / `or` |
+| **30.3** | | `**` on ints |
+| **30.4** | | Float `%` and `//` |
+| **30.5** | | `for x in list` / `for x in map` / `for x in str` |
+| **30.6** | | `arr[i] = v`, `obj.f = v` assignment targets |
+| **30.7** | | Missing string methods: `strip`, `split`, `capitalize`, `title`, `zfill`, `count` |
+| **30.8** | | `list.extend`, `list.index`, `map.get_or`, `map.items` |
+| **30.9** | | `len()` on tuple / ptr, `str(x)` on any tag |
+| **30.10** | | `range(a, b, c)` |
+| **31** | **Planned** | Tuples, sets, slicing |
+| **32** | **Planned** | Classes, structs, inheritance |
+| **33** | **Planned** | Lambdas, closures |
+| **34** | **Planned** | Exceptions |
+| **35** | **Planned** | Pointers, FFI, `malloc` / `free` |
+| **36** | **Planned** | Modules and stdlib (`os`, `py`, `gui`, `raster`) |
+| **37** | **Planned** | `.text` size limit removal, needed before or during Phase 34 |
+| **38** | **Planned** | Self-hosting on VCB IR; fixpoint re-enabled in harness |
+| **39** | **Planned** | Full benchmark suite: Vayu tree-walk / VM / native vs C++ / Python / Java |
+| **40** | **Planned** | Version cut |
 # 30. Current Status
 
 Vayu is an early-stage independent language project with a growing compiler, runtime, VM, native compiler, FFI layer, and Python/CPython interoperability.
