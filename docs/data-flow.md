@@ -244,7 +244,7 @@ The .vcbir representation is the contract between the two repositories: Vayu own
 
 ## Phase 27 Backend Status
 
-Phase 27 Parts 1–16 are complete. The current VCB backend includes:
+Phase 27 Parts 1–17 are complete. The current VCB backend includes:
 
 - Windows PE emission and validation
 - Linux x86-64 ELF emission and the ELF test matrix
@@ -254,16 +254,20 @@ Phase 27 Parts 1–16 are complete. The current VCB backend includes:
 - WDAC supplemental-policy tooling
 - Linux runtime support for syscalls, heap allocation, lists, maps, strings, and float printing
 
-The next milestone is Phase 27 Part 17:
+The next milestone is Phase 28, which changes the native output boundary from direct executable emission toward relocatable objects and external linking:
 
 ```text
-Import construction
-      ↓
-move into writePe
-      ↓
-remove kIdataRva hardcode
-
-Linux unwind path
-      ↓
-add .eh_frame
+VCBIR
+  ↓
+VCB object emitter
+  ├── Windows COFF .obj
+  └── Linux ELF .o
+  ↓
+External linker
+  ├── Windows link.exe / lld-link
+  └── Linux gcc / clang
+  ↓
+Native executable
 ```
+
+Phase 28.5 makes external linking the default native path while retaining the embedded linker path as an explicit compatibility option.
