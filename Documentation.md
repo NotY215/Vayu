@@ -875,49 +875,32 @@ C++ bootstrap can eventually be retired
 
 # 29. Roadmap
 
-| Phase | Scope |
-|---:|---|
-| **1–24** | Core language, runtime, tooling, graphics, package ecosystem, native floats and related compiler/runtime work. **Completed.** |
-| **25** | **Skipped for now** — benchmarking postponed until after the VCB transition. |
-| **26 Part 1** | **Completed** — VCB project, IR, parser, printer, and `vcb dump`. |
-| **26 Part 2** | **Completed** — x86-64 code generation, PE + ELF writers, prebuilt runtime, and Vayu's native path transitioned from QBE+GCC to VCB. |
-| **27 Parts 1–17** | **Done** | ELF writer, Linux runtime, PE correctness, validator |
-| **WDAC structural fix** | **Done** | `.rsrc`, Rich header, 32 KB minimum image; sufficient for `concat_test.exe`, intermittent for others |
-| **Signing** | **Removed** | Not needed once the object + external-linker path lands |
-| **28** | **Next** | **Object emission + external link** |
-| **28.1** | | COFF `.obj` emitter on Windows: sections, symbols, relocations, no headers |
-| **28.2** | | ELF `.o` emitter on Linux: same shape, `.rela.text`, `.symtab`, `.strtab` |
-| **28.3** | | `vcb emit-obj <file.vcbir> -o out.obj` subcommand |
-| **28.4** | | `vcb link <file.obj> -o out.exe` wrapper: finds `link.exe`, `lld-link`, `gcc`, or `clang` |
-| **28.5** | | `vayuc --native --link=external`; default in `NativeCompiler`, with `--link=embedded` retained for the current path |
-| **28.6** | | VcbLower builtin guard: unknown Vayu builtins throw at lowering time instead of emitting unresolved `call` |
-| **29** | **Planned** | MAC compliance helper: no bypass, policy templates only |
-| **29.1** | | `vcb policy wdac <out.xml>`: supplemental WDAC policy template scoped to `_out\\` |
-| **29.2** | | `vcb policy selinux <out.te>`: SELinux type-enforcement module skeleton |
-| **29.3** | | `vcb policy apparmor <out.profile>`: AppArmor profile skeleton |
-| **29.4** | | `vcb policy ima`: documents the IMA signing flow and prints the exact command |
-| **29.5** | | Documentation for each mechanism: what it enforces, what the user does, and why VCB cannot bypass it |
-| **30** | **Planned** | Small VcbLower additions |
-| **30.1** | | Unary `&`, `*`, `~` |
-| **30.2** | | Short-circuit `and` / `or` |
-| **30.3** | | `**` on ints |
-| **30.4** | | Float `%` and `//` |
-| **30.5** | | `for x in list` / `for x in map` / `for x in str` |
-| **30.6** | | `arr[i] = v`, `obj.f = v` assignment targets |
-| **30.7** | | Missing string methods: `strip`, `split`, `capitalize`, `title`, `zfill`, `count` |
-| **30.8** | | `list.extend`, `list.index`, `map.get_or`, `map.items` |
-| **30.9** | | `len()` on tuple / ptr, `str(x)` on any tag |
-| **30.10** | | `range(a, b, c)` |
-| **31** | **Planned** | Tuples, sets, slicing |
-| **32** | **Planned** | Classes, structs, inheritance |
-| **33** | **Planned** | Lambdas, closures |
-| **34** | **Planned** | Exceptions |
-| **35** | **Planned** | Pointers, FFI, `malloc` / `free` |
-| **36** | **Planned** | Modules and stdlib (`os`, `py`, `gui`, `raster`) |
-| **37** | **Planned** | `.text` size limit removal, needed before or during Phase 34 |
-| **38** | **Planned** | Self-hosting on VCB IR; fixpoint re-enabled in harness |
-| **39** | **Planned** | Full benchmark suite: Vayu tree-walk / VM / native vs C++ / Python / Java |
-| **40** | **Planned** | Version cut |
+| Phase / Item | Status | Scope |
+|---|---|---|
+| 27 Parts 1-17 | done | ELF writer, Linux runtime, PE correctness, validator |
+| WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
+| Signing | removed | Not needed once obj+linker path lands |
+| Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
+| 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
+| — | waiting | Awaiting your next prompt |
+| 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
+| 28.2 | queued | ELF `.o` emitter |
+| 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |
+| 28.4 | queued | `vayuc --native` external-link default |
+| 28.5 | queued | VcbLower builtin guard |
+| 29 | queued | MAC policy templates |
+| 30 | queued | Small VcbLower additions |
+| 31 | queued | Tuples, sets, slicing |
+| 32 | queued | Classes, structs, inheritance |
+| 33 | queued | Lambdas, closures |
+| 34 | queued | Exceptions |
+| 35 | queued | Pointers, FFI |
+| 36 | queued | Modules and stdlib |
+| 37 | queued | `.text` size limit removal |
+| 38 | queued | Self-hosting on VCB IR |
+| 39 | queued | Full benchmark suite |
+| 40 | queued | Version cut |
+
 # 30. Current Status
 
 Vayu is an early-stage independent language project with a growing compiler, runtime, VM, native compiler, FFI layer, and Python/CPython interoperability.
