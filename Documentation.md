@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is in the VCB native-backend hardening and benchmarking transition. Phase 25 remains skipped. Phase 28 Part 1 is working and establishes the benchmark foundation and VCB benchmark preparation; Part 2 remains pending for the checkpointed benchmark runner.
+The current project is in the VCB native-backend transition from direct executable emission to relocatable object emission and external linking. Phase 27 is complete. Phase 28 is next and covers the Windows COFF object path, Linux ELF object path, external linker wrapper, NativeCompiler integration, and VcbLower builtin validation.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
