@@ -72,8 +72,6 @@ Native benchmarking should use the VCB backend and record the VCB revision and t
 
 Phase 25 is skipped for now.
 
-**Phase 28 Part 1 — Working:** benchmark foundation and VCB benchmark preparation.
+**Phase 28 — Next:** object emission and external linking. Benchmark expansion moves to Phase 39.
 
-**Phase 28 Part 2 — Pending:** benchmark suite with a checkpointed runner, recording target, backend, VCB revision, and checkpointed results for each measurement.
-
-**Phase 29:** version cut after Phase 28.
+Phase 39 will compare Vayu tree-walk, VM, and native execution against C++, Python, and Java.
