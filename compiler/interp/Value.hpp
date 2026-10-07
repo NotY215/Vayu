@@ -71,7 +71,10 @@ namespace vayu {
             ~U() {}
         };
 
-        Tag tag_;
+        // Default member initializer so the default constructor can be
+        // `= default` (MSVC 14.51 emits C4702 on the empty inline body
+        // of an explicitly-written default constructor in this class).
+        Tag tag_ = Tag::None;
         U   u_;
 
         void destroy()  noexcept;
@@ -79,8 +82,8 @@ namespace vayu {
         void moveFrom(Value&& other) noexcept;
 
     public:
-        Value() noexcept : tag_(Tag::None) {}
-        Value(std::nullptr_t) noexcept : tag_(Tag::None) {}
+        Value() noexcept = default;
+        Value(std::nullptr_t) noexcept : tag_(Tag::None) { (void)0; }
         Value(bool b) noexcept : tag_(Tag::Bool) { u_.b = b; }
         Value(long long i) noexcept : tag_(Tag::Int) { u_.i = i; }
         Value(int i) noexcept : tag_(Tag::Int) { u_.i = (long long)i; }

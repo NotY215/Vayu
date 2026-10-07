@@ -145,6 +145,15 @@ namespace vayu {
         int runRc = std::system(("\"" + exePath + "\"").c_str());
         bool keep = (std::getenv("VAYU_KEEP_TEMP") != nullptr);
         if (!keep) tryRemove(exePath);
+        if (runRc != 0) {
+            // 0xC0000005 = STATUS_ACCESS_VIOLATION; 0xC0000094 = INT_DIVIDE_BY_ZERO;
+            // 5 = ERROR_ACCESS_DENIED (WDAC block).
+            std::fprintf(stderr,
+                "native: child exited with code %d (0x%08X)%s\n",
+                runRc, (unsigned)runRc,
+                (unsigned)runRc == 0xC0000005u ? "  STATUS_ACCESS_VIOLATION" :
+                (unsigned)runRc == 5u ? "  ACCESS_DENIED (WDAC?)" : "");
+        }
 
 #ifdef _WIN32
         return runRc;

@@ -1775,6 +1775,8 @@ namespace vayu {
         case Callable::Kind::TupleMethod:  return callTupleMethod(fn, args, loc);
         case Callable::Kind::SetMethod:    return callSetMethod(fn, args, loc);
         case Callable::Kind::StringMethod: return callStringMethod(fn, args, loc);
+        default:
+            break;
         }
         return Value();
     }
@@ -2540,12 +2542,15 @@ namespace vayu {
             }
             std::cout << '\n'; return Value();
         }
+        [[noreturn]] static void doExit(int code) {
+            std::exit(code);
+        }
+
         Value bi_exit(const std::vector<Value>& args) {
             int code = 0;
             if (!args.empty() && args[0].isInt())
                 code = (int)args[0].asInt();
-            std::exit(code);
-            return Value();   // unreachable
+            doExit(code);
         }
         Value bi_str(const std::vector<Value>& a) { return a.empty() ? Value("") : Value(a[0].toString()); }
         Value bi_bool(const std::vector<Value>& a) { return a.empty() ? Value(false) : Value(a[0].truthy()); }

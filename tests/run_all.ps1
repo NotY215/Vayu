@@ -1,4 +1,6 @@
-# tests\run_all.ps1 — cross-backend sanity harness.
+# tests\run_all.ps1 — cross-backend sanity harness.  Release-only;
+# the native backend is VCB (tools\vcb.exe).  Fixpoint is stubbed out
+# pending self-hosting on VCB IR.
 #
 # Modes:
 #   (no args)              full: examples + fixpoint
@@ -21,10 +23,7 @@ if (-not (Test-Path $vayuc)) {
     Write-Host "FATAL: $vayuc not found. Build first." -ForegroundColor Red
     exit 2
 }
-if (-not (Test-Path "tools\qbe.exe")) {
-    Write-Host "FATAL: tools\qbe.exe not found." -ForegroundColor Red
-    exit 2
-}
+# QBE was removed in Phase 26 Part 2.9e; the native backend is VCB.
 
 $skip = @(
     "nn.vyu",
@@ -166,11 +165,14 @@ function Prepend-AttSyntax([string]$path) {
 }
 
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {
-    $compilerPath = Join-Path $root $compiler
-    if (-not (Test-Path $compilerPath)) {
-        Write-Host ("  {0}: {1} missing, skipping" -f $label, $compiler) -ForegroundColor DarkGray
-        return $true
-    }
+    # Disabled.  The self-hosted compiler still emits QBE IL; running
+    # that output requires qbe.exe and gcc, both removed in Phase 26
+    # Part 2.9e.  Re-enable once vayu-src\vayu.vyu emits VCB IR
+    # (Phase 30+).
+    Write-Host ("  {0}: fixpoint disabled (self-hosting via VCB pending)" `
+                -f $label) -ForegroundColor DarkYellow
+    return $true
+}
 
     $selfSsaPath  = Join-Path $root "${label}_self.ssa"
     $selfSPath    = Join-Path $root "${label}_self.s"

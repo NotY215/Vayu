@@ -34,6 +34,10 @@ Get-ChildItem -File -Filter '*_rt.c' | ForEach-Object {
     Write-Host ("rm " + $_.Name)
     Remove-Item $_.FullName -Force
 }
+Get-ChildItem -File -Filter '*.vcbir' | ForEach-Object {
+    Write-Host ("rm " + $_.Name)
+    Remove-Item $_.FullName -Force
+}
 
 # The native build temp directory.
 if (Test-Path '_vayu_tmp') {

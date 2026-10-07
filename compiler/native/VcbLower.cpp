@@ -21,6 +21,27 @@ namespace vayu {
         class Lower {
         public:
             std::string run(const Block& program) {
+                // Pre-pass: collect user function return types from
+                // their `-> T` annotations.  Needed so that
+                //   x = greet(name)   ; x : str
+                // sets lastType_ correctly after the call.
+                for (auto& s : program.stmts) {
+                    if (s->kind != StmtKind::Def) continue;
+                    auto* d = static_cast<const DefStmt*>(s.get());
+                    VType rt = VType::Int;   // unannotated functions default to int
+                    if (d->returnType &&
+                        d->returnType->kind == ExprKind::NameRef) {
+                        const std::string& rtn =
+                            static_cast<const NameRefExpr*>(
+                                d->returnType.get())->name;
+                        if (rtn == "str")        rt = VType::Str;
+                        else if (rtn == "bool")  rt = VType::Bool;
+                        else if (rtn == "float") rt = VType::Float;
+                        else if (rtn == "list")  rt = VType::List;
+                        else if (rtn == "map")   rt = VType::Map;
+                    }
+                    fnReturnTypes_[d->name] = rt;
+                }
                 for (auto& s : program.stmts) {
                     if (s->kind == StmtKind::Def) {
                         auto* d = static_cast<const DefStmt*>(s.get());
@@ -38,6 +59,7 @@ namespace vayu {
         private:
             std::ostringstream                           out_;
             std::unordered_map<std::string, std::string> fnSlots_;
+            std::unordered_map<std::string, VType>       fnReturnTypes_;
             std::unordered_map<std::string, VType>       nameTypes_;
             std::vector<std::string>                     breakStack_;
             std::vector<std::string>                     continueStack_;
@@ -234,6 +256,36 @@ namespace vayu {
                     VType lt = lastType_;
                     std::string r = emitExpr(b->rhs.get());
                     VType rt = lastType_;
+
+                    // ---- str operations ----------------------------------
+                    if (lt == VType::Str && rt == VType::Str) {
+                        if (b->op == BinOp::Add) {
+                            std::string t = fresh();
+                            emit("i64 " + t +
+                                " = call vayu_str_concat(" + l + ", " + r + ")");
+                            lastType_ = VType::Str;
+                            return t;
+                        }
+                        if (b->op == BinOp::Eq) {
+                            std::string t = fresh();
+                            emit("i64 " + t +
+                                " = call vayu_str_eq(" + l + ", " + r + ")");
+                            lastType_ = VType::Bool;
+                            return t;
+                        }
+                        if (b->op == BinOp::NotEq) {
+                            std::string t = fresh();
+                            emit("i64 " + t +
+                                " = call vayu_str_eq(" + l + ", " + r + ")");
+                            std::string z = fresh();
+                            emit("i64 " + z + " = const.i64 0");
+                            std::string n = fresh();
+                            emit("i64 " + n + " = eq " + t + ", " + z);
+                            lastType_ = VType::Bool;
+                            return n;
+                        }
+                    }
+
                     bool floatCtx = isFloat(lt) || isFloat(rt);
 
                     std::string op;
@@ -475,7 +527,11 @@ namespace vayu {
                 }
                 std::string t = fresh();
                 emit("i64 " + t + " = call " + name + "(" + argstr + ")");
-                lastType_ = VType::Int;
+                {
+                    auto rit = fnReturnTypes_.find(name);
+                    lastType_ = (rit != fnReturnTypes_.end())
+                        ? rit->second : VType::Int;
+                }
                 return t;
             }
 
@@ -827,7 +883,19 @@ namespace vayu {
                 emitLabel("entry");
 
                 for (size_t i = 0; i < d->params.size(); ++i) {
-                    std::string slot = declareSlot(d->params[i].name, VType::Int);
+                    VType pt = VType::Int;
+                    if (d->params[i].type &&
+                        d->params[i].type->kind == ExprKind::NameRef) {
+                        const std::string& tn =
+                            static_cast<const NameRefExpr*>(
+                                d->params[i].type.get())->name;
+                        if (tn == "str")        pt = VType::Str;
+                        else if (tn == "bool")  pt = VType::Bool;
+                        else if (tn == "float") pt = VType::Float;
+                        else if (tn == "list")  pt = VType::List;
+                        else if (tn == "map")   pt = VType::Map;
+                    }
+                    std::string slot = declareSlot(d->params[i].name, pt);
                     emit("store %p" + std::to_string(i) + ", " + slot);
                 }
                 emitBlock(d->body);
