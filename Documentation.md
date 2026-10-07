@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is in the VCB native-backend hardening stage. Phase 25 benchmarking is intentionally skipped for now and will resume as Phase 28 after the VCB-built PE/Linux path and validation matrix are sufficiently complete.
+The current project is in the VCB native-backend hardening and benchmarking transition. Phase 25 remains skipped. Phase 28 Part 1 is working and establishes the benchmark foundation and VCB benchmark preparation; Part 2 remains pending for the checkpointed benchmark runner.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -899,9 +899,15 @@ C++ bootstrap can eventually be retired
 | **27 Part 15** | **Done** — Runtime `.pdata` via `emitRuntime(..., &unwindEntries)`; `.xdata` built from all entries. |
 | **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
 | **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
-| **28** | Full benchmarking on VCB-built binaries. |
-| **29** | Version cut. |
-| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
+| **28 Part 1** | **Working** — benchmark foundation and VCB benchmark preparation. |
+| **28 Part 2** | **Pending** — benchmark suite with checkpointed runner. |
+| **29** | **After 28** — version cut. |
+| **30** | **Planned** — structs + classes + inheritance in VCB. |
+| **31** | **Planned** — exceptions in VCB. |
+| **32** | **Planned** — generators in VCB. |
+| **33** | **Planned** — lambdas / closures in VCB. |
+| **34** | **Planned** — tuples, sets, slicing, `range(a,b,c)`, `str(x)` dispatch. |
+| **35** | **Planned** — self-hosting on VCB IR; fixpoint re-enabled in harness. |
 
 # 30. Current Status
 
