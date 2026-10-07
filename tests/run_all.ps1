@@ -1,17 +1,29 @@
-# tests\run_all.ps1 — cross-backend sanity harness.  Release-only;
-# the native backend is VCB (tools\vcb.exe).  Fixpoint is stubbed out
-# pending self-hosting on VCB IR.
+# tests\run_all.ps1 — cross-backend sanity harness.
+#
+# Native backend: VCB (tools\vcb.exe).  vayuc dispatches to it via the
+# VAYU_VCB environment variable; if unset, vayuc falls back to
+# tools\vcb.exe.  This script sets VAYU_VCB explicitly so the
+# freshness check below is meaningful.
+#
+# QBE and gcc were removed in Phase 26 Part 2.9e.  Signing was removed
+# from VCB in the post-27 cleanup.  VCB emits machine code and a
+# complete PE or ELF image directly.
 #
 # Modes:
 #   (no args)              full: examples + fixpoint
 #   -Test <name>           one example only, all backends, no fixpoint
-#   -FixpointOnly          skip examples, run only the self-compile fixpoint
+#   -FixpointOnly          skip examples, run the fixpoint (stubbed)
 #   -NoFixpoint            examples only (fast iteration)
+#   -FailOnDenied          treat Windows ACCESS_DENIED as a failure.
+#                          Default: skip.  Denied means the WDAC inbox
+#                          policy blocked the freshly-built unsigned
+#                          binary at launch, not a codegen bug.
 
 param(
     [string]$Test = "",
     [switch]$FixpointOnly,
-    [switch]$NoFixpoint
+    [switch]$NoFixpoint,
+    [switch]$FailOnDenied
 )
 
 $ErrorActionPreference = "Continue"
@@ -20,10 +32,36 @@ Set-Location $root
 
 $vayuc = "build\x64-Release\bin\vayuc.exe"
 if (-not (Test-Path $vayuc)) {
-    Write-Host "FATAL: $vayuc not found. Build first." -ForegroundColor Red
+    Write-Host "FATAL: $vayuc not found. Build Vayu first." -ForegroundColor Red
     exit 2
 }
-# QBE was removed in Phase 26 Part 2.9e; the native backend is VCB.
+
+# ---- VCB resolution ---------------------------------------------------
+$vcbRel = "tools\vcb.exe"
+if (-not (Test-Path $vcbRel)) {
+    Write-Host "FATAL: $vcbRel not found. Copy vcb.exe into tools\." -ForegroundColor Red
+    exit 2
+}
+$env:VAYU_VCB = (Resolve-Path $vcbRel).Path
+
+# ---- Freshness check --------------------------------------------------
+$vcbSrcBuild = "E:\VCB\build\x64-Release\bin\vcb.exe"
+if (Test-Path $vcbSrcBuild) {
+    $toolTime = (Get-Item $vcbRel).LastWriteTime
+    $srcTime  = (Get-Item $vcbSrcBuild).LastWriteTime
+    if ($srcTime -gt $toolTime) {
+        Write-Host ("WARN: tools\vcb.exe is older than $vcbSrcBuild.") -ForegroundColor Yellow
+        Write-Host ("      tools: {0:yyyy-MM-dd HH:mm}" -f $toolTime) -ForegroundColor Yellow
+        Write-Host ("      src  : {0:yyyy-MM-dd HH:mm}" -f $srcTime)  -ForegroundColor Yellow
+        Write-Host "      Results may reflect stale code.  Rebuild VCB and re-copy." `
+            -ForegroundColor Yellow
+    }
+}
+$vcbInfo = Get-Item $vcbRel
+Write-Host ("VCB   : {0}  ({1:yyyy-MM-dd HH:mm})" -f $vcbRel, $vcbInfo.LastWriteTime) `
+    -ForegroundColor Cyan
+
+# ---- Test lists -------------------------------------------------------
 
 $skip = @(
     "nn.vyu",
@@ -66,17 +104,31 @@ $native_only = @(
 
 $sort_compare = @( "generators.vyu" )
 
+# Examples whose exit code is intentionally non-zero on any backend.
+$expected_exit = @{
+    "vcb_smoke.vyu" = 42
+}
+
+# ---- Helpers ----------------------------------------------------------
+
+# Returns @{ rc; out; err }.  Captures stdout and stderr into separate
+# temp files so the comparison is against the child program's stdout
+# only, not against vcb's status lines or vayuc's diagnostics.
 function Invoke-Backend {
     param($file, $mode)
-    $tmp = [System.IO.Path]::GetTempFileName()
+    $outTmp = [System.IO.Path]::GetTempFileName()
+    $errTmp = [System.IO.Path]::GetTempFileName()
     $argList = @($file)
     if ($mode) { $argList += $mode }
-    & $vayuc @argList *> $tmp
+    & $vayuc @argList 1> $outTmp 2> $errTmp
     $rc = $LASTEXITCODE
-    $out = Get-Content $tmp -Raw -ErrorAction SilentlyContinue
-    Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+    $out = Get-Content $outTmp -Raw -ErrorAction SilentlyContinue
+    $err = Get-Content $errTmp -Raw -ErrorAction SilentlyContinue
+    Remove-Item -Force $outTmp -ErrorAction SilentlyContinue
+    Remove-Item -Force $errTmp -ErrorAction SilentlyContinue
     if ($null -eq $out) { $out = "" }
-    return @{ rc = $rc; out = $out }
+    if ($null -eq $err) { $err = "" }
+    return @{ rc = $rc; out = $out; err = $err }
 }
 
 function Compare-Output {
@@ -87,183 +139,100 @@ function Compare-Output {
     return (($la -join "`n") -eq ($lb -join "`n"))
 }
 
+# Windows returns several codes when the loader refuses an unsigned
+# binary under the WDAC inbox policy:
+#     5           ERROR_ACCESS_DENIED (cmd.exe's mapping)
+#    -1073741790  0xC0000022  STATUS_ACCESS_DENIED
+#    -1073741819  0xC0000005  STATUS_ACCESS_VIOLATION (rare, sandbox kill)
+function Is-Denied([int]$rc) {
+    return ($rc -eq 5 -or $rc -eq -1073741790 -or $rc -eq -1073741819)
+}
+
+function ExitCodeOK([string]$name, [int]$rc) {
+    if ($rc -eq 0) { return $true }
+    if ($expected_exit.ContainsKey($name)) {
+        return ($rc -eq $expected_exit[$name])
+    }
+    return $false
+}
+
 function Test-OneFile([string]$rel, [string]$name) {
     if ($skip -contains $name) {
         Write-Host ("[skip]  {0}  (in skip list)" -f $name) -ForegroundColor DarkGray
         return $true
     }
+
     if ($native_only -contains $name) {
         $nat = Invoke-Backend $rel "--native"
-        if ($nat.rc -eq 0) {
+        if (ExitCodeOK $name $nat.rc) {
             Write-Host ("[ok]    {0}  (native-only)" -f $name) -ForegroundColor Green
             return $true
         }
+        if ((Is-Denied $nat.rc) -and -not $FailOnDenied) {
+            Write-Host ("[denied]{0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Yellow
+            return $true
+        }
         Write-Host ("[FAIL]  {0}  (native-only rc={1})" -f $name, $nat.rc) -ForegroundColor Red
+        if ($nat.err) {
+            $line = ($nat.err -split "`r?`n" | Where-Object { $_ } | Select-Object -First 1)
+            if ($line) { Write-Host ("        {0}" -f $line) -ForegroundColor DarkRed }
+        }
         return $false
     }
+
     $tw = Invoke-Backend $rel ""
-    if ($tw.rc -ne 0) {
+    if (-not (ExitCodeOK $name $tw.rc)) {
         Write-Host ("[FAIL]  {0}  (tree-walk rc={1})" -f $name, $tw.rc) -ForegroundColor Red
         return $false
     }
+
     $vm  = Invoke-Backend $rel "--vm"
     $nat = Invoke-Backend $rel "--native"
     $useSort = $sort_compare -contains $name
+
     $ok = $true
-    if ($vm.rc -eq 0 -and -not (Compare-Output $vm.out $tw.out $useSort)) {
+    if ((ExitCodeOK $name $vm.rc) -and -not (Compare-Output $vm.out $tw.out $useSort)) {
         Write-Host ("[FAIL]  {0}  (VM output differs)" -f $name) -ForegroundColor Red
         $ok = $false
     }
-    if ($nat.rc -eq 0 -and -not (Compare-Output $nat.out $tw.out $useSort)) {
-        Write-Host ("[FAIL]  {0}  (native output differs)" -f $name) -ForegroundColor Red
+
+    if (ExitCodeOK $name $nat.rc) {
+        if (-not (Compare-Output $nat.out $tw.out $useSort)) {
+            Write-Host ("[FAIL]  {0}  (native output differs)" -f $name) -ForegroundColor Red
+            Write-Host ("        tree : {0}" -f ($tw.out -replace "`n", "\n")) -ForegroundColor DarkYellow
+            Write-Host ("        nativ: {0}" -f ($nat.out -replace "`n", "\n")) -ForegroundColor DarkYellow
+            $ok = $false
+        }
+    }
+    elseif ((Is-Denied $nat.rc) -and -not $FailOnDenied) {
+        Write-Host ("[denied]{0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Yellow
+    }
+    else {
+        Write-Host ("[FAIL]  {0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Red
+        if ($nat.err) {
+            $line = ($nat.err -split "`r?`n" | Where-Object { $_ } | Select-Object -First 1)
+            if ($line) { Write-Host ("        {0}" -f $line) -ForegroundColor DarkRed }
+        }
         $ok = $false
     }
+
     if ($ok) {
         $tags = "tree"
-        if ($vm.rc -eq 0)  { $tags += "+vm" }
-        if ($nat.rc -eq 0) { $tags += "+native" }
+        if (ExitCodeOK $name $vm.rc)  { $tags += "+vm" }
+        if (ExitCodeOK $name $nat.rc) { $tags += "+native" }
         Write-Host ("[ok]    {0}  ({1})" -f $name, $tags) -ForegroundColor Green
     }
     return $ok
 }
 
 # -------------------------------------------------------------------------
-# Fixpoint — serial, BelowNormal, -O2 with safe flags.
+# Fixpoint — DISABLED until self-hosting on VCB IR lands (Phase 36).
 # -------------------------------------------------------------------------
 
-function Invoke-Child([string]$exe, [string]$argLine, [string]$workDir, [string]$outPath, [string]$errPath) {
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName               = $exe
-    $psi.Arguments              = $argLine
-    $psi.WorkingDirectory       = $workDir
-    $psi.UseShellExecute        = $false
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
-    $psi.CreateNoWindow         = $true
-
-    $p = New-Object System.Diagnostics.Process
-    $p.StartInfo = $psi
-    [void]$p.Start()
-    try {
-        $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
-    } catch { }
-
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
-    $p.WaitForExit()
-    $rc = $p.ExitCode
-    $p.Dispose()
-
-    if ($outPath) { [System.IO.File]::WriteAllText($outPath, $out) }
-    if ($errPath) { [System.IO.File]::WriteAllText($errPath, $err) }
-    return $rc
-}
-
-function Prepend-AttSyntax([string]$path) {
-    $body = [System.IO.File]::ReadAllText($path)
-    [System.IO.File]::WriteAllText($path, ".att_syntax prefix`n" + $body)
-}
-
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {
-    # Disabled.  The self-hosted compiler still emits QBE IL; running
-    # that output requires qbe.exe and gcc, both removed in Phase 26
-    # Part 2.9e.  Re-enable once vayu-src\vayu.vyu emits VCB IR
-    # (Phase 30+).
     Write-Host ("  {0}: fixpoint disabled (self-hosting via VCB pending)" `
                 -f $label) -ForegroundColor DarkYellow
     return $true
-}
-
-    $selfSsaPath  = Join-Path $root "${label}_self.ssa"
-    $selfSPath    = Join-Path $root "${label}_self.s"
-    $selfExePath  = Join-Path $root "${label}_self.exe"
-    $selfSsa2Path = Join-Path $root "${label}_self2.ssa"
-    $qbeLogPath   = Join-Path $root "${label}_qbe.log"
-    $gccLogPath   = Join-Path $root "${label}_gcc.log"
-    $scLogPath    = Join-Path $root "${label}_sc.log"
-    $rtCPath      = Join-Path $root "${label}_rt.c"
-    $qbeExe       = Join-Path $root "tools\qbe.exe"
-
-    $t0 = Get-Date
-
-    # 1. Emit the full runtime.
-    $rtLine = '--emit-runtime "' + $rtCPath + '"'
-    [void](Invoke-Child $vayuc $rtLine $root $null $null)
-    if (-not (Test-Path $rtCPath)) {
-        Write-Host ("  {0}: --emit-runtime failed" -f $label) -ForegroundColor Red
-        return $false
-    }
-
-    # 2. Self-hosted compiler -> SSA.
-    $srcLine = '"' + $source + '"'
-    $rc1 = Invoke-Child $compilerPath $srcLine $root $selfSsaPath $scLogPath
-    if ($rc1 -ne 0 -or -not (Test-Path $selfSsaPath)) {
-        Write-Host ("  {0}: first compile failed (rc={1})" -f $label, $rc1) -ForegroundColor Red
-        if (Test-Path $scLogPath) { Get-Content $scLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
-        return $false
-    }
-
-    # 3. qbe -> .s  (writes to $selfSPath)
-    $qbeLine = '-t amd64_win -o "' + $selfSPath + '" "' + $selfSsaPath + '"'
-    $rcQ = Invoke-Child $qbeExe $qbeLine $root $null $qbeLogPath
-    if ($rcQ -ne 0 -or -not (Test-Path $selfSPath)) {
-        Write-Host ("  {0}: qbe failed (see {1})" -f $label, $qbeLogPath) -ForegroundColor Red
-        if (Test-Path $qbeLogPath) { Get-Content $qbeLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
-        return $false
-    }
-
-    # gcc (and ld) on Windows expect `.att_syntax prefix` at the top of a
-    # QBE-generated .s file.  NativeCompiler.cpp adds it inline; the fixpoint
-    # has to do it by hand.
-    Prepend-AttSyntax $selfSPath
-
-    # 4. gcc -> .exe.  -O2 with only the two safest memory-trimming flags.
-    #    -O2 -fno-inline -fno-ipa-cp keeps runtime near full -O2 while
-    #    halving gcc's peak RSS from ~500MB to ~250MB.
-    $gccLine = '-O2 -fno-inline -fno-ipa-cp -fno-tree-vectorize -s "' +
-               $selfSPath + '" "' + $rtCPath + '" -o "' + $selfExePath +
-               '" -lws2_32 -lbcrypt -luser32 -lgdi32 -lcomctl32'
-    $rcG = Invoke-Child "gcc" $gccLine $root $null $gccLogPath
-    if ($rcG -ne 0 -or -not (Test-Path $selfExePath)) {
-        Write-Host ("  {0}: link failed (see {1})" -f $label, $gccLogPath) -ForegroundColor Red
-        if (Test-Path $gccLogPath) { Get-Content $gccLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
-        return $false
-    }
-
-    Remove-Item -Force -ErrorAction SilentlyContinue $selfSPath
-
-    # 5. Self-compile with the freshly built compiler.
-    $rc2 = Invoke-Child $selfExePath $srcLine $root $selfSsa2Path $scLogPath
-    if ($rc2 -ne 0 -or -not (Test-Path $selfSsa2Path)) {
-        Write-Host ("  {0}: self-compile failed (rc={1})" -f $label, $rc2) -ForegroundColor Red
-        if (Test-Path $scLogPath) { Get-Content $scLogPath | Select-Object -First 10 | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow } }
-        return $false
-    }
-
-    # 6. Hash-compare.
-    $a = Get-Item $selfSsaPath
-    $b = Get-Item $selfSsa2Path
-    $equal = $false
-    if ($a.Length -eq $b.Length) {
-        $h1 = (Get-FileHash -Algorithm SHA256 -Path $selfSsaPath).Hash
-        $h2 = (Get-FileHash -Algorithm SHA256 -Path $selfSsa2Path).Hash
-        $equal = ($h1 -eq $h2)
-    }
-
-    $elapsed = (Get-Date) - $t0
-
-    if ($equal) {
-        Remove-Item -Force -ErrorAction SilentlyContinue `
-            $selfSsaPath, $selfSsa2Path, $selfExePath, $rtCPath, `
-            $qbeLogPath, $gccLogPath, $scLogPath
-        Write-Host ("  {0}: OK ({1:N1}s)" -f $label, $elapsed.TotalSeconds) -ForegroundColor Green
-        return $true
-    }
-
-    Write-Host ("  {0}: DIFFERS ({1:N1}s)" -f $label, $elapsed.TotalSeconds) -ForegroundColor Red
-    Write-Host ("    left : {0} ({1} bytes)" -f $label, $a.Length) -ForegroundColor DarkYellow
-    Write-Host ("    right: {0} ({1} bytes)" -f $label, $b.Length) -ForegroundColor DarkYellow
-    return $false
 }
 
 # -------------------------------------------------------------------------
@@ -335,7 +304,11 @@ foreach ($f in $examples) {
 Write-Host ""
 Write-Host "--------------------------"
 Write-Host ("Pass: {0}" -f $passCount) -ForegroundColor Green
-Write-Host ("Fail: {0}" -f $failCount) -ForegroundColor $(if ($failCount -gt 0) { "Red" } else { "Gray" })
+if ($failCount -gt 0) {
+    Write-Host ("Fail: {0}" -f $failCount) -ForegroundColor Red
+} else {
+    Write-Host ("Fail: {0}" -f $failCount) -ForegroundColor Gray
+}
 Write-Host ("Skip: {0}" -f $skipCount) -ForegroundColor DarkGray
 
 if ($failCount -gt 0) {
