@@ -57,9 +57,15 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | **27 Part 15** | **Done** — Runtime `.pdata` emitted through `emitRuntime(..., &unwindEntries)` and `.xdata` built from all unwind entries. |
 | **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
 | **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove the `kIdataRva` hardcode; add Linux `.eh_frame`. |
-| **28** | Full benchmarking on VCB-built binaries. |
-| **29** | Version cut. |
-| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
+| **28 Part 1** | **Working** — benchmark foundation and VCB benchmark preparation. |
+| **28 Part 2** | **Pending** — benchmark suite with checkpointed runner. |
+| **29** | **After 28** — version cut. |
+| **30** | **Planned** — structs + classes + inheritance in VCB. |
+| **31** | **Planned** — exceptions in VCB. |
+| **32** | **Planned** — generators in VCB. |
+| **33** | **Planned** — lambdas / closures in VCB. |
+| **34** | **Planned** — tuples, sets, slicing, `range(a,b,c)`, `str(x)` dispatch. |
+| **35** | **Planned** — self-hosting on VCB IR; fixpoint re-enabled in harness. |
 
 ### Phase 25 — Skipped for now
 
@@ -79,7 +85,9 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 ### Phase 28 — Benchmarking on VCB
 
-The benchmark suite returns after the VCB native path is sufficiently complete. Results should distinguish Windows PE and Linux ELF targets and record the VCB revision used.
+**Part 1 — Working:** benchmark foundation and VCB benchmark preparation.
+
+**Part 2 — Pending:** benchmark suite with a checkpointed runner. Results should distinguish Windows PE and Linux ELF targets and record the VCB revision used.
 
 ### Phase 29 — Version cut
 

@@ -628,9 +628,15 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | **27 Part 16** | **Done** — `tests\\elf_matrix.ps1` added for Linux target coverage. |
 | **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
 | **27 Part 17** | **Next** — Move import-table construction into `writePe`; remove `kIdataRva` hardcode; add Linux `.eh_frame`. |
-| **28** | Full benchmarking on VCB-built binaries. |
-| **29** | Version cut. |
-| **30+** | Open — BigFloat, shaders, escape analysis 8.1–8.3, multi-input ONNX, GPU tensor, Adam/softmax. |
+| **28 Part 1** | **Working** — benchmark foundation and VCB benchmark preparation. |
+| **28 Part 2** | **Pending** — benchmark suite with checkpointed runner. |
+| **29** | **After 28** — version cut. |
+| **30** | **Planned** — structs + classes + inheritance in VCB. |
+| **31** | **Planned** — exceptions in VCB. |
+| **32** | **Planned** — generators in VCB. |
+| **33** | **Planned** — lambdas / closures in VCB. |
+| **34** | **Planned** — tuples, sets, slicing, `range(a,b,c)`, `str(x)` dispatch. |
+| **35** | **Planned** — self-hosting on VCB IR; fixpoint re-enabled in harness. |
 
 ## DeepSeek
 
