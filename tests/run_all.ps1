@@ -1,4 +1,4 @@
-# tests\run_all.ps1 — cross-backend sanity harness.
+# tests\run_all.ps1 -- cross-backend sanity harness.
 #
 # Native backend: VCB (tools\vcb.exe).  vayuc dispatches to it via the
 # VAYU_VCB environment variable; if unset, vayuc falls back to
@@ -211,8 +211,9 @@ function Test-OneFile([string]$rel, [string]$name) {
     else {
         Write-Host ("[FAIL]  {0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Red
         if ($nat.err) {
-            $line = ($nat.err -split "`r?`n" | Where-Object { $_ } | Select-Object -First 1)
-            if ($line) { Write-Host ("        {0}" -f $line) -ForegroundColor DarkRed }
+            $lines = @($nat.err -split "`r?`n" | Where-Object { $_ })
+            $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1] } else { "" }
+            if ($last) { Write-Host ("        {0}" -f $last) -ForegroundColor DarkRed }
         }
         $ok = $false
     }
