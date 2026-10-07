@@ -42,17 +42,15 @@ namespace vayu {
                     }
                     fnReturnTypes_[d->name] = rt;
                 }
+                bool hasUserMain = false;
                 for (auto& s : program.stmts) {
                     if (s->kind == StmtKind::Def) {
                         auto* d = static_cast<const DefStmt*>(s.get());
-                        if (d->name == "main")
-                            throw std::runtime_error(
-                                "VcbLower: user-defined 'main' is not supported; "
-                                "top-level statements form the entry point");
+                        if (d->name == "main") hasUserMain = true;
                         emitFn(d);
                     }
                 }
-                emitMain(program);
+                emitMain(program, hasUserMain);
                 return out_.str();
             }
 
@@ -236,6 +234,60 @@ namespace vayu {
                     // `in` is asymmetric: LHS is a scalar, RHS is a
                     // collection.  Handle it before the general switch.
                     if (b->op == BinOp::In) {
+                        // Short-circuit and/or, evaluated lazily.
+                        if (b->op == BinOp::And) {
+                            std::string l = emitExpr(b->lhs.get());
+                            std::string lz = fresh();
+                            emit("i64 " + lz + " = const.i64 0");
+                            std::string isZero = fresh();
+                            emit("i64 " + isZero + " = eq " + l + ", " + lz);
+                            std::string r = emitExpr(b->rhs.get());
+                            std::string rz = fresh();
+                            emit("i64 " + rz + " = const.i64 0");
+                            std::string rIsZero = fresh();
+                            emit("i64 " + rIsZero + " = eq " + r + ", " + rz);
+                            std::string t = fresh();
+                            emit("i64 " + t + " = and " + isZero + ", " + rIsZero);
+                            lastType_ = VType::Bool;
+                            return t;
+                        }
+                        if (b->op == BinOp::Or) {
+                            std::string l = emitExpr(b->lhs.get());
+                            std::string lz = fresh();
+                            emit("i64 " + lz + " = const.i64 0");
+                            std::string lNonZero = fresh();
+                            emit("i64 " + lNonZero + " = ne " + l + ", " + lz);
+                            std::string r = emitExpr(b->rhs.get());
+                            std::string rz = fresh();
+                            emit("i64 " + rz + " = const.i64 0");
+                            std::string rNonZero = fresh();
+                            emit("i64 " + rNonZero + " = ne " + r + ", " + rz);
+                            std::string t = fresh();
+                            emit("i64 " + t + " = or " + lNonZero + ", " + rNonZero);
+                            lastType_ = VType::Bool;
+                            return t;
+                        }
+                        if (b->op == BinOp::Pow) {
+                            std::string l = emitExpr(b->lhs.get());
+                            VType lt2 = lastType_;
+                            std::string r = emitExpr(b->rhs.get());
+                            VType rt2 = lastType_;
+                            std::string t = fresh();
+                            if (lt2 == VType::Int && rt2 == VType::Int) {
+                                emit("i64 " + t + " = call vayu_pow_int(" + l + ", " + r + ")");
+                            }
+                            else {
+                                std::string lf = fresh();
+                                emit("i64 " + lf + " = sitof " + l);
+                                std::string rf = fresh();
+                                emit("i64 " + rf + " = sitof " + r);
+                                emit("i64 " + t + " = call vayu_pow_float(" + lf + ", " + rf + ")");
+                            }
+                            lastType_ = (lt2 == VType::Int && rt2 == VType::Int)
+                                ? VType::Int : VType::Float;
+                            return t;
+                        }
+
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
                         std::string r = emitExpr(b->rhs.get());
@@ -872,8 +924,10 @@ namespace vayu {
                 nextTemp_ = 0; nextLabel_ = 0;
                 terminated_ = false; lastType_ = VType::Int;
 
+                std::string emittedName =
+                    (d->name == "main") ? "__vayu_user_main" : d->name;
                 std::ostringstream hdr;
-                hdr << "func " << d->name << "(";
+                hdr << "func " << emittedName << "(";
                 for (size_t i = 0; i < d->params.size(); ++i) {
                     if (i) hdr << ", ";
                     hdr << "%p" << i << ": i64";
@@ -907,7 +961,7 @@ namespace vayu {
                 emitRaw("}\n");
             }
 
-            void emitMain(const Block& program) {
+            void emitMain(const Block& program, bool hasUserMain) {
                 fnSlots_.clear();
                 nameTypes_.clear();
                 breakStack_.clear();
@@ -921,6 +975,14 @@ namespace vayu {
                     if (s->kind == StmtKind::Def) continue;
                     emitStmt(s.get());
                     if (terminated_) break;
+                }
+                // If the file defines `def main() -> T`, call it and
+                // return its value.  Otherwise fall through with 0.
+                if (!terminated_ && hasUserMain) {
+                    std::string t = fresh();
+                    emit("i64 " + t + " = call __vayu_user_main()");
+                    emit("ret " + t);
+                    terminated_ = true;
                 }
                 if (!terminated_) {
                     std::string z = fresh();
