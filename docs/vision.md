@@ -92,11 +92,9 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 **27 Part 17 — Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
 
-### Phase 28 — Benchmarking on VCB
+### Phase 28 — Object emission and external linking
 
-**Part 1 — Working:** benchmark foundation and VCB benchmark preparation.
-
-**Part 2 — Pending:** benchmark suite with a checkpointed runner. Results should distinguish Windows PE and Linux ELF targets and record the VCB revision used.
+Phase 28 replaces the direct executable-output boundary with relocatable object emission and external linking. Windows will emit COFF `.obj` files and Linux will emit ELF `.o` files, with VCB providing the object-level sections, symbols, and relocations. `NativeCompiler` will use external linking by default while retaining the embedded path as an explicit option.
 
 ### Phase 29 — Version cut
 
