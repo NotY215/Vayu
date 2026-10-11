@@ -221,6 +221,19 @@ namespace vayu {
                         lastType_ = VType::Bool;
                         return t;
                     }
+                    // Phase 30 -- bitwise NOT.
+                    case UnOp::BNot: {
+                        if (operandType != VType::Int)
+                            throw std::runtime_error(
+                                "VcbLower: '~' requires an int operand "
+                                "at line " + std::to_string(e->loc.line));
+                        std::string neg1 = fresh();
+                        emit("i64 " + neg1 + " = const.i64 -1");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = xor " + v + ", " + neg1);
+                        lastType_ = VType::Int;
+                        return t;
+                    }
                     default:
                         throw std::runtime_error(
                             "VcbLower: unary op not yet supported at line " +
@@ -231,63 +244,84 @@ namespace vayu {
                 case ExprKind::Binary: {
                     auto* b = static_cast<const BinaryExpr*>(e);
 
+                    // Phase 30 -- short-circuit `and`.
+                    if (b->op == BinOp::And) {
+                        std::string slotName = "__and_" +
+                            std::to_string(nextTemp_++);
+                        std::string slot =
+                            declareSlot(slotName, VType::Int);
+                        std::string l = emitExpr(b->lhs.get());
+                        VType lt = lastType_;
+                        std::string evalR = freshLabel("and_eval");
+                        std::string done  = freshLabel("and_done");
+                        emit("store " + l + ", " + slot);
+                        emit("br " + l + ", " + evalR + ", " + done);
+                        emitLabel(evalR);
+                        std::string r = emitExpr(b->rhs.get());
+                        VType rt = lastType_;
+                        emit("store " + r + ", " + slot);
+                        emit("jmp " + done);
+                        emitLabel(done);
+                        std::string t = fresh();
+                        emit("i64 " + t + " = load " + slot);
+                        lastType_ = (lt == rt) ? lt : rt;
+                        return t;
+                    }
+
+                    // Phase 30 -- short-circuit `or`.
+                    if (b->op == BinOp::Or) {
+                        std::string slotName = "__or_" +
+                            std::to_string(nextTemp_++);
+                        std::string slot =
+                            declareSlot(slotName, VType::Int);
+                        std::string l = emitExpr(b->lhs.get());
+                        VType lt = lastType_;
+                        std::string evalR = freshLabel("or_eval");
+                        std::string done  = freshLabel("or_done");
+                        emit("store " + l + ", " + slot);
+                        emit("br " + l + ", " + done + ", " + evalR);
+                        emitLabel(evalR);
+                        std::string r = emitExpr(b->rhs.get());
+                        VType rt = lastType_;
+                        emit("store " + r + ", " + slot);
+                        emit("jmp " + done);
+                        emitLabel(done);
+                        std::string t = fresh();
+                        emit("i64 " + t + " = load " + slot);
+                        lastType_ = (lt == rt) ? lt : rt;
+                        return t;
+                    }
+
+                    // Phase 30 -- integer exponentiation.
+                    if (b->op == BinOp::Pow) {
+                        std::string l = emitExpr(b->lhs.get());
+                        VType lt = lastType_;
+                        std::string r = emitExpr(b->rhs.get());
+                        VType rt = lastType_;
+                        if (lt != VType::Int || rt != VType::Int)
+                            throw std::runtime_error(
+                                "VcbLower: '**' only supports int ** int "
+                                "at line " + std::to_string(e->loc.line));
+                        if (b->rhs->kind == ExprKind::IntLit) {
+                            auto* lit = static_cast<const IntLitExpr*>(
+                                b->rhs.get());
+                            if (lit->value < 0)
+                                throw std::runtime_error(
+                                    "VcbLower: '**' with a negative "
+                                    "exponent is not supported "
+                                    "(Python returns a float) at line " +
+                                    std::to_string(e->loc.line));
+                        }
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_pow_int(" + l +
+                            ", " + r + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+
                     // `in` is asymmetric: LHS is a scalar, RHS is a
                     // collection.  Handle it before the general switch.
                     if (b->op == BinOp::In) {
-                        // Short-circuit and/or, evaluated lazily.
-                        if (b->op == BinOp::And) {
-                            std::string l = emitExpr(b->lhs.get());
-                            std::string lz = fresh();
-                            emit("i64 " + lz + " = const.i64 0");
-                            std::string isZero = fresh();
-                            emit("i64 " + isZero + " = eq " + l + ", " + lz);
-                            std::string r = emitExpr(b->rhs.get());
-                            std::string rz = fresh();
-                            emit("i64 " + rz + " = const.i64 0");
-                            std::string rIsZero = fresh();
-                            emit("i64 " + rIsZero + " = eq " + r + ", " + rz);
-                            std::string t = fresh();
-                            emit("i64 " + t + " = and " + isZero + ", " + rIsZero);
-                            lastType_ = VType::Bool;
-                            return t;
-                        }
-                        if (b->op == BinOp::Or) {
-                            std::string l = emitExpr(b->lhs.get());
-                            std::string lz = fresh();
-                            emit("i64 " + lz + " = const.i64 0");
-                            std::string lNonZero = fresh();
-                            emit("i64 " + lNonZero + " = ne " + l + ", " + lz);
-                            std::string r = emitExpr(b->rhs.get());
-                            std::string rz = fresh();
-                            emit("i64 " + rz + " = const.i64 0");
-                            std::string rNonZero = fresh();
-                            emit("i64 " + rNonZero + " = ne " + r + ", " + rz);
-                            std::string t = fresh();
-                            emit("i64 " + t + " = or " + lNonZero + ", " + rNonZero);
-                            lastType_ = VType::Bool;
-                            return t;
-                        }
-                        if (b->op == BinOp::Pow) {
-                            std::string l = emitExpr(b->lhs.get());
-                            VType lt2 = lastType_;
-                            std::string r = emitExpr(b->rhs.get());
-                            VType rt2 = lastType_;
-                            std::string t = fresh();
-                            if (lt2 == VType::Int && rt2 == VType::Int) {
-                                emit("i64 " + t + " = call vayu_pow_int(" + l + ", " + r + ")");
-                            }
-                            else {
-                                std::string lf = fresh();
-                                emit("i64 " + lf + " = sitof " + l);
-                                std::string rf = fresh();
-                                emit("i64 " + rf + " = sitof " + r);
-                                emit("i64 " + t + " = call vayu_pow_float(" + lf + ", " + rf + ")");
-                            }
-                            lastType_ = (lt2 == VType::Int && rt2 == VType::Int)
-                                ? VType::Int : VType::Float;
-                            return t;
-                        }
-
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
                         std::string r = emitExpr(b->rhs.get());
@@ -300,8 +334,9 @@ namespace vayu {
                             return t;
                         }
                         throw std::runtime_error(
-                            "VcbLower: 'in' only supports map<str, _> on the "
-                            "right, at line " + std::to_string(e->loc.line));
+                            "VcbLower: 'in' only supports map<str, _> on "
+                            "the right, at line " +
+                            std::to_string(e->loc.line));
                     }
 
                     std::string l = emitExpr(b->lhs.get());
@@ -571,6 +606,20 @@ namespace vayu {
                     lastType_ = VType::Float;
                     return t;
                 }
+                // Phase 30 -- str(str) identity.  str(int/bool/float)
+                // is Phase 30 Part 2.
+                if (name == "str") {
+                    if (args.size() != 1)
+                        throw std::runtime_error("VcbLower: str() takes one arg");
+                    if (argTypes[0] == VType::Str) {
+                        lastType_ = VType::Str;
+                        return args[0];
+                    }
+                    throw std::runtime_error(
+                        "VcbLower: str() for non-str is not yet supported "
+                        "(Phase 30 Part 2) at line " +
+                        std::to_string(c->loc.line));
+                }
 
                 // Phase 28.5 -- builtin guard.
                 //
@@ -752,10 +801,35 @@ namespace vayu {
                 }
                 case StmtKind::Assign: {
                     auto* n = static_cast<const AssignStmt*>(s);
+
+                    // Phase 30 -- index assignment: arr[i] = v.
+                    if (n->target->kind == ExprKind::Index) {
+                        auto* ix = static_cast<const IndexExpr*>(
+                            n->target.get());
+                        std::string base = emitExpr(ix->target.get());
+                        VType baseType = lastType_;
+                        std::string idx = emitExpr(ix->index.get());
+                        std::string val = emitExpr(n->value.get());
+                        if (baseType == VType::List) {
+                            emit("call vayu_list_set(" + base + ", " +
+                                idx + ", " + val + ")");
+                            return;
+                        }
+                        if (baseType == VType::Map) {
+                            emit("call vayu_map_put(" + base + ", " +
+                                idx + ", " + val + ")");
+                            return;
+                        }
+                        throw std::runtime_error(
+                            "VcbLower: index-assign on non-collection "
+                            "at line " + std::to_string(s->loc.line));
+                    }
+
                     if (n->target->kind != ExprKind::NameRef)
                         throw std::runtime_error(
-                            "VcbLower: only NameRef assignment targets supported "
-                            "at line " + std::to_string(s->loc.line));
+                            "VcbLower: only NameRef and Index assignment "
+                            "targets supported at line " +
+                            std::to_string(s->loc.line));
                     const std::string& nm =
                         static_cast<const NameRefExpr*>(n->target.get())->name;
                     std::string v = emitExpr(n->value.get());
@@ -870,20 +944,43 @@ namespace vayu {
                             "VcbLower: keyword args to range() not supported");
                     argVals.push_back(emitExpr(a.value.get()));
                 }
-                std::string startReg, stopReg;
+                std::string startReg, stopReg, stepReg;
+                bool stepPositive = true;
                 if (argVals.size() == 1) {
                     std::string z = fresh();
                     emit("i64 " + z + " = const.i64 0");
                     startReg = z;
                     stopReg = argVals[0];
+                    std::string one = fresh();
+                    emit("i64 " + one + " = const.i64 1");
+                    stepReg = one;
                 }
-                else {
+                else if (argVals.size() == 2) {
                     startReg = argVals[0];
                     stopReg = argVals[1];
-                    if (argVals.size() == 3)
+                    std::string one = fresh();
+                    emit("i64 " + one + " = const.i64 1");
+                    stepReg = one;
+                }
+                else {
+                    // Phase 30 -- 3-arg range.  The step must be a
+                    // compile-time literal so the loop can pick a
+                    // comparison direction once.
+                    if (call->args[2].value->kind != ExprKind::IntLit)
                         throw std::runtime_error(
-                            "VcbLower: range() with 3 args not yet supported "
+                            "VcbLower: range() step must be an int "
+                            "literal at line " +
+                            std::to_string(n->loc.line));
+                    auto* stepLit = static_cast<const IntLitExpr*>(
+                        call->args[2].value.get());
+                    if (stepLit->value == 0)
+                        throw std::runtime_error(
+                            "VcbLower: range() step must be non-zero "
                             "at line " + std::to_string(n->loc.line));
+                    startReg = argVals[0];
+                    stopReg = argVals[1];
+                    stepReg = argVals[2];
+                    stepPositive = (stepLit->value > 0);
                 }
 
                 std::string slot = declareSlot(n->targetName, VType::Int);
@@ -898,7 +995,10 @@ namespace vayu {
                 std::string iCur = fresh();
                 emit("i64 " + iCur + " = load " + slot);
                 std::string cmp = fresh();
-                emit("i64 " + cmp + " = lt " + iCur + ", " + stopReg);
+                if (stepPositive)
+                    emit("i64 " + cmp + " = lt " + iCur + ", " + stopReg);
+                else
+                    emit("i64 " + cmp + " = gt " + iCur + ", " + stopReg);
                 emit("br " + cmp + ", " + bodyL + ", " + exitL);
 
                 emitLabel(bodyL);
@@ -912,10 +1012,8 @@ namespace vayu {
                 emitLabel(stepL);
                 std::string iCur2 = fresh();
                 emit("i64 " + iCur2 + " = load " + slot);
-                std::string one = fresh();
-                emit("i64 " + one + " = const.i64 1");
                 std::string iNxt = fresh();
-                emit("i64 " + iNxt + " = add " + iCur2 + ", " + one);
+                emit("i64 " + iNxt + " = add " + iCur2 + ", " + stepReg);
                 emit("store " + iNxt + ", " + slot);
                 emit("jmp " + topL);
                 emitLabel(exitL);
