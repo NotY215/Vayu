@@ -101,10 +101,10 @@ The compiler repository also contains the standalone `vls`, `vfmt`, and `vlint` 
 
 **Vayu** is a next-generation programming language designed to combine the best ideas from:
 
-- 🐍 **Python** — simple, readable syntax and a powerful ecosystem
-- ⚡ **C++** — native performance and low-level control
-- ☕ **Java** — portability and large-scale application development
-- 🎯 **C#** — modern application and GUI development
+- 🐍 **Python** -- simple, readable syntax and a powerful ecosystem
+- ⚡ **C++** -- native performance and low-level control
+- ☕ **Java** -- portability and large-scale application development
+- 🎯 **C#** -- modern application and GUI development
 
 Vayu aims to provide these capabilities without forcing developers to switch between multiple languages for different types of software.
 
@@ -581,23 +581,23 @@ Current implemented areas include:
 
 ### Current Development Direction
 
-**Current development — VCB-backed native toolchain**
+**Current development -- VCB-backed native toolchain**
 
 Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, and the Linux path is covered by VCB's ELF target and the Phase 27 ELF matrix.
 
-**Phase 27 Parts 1–16 — Done**
+**Phase 27 Parts 1–16 -- Done**
 
 The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, shared x86-64 emitter extraction, the 11-program PE matrix, runtime `.pdata` / `.xdata` coverage, and the Linux ELF matrix.
 
-**Phase 27 Parts 1–16 — Done.**
+**Phase 27 Parts 1–16 -- Done.**
 
-**Phase 27 Parts 1–17 — Done. The WDAC structural fix is complete, while the object + external-linker path becomes the next major backend transition.
+**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is complete, while the object + external-linker path becomes the next major backend transition.
 
-**Phase 18 — Vayu developer tooling**
+**Phase 18 -- Vayu developer tooling**
 
 The current development track focuses on making Vayu practical to use inside a modern editor and development workflow. The repository now contains the Vayu Language Server, formatter, linter, and VS Code extension, alongside the existing compiler/runtime infrastructure.
 
-**Phase 17 — Vayu self-hosting / compiler bootstrap**
+**Phase 17 -- Vayu self-hosting / compiler bootstrap**
 
 The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu itself is developed toward feature parity. The long-term objective is for Vayu to compile its own compiler and eventually allow the C++ bootstrap implementation to be dropped.
 
@@ -610,7 +610,7 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
 | 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| — | waiting | Awaiting your next prompt |
+| -- | waiting | Awaiting your next prompt |
 | 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
 | 28.2 | queued | ELF `.o` emitter |
 | 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |

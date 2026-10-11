@@ -31,7 +31,7 @@ namespace vayu {
         Plus, Minus, Star, Slash, Percent, StarStar, SlashSlash,
         Assign, Eq, NotEq, Lt, Gt, LtEq, GtEq,
         PlusAssign, MinusAssign, StarAssign, SlashAssign,
-        // Phase 11.1i — additional compound assigns
+        // Phase 11.1i -- additional compound assigns
         PercentAssign, StarStarAssign, SlashSlashAssign,
         AmpAssign, PipeAssign, CaretAssign, ShlAssign, ShrAssign,
         Arrow, FatArrow,

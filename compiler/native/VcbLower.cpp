@@ -572,6 +572,22 @@ namespace vayu {
                     return t;
                 }
 
+                // Phase 28.5 -- builtin guard.
+                //
+                // Reaching this point means `name` is not one of the
+                // builtins handled above (print, exit, len, int,
+                // float) and not a user-defined function.  Emitting a
+                // call to it would produce an unresolved external
+                // reference that only fails at link time with an
+                // opaque message.  Fail here with the location and
+                // the name of the offending builtin.
+                auto fnRit = fnReturnTypes_.find(name);
+                if (fnRit == fnReturnTypes_.end()) {
+                    throw std::runtime_error(
+                        "VcbLower: unknown builtin '" + name +
+                        "' at line " + std::to_string(c->loc.line));
+                }
+
                 std::string argstr;
                 for (size_t i = 0; i < args.size(); ++i) {
                     if (i) argstr += ", ";
@@ -579,11 +595,7 @@ namespace vayu {
                 }
                 std::string t = fresh();
                 emit("i64 " + t + " = call " + name + "(" + argstr + ")");
-                {
-                    auto rit = fnReturnTypes_.find(name);
-                    lastType_ = (rit != fnReturnTypes_.end())
-                        ? rit->second : VType::Int;
-                }
+                lastType_ = fnRit->second;
                 return t;
             }
 

@@ -1,4 +1,4 @@
-# self_host_17_5.vyu — Phase 17.5 target: const + enum.
+# self_host_17_5.vyu -- Phase 17.5 target: const + enum.
 
 const MAX: int = 100
 const RATIO: int = 3

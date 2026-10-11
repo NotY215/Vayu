@@ -1,4 +1,4 @@
-# vayu.vyu — Unified Vayu compiler: lex -> parse -> codegen.
+# vayu.vyu -- Unified Vayu compiler: lex -> parse -> codegen.
 def vayu_digit_val(c: str) -> int:
     o = ord(c)
     if o >= 48 and o <= 57:
@@ -429,7 +429,7 @@ class Parser:
             self.ast.nodes[node].left = expr
             self.ast.nodes[node].right = value
             return node
-        # Phase 17.1: compound assign — x OP= e  desugars to  x = x OP e.
+        # Phase 17.1: compound assign -- x OP= e  desugars to  x = x OP e.
         op_kind = self.peek_kind()
         if op_kind == "PlusAssign":
             self.advance()

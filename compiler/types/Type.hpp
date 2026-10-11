@@ -17,12 +17,12 @@ namespace vayu {
         Map,
         Named,
         TypeParam,
-        Unique,   // Phase 12.0 — unique<T>
-        Shared,   // Phase 12.1 — shared<T>, copyable
-        Weak,     // Phase 12.1 — weak<T>, must .upgrade()
+        Unique,   // Phase 12.0 -- unique<T>
+        Shared,   // Phase 12.1 -- shared<T>, copyable
+        Weak,     // Phase 12.1 -- weak<T>, must .upgrade()
         Tuple,    // Phase 14.0
         Set,      // Phase 14.1
-        Ptr,      // Phase 15.2e — ptr<T>
+        Ptr,      // Phase 15.2e -- ptr<T>
     };
 
     class Type;

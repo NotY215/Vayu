@@ -1,4 +1,4 @@
-# vparse.vyu — expression + statement parser written in Vayu.
+# vparse.vyu -- expression + statement parser written in Vayu.
 
 class Token:
     kind: str

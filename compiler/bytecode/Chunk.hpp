@@ -8,7 +8,7 @@
 
 namespace vayu {
 
-    /// A compiled compilation unit — top-level script or a single function body.
+    /// A compiled compilation unit -- top-level script or a single function body.
     struct Chunk {
         std::vector<uint8_t>     code;
         std::vector<int>         lines;
@@ -18,7 +18,7 @@ namespace vayu {
         /// Nested functions declared inside this chunk .
         std::vector<std::shared_ptr<Chunk>> functions;
 
-        /// Parameter names — populated for function chunks; empty for top-level.
+        /// Parameter names -- populated for function chunks; empty for top-level.
         std::vector<std::string> paramNames;
 
         void   emit(uint8_t b, int line);

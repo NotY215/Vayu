@@ -103,7 +103,7 @@ namespace vayu {
     void Parser::skipNewlines() { while (check(TokenType::Newline)) advance(); }
 
     // =========================================================================
-    // Phase 11.1h — namespace detection & splicing
+    // Phase 11.1h -- namespace detection & splicing
     // =========================================================================
 
     bool Parser::isNamespaceAhead() const {
@@ -183,7 +183,7 @@ namespace vayu {
                 continue;
             }
 
-            // Phase 11.1g: `defer expr` — soft keyword, block-top only.
+            // Phase 11.1g: `defer expr` -- soft keyword, block-top only.
             if (check(TokenType::Identifier) && peek().lexeme == "defer" &&
                 peek(1).type != TokenType::Assign &&
                 peek(1).type != TokenType::PlusAssign &&
@@ -283,7 +283,7 @@ namespace vayu {
         if (check(TokenType::Identifier) && peek(1).type == TokenType::Colon)
             return parseAnnotatedAssign();
 
-        // Phase 14.0b: `a, b, c = expr` — desugared to
+        // Phase 14.0b: `a, b, c = expr` -- desugared to
         //   __unpack_N = expr
         //   a = __unpack_N[0]
         //   b = __unpack_N[1]
@@ -333,7 +333,7 @@ namespace vayu {
     }
 
     // =========================================================================
-    // Phase 11.1e — match / case
+    // Phase 11.1e -- match / case
     // =========================================================================
 
     StmtPtr Parser::parseMatch() {
@@ -482,7 +482,7 @@ namespace vayu {
     }
 
     // =========================================================================
-    // Phase 11.1f — with statement
+    // Phase 11.1f -- with statement
     // =========================================================================
 
     StmtPtr Parser::parseWith() {
@@ -543,7 +543,7 @@ namespace vayu {
     }
 
     // =========================================================================
-    // Phase 11.1k1 — yield
+    // Phase 11.1k1 -- yield
     // =========================================================================
 
     StmtPtr Parser::parseYield() {
@@ -556,7 +556,7 @@ namespace vayu {
     }
 
     // =========================================================================
-    // Phase 11.1i — compound assign desugar
+    // Phase 11.1i -- compound assign desugar
     // =========================================================================
 
     StmtPtr Parser::buildCompoundAssign(ExprPtr target, BinOp op,
@@ -1030,7 +1030,7 @@ namespace vayu {
             throw ParseError("extern block has no declarations", eTok.location);
         return node;
     }
-    // Phase 15.2: `unsafe:` block.  Surface syntax only — the body is
+    // Phase 15.2: `unsafe:` block.  Surface syntax only -- the body is
     // executed exactly like a normal inline block.  Raw-pointer semantics
     // land in 15.2b.
     StmtPtr Parser::parseUnsafe() {

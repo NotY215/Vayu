@@ -77,7 +77,7 @@ namespace vayu {
         Value pyStubVersion(const std::vector<Value>&);
         Value pyStubRun(const std::vector<Value>&);
         Value pyStubExec(const std::vector<Value>&);
-        // Phase 16.1 — value bridging stubs.
+        // Phase 16.1 -- value bridging stubs.
         Value pyStubInt(const std::vector<Value>&);
         Value pyStubStr(const std::vector<Value>&);
         Value pyStubBool(const std::vector<Value>&);
@@ -455,7 +455,7 @@ namespace vayu {
     }
 
     // ===========================================================================
-    // Phase 11.1k1 — generators
+    // Phase 11.1k1 -- generators
     // ===========================================================================
 
     void Interpreter::execYield(const YieldStmt* y) {
@@ -774,7 +774,7 @@ namespace vayu {
             mod->members["version"] = mk("version", pyStubVersion);
             mod->members["run"] = mk("run", pyStubRun);
             mod->members["exec"] = mk("exec", pyStubExec);
-            // Phase 16.1 — value bridging.
+            // Phase 16.1 -- value bridging.
             mod->members["int"] = mk("int", pyStubInt);
             mod->members["str"] = mk("str", pyStubStr);
             mod->members["bool"] = mk("bool", pyStubBool);
@@ -1179,7 +1179,7 @@ namespace vayu {
             }
             return Value(s);
         }
-                             // Phase 14.4 — slice
+                             // Phase 14.4 -- slice
         case ExprKind::Slice: {
             auto* n = static_cast<const SliceExpr*>(e);
             Value tgt = eval(n->target.get());
@@ -2905,7 +2905,7 @@ namespace vayu {
             if (a.empty()) throw std::runtime_error("math.erfc expects a number");
             return Value(std::erfc(a[0].asDouble()));
         }
-        // ---- Phase 13.0 — inspection & pure helpers ----
+        // ---- Phase 13.0 -- inspection & pure helpers ----
 
         uint64_t fnv1a64(const std::string& s) {
             uint64_t h = 1469598103934665603ULL;
@@ -3322,7 +3322,7 @@ namespace vayu {
         // Phase 15.6: malloc/free built-ins.
         // malloc(n) allocates a heap-style block of n bytes and returns a
         // reference to a backing list of n/8 cells.  free(p) is a no-op
-        // here — the shared_ptr reclaims the block when the last ref dies.
+        // here -- the shared_ptr reclaims the block when the last ref dies.
         Value bi_malloc(const std::vector<Value>& a) {
             if (a.size() != 1 || !a[0].isInt())
                 throw std::runtime_error("malloc(n) takes one int argument");

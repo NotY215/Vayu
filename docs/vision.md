@@ -40,7 +40,7 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
 | 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| — | waiting | Awaiting your next prompt |
+| -- | waiting | Awaiting your next prompt |
 | 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
 | 28.2 | queued | ELF `.o` emitter |
 | 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |
@@ -59,38 +59,38 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | 39 | queued | Full benchmark suite |
 | 40 | queued | Version cut |
 
-### Phase 25 — Skipped for now
+### Phase 25 -- Skipped for now
 
 Benchmarking was intentionally postponed until after the VCB transition. The existing control benchmark suite remains available for later comparison, but Phase 25 is not an active development phase.
 
-### Phase 26 — VCB foundation and native backend transition
+### Phase 26 -- VCB foundation and native backend transition
 
 **26 Part 1 is completed:** VCB IR, parser, printer, and `vcb dump`.
 
 **26 Part 2 is completed:** x86-64 code generation, PE + ELF writers, prebuilt runtime, and the Vayu native compiler transition from the old QBE+GCC chain to VCB.
 
-### Phase 27 — VCB native backend correctness and validation
+### Phase 27 -- VCB native backend correctness and validation
 
-**27 Parts 1–17 — Done. The WDAC structural fix is complete but remains intermittent for some binaries; signing is removed from the roadmap.** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, WDAC supplemental-policy generation, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
+**27 Parts 1–17 -- Done. The WDAC structural fix is complete but remains intermittent for some binaries; signing is removed from the roadmap.** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, WDAC supplemental-policy generation, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
 
-**27 Part 17 — Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
+**27 Part 17 -- Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
 
-### Phase 28 — Object emission and external linking
+### Phase 28 -- Object emission and external linking
 
 Phase 28 replaces the direct executable-output boundary with relocatable object emission and external linking. Windows will emit COFF `.obj` files and Linux will emit ELF `.o` files, with VCB providing the object-level sections, symbols, and relocations. `NativeCompiler` will use external linking by default while retaining the embedded path as an explicit option.
 
-### Phase 29 — Version cut
+### Phase 29 -- Version cut
 
 The VCB-era Vayu toolchain is prepared for a release cut once the required native targets, runtime coverage, packaging and validation are complete.
 
 
-### Phase 19–21 — GUI, 2D Graphics and 3D Raster
+### Phase 19–21 -- GUI, 2D Graphics and 3D Raster
 
 The current tooling layer is now a major part of the repository. It includes:
 
-- `vls` — Vayu Language Server
-- `vfmt` — Vayu formatter
-- `vlint` — Vayu linter
+- `vls` -- Vayu Language Server
+- `vfmt` -- Vayu formatter
+- `vlint` -- Vayu linter
 - VS Code extension for `.vyu`
 - diagnostics, hover, completion and go-to-definition
 - references, rename and signature help
@@ -103,7 +103,7 @@ The official VS Code extension is published as `Fliczo.vayu`.
 
 **Direct install:** `vscode:extension/Fliczo.vayu`
 
-### Phase 19–21 — GUI, 2D Graphics and 3D Raster
+### Phase 19–21 -- GUI, 2D Graphics and 3D Raster
 
 The GUI foundation now provides native windows, events, callbacks, canvas drawing, widgets, text, transforms and image-oriented examples. The graphics layer has been extended with a software/hybrid raster pipeline.
 
@@ -134,7 +134,7 @@ The immediate compiler objective remains self-hosting rather than rewriting the 
 
 After self-hosting, the roadmap continues through developer tooling, GUI/window/event/widget APIs, 2D and then 3D graphics, AI/ML infrastructure, and the package ecosystem. These later phases depend on a stable compiler, runtime, standard library, interoperability layer, and tooling foundation.
 
-## ⚙️ VCB — Vayu Compiler Backend
+## ⚙️ VCB -- Vayu Compiler Backend
 
 <a href="https://github.com/NotY215/VCB">
   <img src="https://raw.githubusercontent.com/NotY215/VCB/master/Assets/VCB_logo.png" alt="VCB Logo" width="160">

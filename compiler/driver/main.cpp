@@ -55,6 +55,8 @@ static void usage() {
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
         "  --bench [N]          run the program N times (default 5)\n"
+        "  --link=external      emit-obj + external link (default, --native)\n"
+        "  --link=embedded      vcb build (VCB's own PE writer, no linker)\n"
         "\n"
         "Utility:\n"
         "  --emit-runtime <path>  write the native runtime C source to <path>\n");
@@ -115,6 +117,8 @@ int main(int argc, char** argv) {
     bool useOpt = true;
     int  benchRuns = 0;
     std::string nativeOutPath;
+    vayu::NativeCompiler::LinkMode linkMode =
+        vayu::NativeCompiler::LinkMode::External;
 
     for (int i = 2; i < argc; ++i) {
         const char* a = argv[i];
@@ -125,6 +129,10 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--dump-bytecode")) mode = Mode::DumpBytecode;
         else if (!std::strcmp(a, "--dump-ir"))       mode = Mode::DumpIR;
         else if (!std::strcmp(a, "--native"))        mode = Mode::Native;
+        else if (!std::strcmp(a, "--link=embedded")) linkMode =
+            vayu::NativeCompiler::LinkMode::Embedded;
+        else if (!std::strcmp(a, "--link=external")) linkMode =
+            vayu::NativeCompiler::LinkMode::External;
         else if (!std::strcmp(a, "--vm"))            useVM = true;
         else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
@@ -250,6 +258,7 @@ int main(int argc, char** argv) {
     if (mode == Mode::Native) {
         if (!nativeOutPath.empty()) {
             vayu::NativeCompiler nc;
+            nc.setLinkMode(linkMode);
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
             if (rc != 0) {
@@ -262,6 +271,7 @@ int main(int argc, char** argv) {
         if (benchRuns > 0) {
             runBenchmark("native (includes compile)", benchRuns, [&]() {
                 vayu::NativeCompiler nc;
+                nc.setLinkMode(linkMode);
                 if (nc.compileAndRun(program, srcDir) != 0) {
                     std::fprintf(stderr, "native: %s\n",
                         nc.lastError().c_str());
@@ -272,6 +282,7 @@ int main(int argc, char** argv) {
         }
 
         vayu::NativeCompiler nc;
+        nc.setLinkMode(linkMode);
         return nc.compileAndRun(program, srcDir);
     }
 

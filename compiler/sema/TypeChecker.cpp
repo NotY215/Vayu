@@ -165,7 +165,7 @@ namespace vayu {
     }
 
     // ===========================================================================
-    // Pass 1 — declarations
+    // Pass 1 -- declarations
     // ===========================================================================
 
     void TypeChecker::collectSignatures(const Block& program) {
@@ -747,7 +747,7 @@ namespace vayu {
         case StmtKind::Assign: {
             auto* n = static_cast<const AssignStmt*>(s);
 
-            // Phase 15.2c: `*p = v` — deref-assign.  Permissive by design;
+            // Phase 15.2c: `*p = v` -- deref-assign.  Permissive by design;
             // the pointer type isn't tracked at the sema level, so we
             // type-check the pointer expression and the value expression
             // and accept the write.
@@ -1217,7 +1217,7 @@ namespace vayu {
         case ExprKind::Unary: {
             auto* n = static_cast<const UnaryExpr*>(e);
 
-            // Phase 15.2b — &x and *p are permissive.
+            // Phase 15.2b -- &x and *p are permissive.
             if (n->op == UnOp::AddrOf) {
                 const Expr* op = n->operand.get();
                 if (op->kind == ExprKind::Index) {

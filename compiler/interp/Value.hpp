@@ -185,7 +185,7 @@ namespace vayu {
         std::vector<Value> items;
     };
 
-    // Phase 15.2c–15.2f — a reference to an assignable slot.
+    // Phase 15.2c–15.2f -- a reference to an assignable slot.
     // `accessor` returns the live slot for the plain case (&x, &obj.f).
     // When `backing` is set, `offset` is a stride-1 cell index into it,
     // and `accessor` uses that to serve reads/writes for pointer

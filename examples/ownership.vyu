@@ -10,7 +10,7 @@ def main() -> None:
     a: unique<Resource> = Resource("first")
     print(a.name)
 
-    # Move a into b — a is now unusable.
+    # Move a into b -- a is now unusable.
     b: unique<Resource> = a
     print(b.name)
 

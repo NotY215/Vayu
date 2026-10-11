@@ -1,4 +1,4 @@
-# self_host_17.vyu — Phase 17.2: bitwise + compound bitwise.
+# self_host_17.vyu -- Phase 17.2: bitwise + compound bitwise.
 
 a: int = 12
 b: int = 10

@@ -9,7 +9,7 @@ namespace vayu {
     // Phase 11: only `const` and `enum` are hard keywords for now.  Words
     // that are commonly used as identifiers or method names (match, case,
     // defer, namespace, static, public, private, protected) will be handled
-    // as soft keywords by the parser when each feature lands — the lexer
+    // as soft keywords by the parser when each feature lands -- the lexer
     // leaves them as Identifier.
     const std::unordered_map<std::string, TokenType>& Lexer::keywords() {
         static const std::unordered_map<std::string, TokenType> kw = {
@@ -40,7 +40,7 @@ namespace vayu {
             {"unique", TokenType::Unique}, {"shared", TokenType::Shared},
             {"weak", TokenType::Weak},
 
-            // Phase 11.1b — hard keyword only.
+            // Phase 11.1b -- hard keyword only.
             {"const", TokenType::Const},
             {"extern", TokenType::Extern},
         };

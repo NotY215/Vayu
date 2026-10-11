@@ -22,7 +22,7 @@ print(nums)
 # Negative indexing
 print(nums[-1])
 
-# Slicing isn't implemented yet — skip.
+# Slicing isn't implemented yet -- skip.
 
 # `in`
 print(3 in nums)

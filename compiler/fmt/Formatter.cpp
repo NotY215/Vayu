@@ -155,7 +155,7 @@ namespace vayu::fmt {
         return out;
     }
 
-    // Pass 3: token-aware spacing — comma, `=`, `==`, and multi-space collapse.
+    // Pass 3: token-aware spacing -- comma, `=`, `==`, and multi-space collapse.
     static std::string passSpacing(const std::string& src) {
         std::string out;
         out.reserve(src.size() + 32);

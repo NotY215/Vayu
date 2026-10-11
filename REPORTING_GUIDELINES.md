@@ -55,12 +55,12 @@ Reports will be reviewed as promptly as reasonably possible.
 
 The review process may include:
 
-1. **Acknowledgement** — confirm that the report has been received when a response channel is available.
-2. **Initial review** — determine whether the report falls within the scope of the Code of Conduct or these guidelines.
-3. **Evidence review** — examine relevant messages, issues, pull requests, commits, or other available information.
-4. **Context review** — consider the surrounding circumstances and the perspectives of the people involved.
-5. **Decision** — determine an appropriate response based on the available information and severity of the conduct.
-6. **Follow-up** — communicate the outcome to the reporter when appropriate and when doing so does not compromise privacy or safety.
+1. **Acknowledgement** -- confirm that the report has been received when a response channel is available.
+2. **Initial review** -- determine whether the report falls within the scope of the Code of Conduct or these guidelines.
+3. **Evidence review** -- examine relevant messages, issues, pull requests, commits, or other available information.
+4. **Context review** -- consider the surrounding circumstances and the perspectives of the people involved.
+5. **Decision** -- determine an appropriate response based on the available information and severity of the conduct.
+6. **Follow-up** -- communicate the outcome to the reporter when appropriate and when doing so does not compromise privacy or safety.
 
 Reports will be considered on a case-by-case basis. A report does not automatically mean that a violation occurred.
 

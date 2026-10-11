@@ -1,4 +1,4 @@
-// vscode-vayu/extension.js — dependency-free Vayu language client.
+// vscode-vayu/extension.js -- dependency-free Vayu language client.
 //
 // Talks to `vls.exe` over stdio using the Language Server Protocol.
 // Provides diagnostics, hover, goto-definition, completion, and commands

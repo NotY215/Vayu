@@ -807,7 +807,7 @@ Important responsibilities:
 
 ---
 
-# 27. VCB — Vayu Compiler Backend
+# 27. VCB -- Vayu Compiler Backend
 
 VCB is the companion backend project:
 
@@ -882,7 +882,7 @@ C++ bootstrap can eventually be retired
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
 | 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| — | waiting | Awaiting your next prompt |
+| -- | waiting | Awaiting your next prompt |
 | 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
 | 28.2 | queued | ELF `.o` emitter |
 | 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |

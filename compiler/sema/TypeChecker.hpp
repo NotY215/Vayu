@@ -39,7 +39,7 @@ namespace vayu {
         std::unordered_map<std::string,
             std::unordered_map<std::string, TypePtr>> statics_;
 
-        // Phase 11.2 — stack of type-parameter scopes.  Each scope maps a
+        // Phase 11.2 -- stack of type-parameter scopes.  Each scope maps a
         // user-visible name (`T`) to its TypeParam node.  Pushed on entering
         // a generic signature or class body.
         std::vector<std::unordered_map<std::string, TypePtr>> typeParamScopes_;

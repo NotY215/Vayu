@@ -1,4 +1,4 @@
-# tests\lsp_probe.ps1 — single probe for every LSP feature.
+# tests\lsp_probe.ps1 -- single probe for every LSP feature.
 param(
     [string]$Vls = "build\x64-debug\bin\vls.exe"
 )

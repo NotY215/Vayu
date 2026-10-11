@@ -38,7 +38,7 @@ def linear_init(in_dim: int, out_dim: int, seed: int) -> list<int>:
     while i < total:
         s = (s * 1103515245 + 12345) % 2147483647
         r: int = (s % 2001) - 1000
-        # 4000 not 1000 — with in_dim==1 and x in [1..8], weights in
+        # 4000 not 1000 -- with in_dim==1 and x in [1..8], weights in
         # [-1,1] make h_pre land in [-8,8] and kill half the ReLU units
         # at init.  4x smaller keeps activations in a live range.
         v: int = (r * Q) // (4000 * scale_den)

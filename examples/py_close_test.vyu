@@ -1,4 +1,4 @@
-# py_close_test.vyu — Phase 16.5 closing test.
+# py_close_test.vyu -- Phase 16.5 closing test.
 # Native-only: uses py.* which has no tree/VM implementation.
 
 py.init()

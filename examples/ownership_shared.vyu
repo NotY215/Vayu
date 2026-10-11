@@ -12,7 +12,7 @@ def use_shared(c: shared<Counter>) -> int:
 def main() -> None:
     a: shared<Counter> = Counter(10)
 
-    # shared copies are fine — no move.
+    # shared copies are fine -- no move.
     b: shared<Counter> = a
     print(a.value)
     print(b.value)

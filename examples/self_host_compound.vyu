@@ -1,4 +1,4 @@
-# self_host_compound.vyu — Phase 17.1 target.
+# self_host_compound.vyu -- Phase 17.1 target.
 
 def main() -> None:
     x: int = 10

@@ -1,4 +1,4 @@
-# py_bidi_test.vyu — Phase 16.3 + 16.4 combined (top-level script).
+# py_bidi_test.vyu -- Phase 16.3 + 16.4 combined (top-level script).
 
 def double(x: int) -> int:
     return x * 2

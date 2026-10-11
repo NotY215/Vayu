@@ -128,15 +128,55 @@ namespace vayu {
         else
             exeCmd = "call \"" + vcbExe + "\"";
 
-        std::string cmd = exeCmd + " build \"" + irPath +
-            "\" -o \"" + exePath + "\"";
-        std::fprintf(stderr, "native: running %s\n", cmd.c_str());
-        int rc = std::system(cmd.c_str());
-        if (rc != 0) {
-            lastError_ = "vcb failed (exit " + std::to_string(rc) +
-                "). IR at " + irPath;
-            std::fprintf(stderr, "native: %s\n", lastError_.c_str());
-            return 1;
+        if (linkMode_ == LinkMode::Embedded) {
+            // Legacy path: VCB's own PE/ELF writer, no external
+            // linker.  Selected by --link=embedded.
+            std::string cmd = exeCmd + " build \"" + irPath +
+                "\" -o \"" + exePath + "\"";
+            std::fprintf(stderr, "native: running %s\n", cmd.c_str());
+            int rc = std::system(cmd.c_str());
+            if (rc != 0) {
+                lastError_ = "vcb build failed (exit " +
+                    std::to_string(rc) + "). IR at " + irPath;
+                std::fprintf(stderr, "native: %s\n", lastError_.c_str());
+                return 1;
+            }
+        }
+        else {
+            // Phase 28.4 default: emit a COFF .obj and link it with
+            // lld-link.exe.  The linker produces a binary in the shape
+            // cl.exe / clang emit, which is the strongest available
+            // signal to WDAC's reputation service.
+            std::string objPath = base + ".obj";
+            std::string emitCmd = exeCmd + " emit-obj \"" + irPath +
+                "\" -o \"" + objPath + "\""
+                " --target pe";
+            std::fprintf(stderr, "native: running %s\n", emitCmd.c_str());
+            int rc = std::system(emitCmd.c_str());
+            if (rc != 0) {
+                lastError_ = "vcb emit-obj failed (exit " +
+                    std::to_string(rc) + "). IR at " + irPath;
+                std::fprintf(stderr, "native: %s\n", lastError_.c_str());
+                return 1;
+            }
+
+            std::string linkCmd = exeCmd + " link \"" + objPath +
+                "\" -o \"" + exePath + "\""
+                " --target pe"
+                " --entry vayu_entry";
+#ifdef _WIN32
+            linkCmd += " --lib tools\\kernel32.lib";
+#endif
+            std::fprintf(stderr, "native: running %s\n", linkCmd.c_str());
+            rc = std::system(linkCmd.c_str());
+            if (rc != 0) {
+                lastError_ = "vcb link failed (exit " +
+                    std::to_string(rc) + "). Object at " + objPath;
+                std::fprintf(stderr, "native: %s\n", lastError_.c_str());
+                return 1;
+            }
+            if (std::getenv("VAYU_KEEP_TEMP") == nullptr)
+                tryRemove(objPath);
         }
 
         tryRemove(irPath);

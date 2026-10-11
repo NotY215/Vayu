@@ -210,7 +210,7 @@ namespace vayu {
         if (to->kind == TypeKind::Named && from->kind == TypeKind::Named)
             return to->name == from->name;
 
-        // Phase 15.2e — ptr<T>
+        // Phase 15.2e -- ptr<T>
         if (to->kind == TypeKind::Ptr && from->kind == TypeKind::Ptr) {
             if (to->params.empty() || from->params.empty()) return true;
             return to->params[0]->equals(from->params[0]);

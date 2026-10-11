@@ -1,4 +1,4 @@
-# self_host_17_4.vyu — Phase 17.4 target.
+# self_host_17_4.vyu -- Phase 17.4 target.
 
 a: int = 0b1100
 b: int = 0o17

@@ -1,4 +1,4 @@
-# Fibonacci — recursion + while loop + print
+# Fibonacci -- recursion + while loop + print
 
 def fib(n: int) -> int:
     if n < 2:

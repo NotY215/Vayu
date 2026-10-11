@@ -1,4 +1,4 @@
-# vlex.vyu — A Vayu lexer, written in Vayu.
+# vlex.vyu -- A Vayu lexer, written in Vayu.
 # Usage:   vlex <source.vyu>
 # Output:  one line per token:  LINE:COL  TYPE  LEXEME
 
@@ -327,7 +327,7 @@ class Lexer:
         self.add("EOF", "", self.line, self.col)
 
 # -----------------------------------------------------------------
-# Keyword lookup — map-based, no one-line ifs.
+# Keyword lookup -- map-based, no one-line ifs.
 # -----------------------------------------------------------------
 def keyword_kind(word: str) -> str:
     kw = {}

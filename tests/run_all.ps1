@@ -1,14 +1,4 @@
 # tests\run_all.ps1 -- cross-backend sanity harness.
-#
-# Native backend: VCB (tools\vcb.exe).  vayuc dispatches to it via the
-# VAYU_VCB environment variable; if unset, vayuc falls back to
-# tools\vcb.exe.  This script sets VAYU_VCB explicitly so the
-# freshness check below is meaningful.
-#
-# QBE and gcc were removed in Phase 26 Part 2.9e.  Signing was removed
-# from VCB in the post-27 cleanup.  VCB emits machine code and a
-# complete PE or ELF image directly.
-#
 # Modes:
 #   (no args)              full: examples + fixpoint
 #   -Test <name>           one example only, all backends, no fixpoint
@@ -228,7 +218,7 @@ function Test-OneFile([string]$rel, [string]$name) {
 }
 
 # -------------------------------------------------------------------------
-# Fixpoint — DISABLED until self-hosting on VCB IR lands (Phase 36).
+# Fixpoint -- DISABLED until self-hosting on VCB IR lands (Phase 36).
 # -------------------------------------------------------------------------
 
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {

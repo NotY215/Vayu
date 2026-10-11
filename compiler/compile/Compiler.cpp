@@ -882,7 +882,7 @@ namespace vayu {
             return;
         }
 
-                             // Phase 14.4 — slice
+                             // Phase 14.4 -- slice
         case ExprKind::Slice: {
             auto* n = static_cast<const SliceExpr*>(e);
             compileExpr(n->target.get());

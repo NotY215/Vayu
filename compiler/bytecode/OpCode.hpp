@@ -24,7 +24,7 @@ namespace vayu {
         ADDR_OF,            // <nameIdx:u16>  reference to a named slot
         DEREF,              // reference -> value
         DEREF_SET,          // value, reference -> store
-        // Phase 15.2d — compound lvalue addresses.
+        // Phase 15.2d -- compound lvalue addresses.
         ADDR_OF_INDEX,      // [target, index] -> reference to element
         ADDR_OF_ATTR,       // <nameIdx:u16>  [base] -> reference to field
     };
