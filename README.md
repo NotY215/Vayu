@@ -712,3 +712,14 @@ Made independently with ❤️, code, experimentation, and a lot of debugging.
 **[🌐 vayu.gt.tc](https://vayu.gt.tc)**
 
 </div>
+
+
+## Project policies
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security](SECURITY.md)
+- [Support](SUPPORT.md)
+- [Citation](CITATION.cff)
+- [Governance](GOVERNANCE.md)
+- [License](LICENSE)

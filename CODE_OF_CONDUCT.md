@@ -1,32 +1,47 @@
 # Vayu Community Code of Conduct
 
-The Vayu Community is an open-source programming-language community built around the Vayu project. It includes contributors, users, maintainers, and people learning or experimenting with the language.
+The Vayu community is an open-source programming-language community for contributors, users, maintainers, and people learning or experimenting with Vayu.
 
-Diversity is one of our huge strengths, but it can also lead to communication issues and unhappiness. To that end, we have a few ground rules that we ask people to adhere to. This code applies equally to founders, mentors and those seeking help and guidance.
+## Expected Behavior
 
-This isn’t an exhaustive list of things that you can’t do. Rather, take it in the spirit in which it’s intended - a guide to make it easier to enrich all of us and the technical communities in which we participate.
+Participants are expected to:
 
-This Code of Conduct applies to all spaces managed by the Vayu project or Vayu Project Maintainers, including the GitHub repository, issues, pull requests, discussions, documentation, and other project-managed communication spaces. Violations outside these spaces may be considered when they directly affect participation in the Vayu community.
+- Be friendly, patient, welcoming, considerate, and respectful.
+- Keep technical disagreements constructive.
+- Focus criticism on code, designs, and ideas rather than people.
+- Respect different backgrounds, identities, experience levels, and viewpoints.
+- Communicate professionally.
+- Stop behavior when someone reasonably asks for it to stop.
 
-If you believe someone is violating the code of conduct, we ask that you report it by emailing [ShreyasMishraS4232b@gmail.com](mailto:ShreyasMishraS4232b@gmail.com). For more details please see our [Reporting guidelines](https://github.com/NotY215/Vayu/blob/main/REPORTING_GUIDELINES.md)
+## Unacceptable Behavior
 
-- **Be friendly and patient.**
-- **Be welcoming.** We strive to be a community that welcomes and supports people of all backgrounds and identities. This includes, but is not limited to members of any race, ethnicity, culture, national origin, colour, immigration status, social and economic class, educational level, sex, sexual orientation, gender identity and expression, age, size, family status, political belief, religion, and mental and physical ability.
-- **Be considerate.** Your work will be used by other people, and you in turn will depend on the work of others. Any decision you take will affect users and colleagues, and you should take those consequences into account when making decisions. Remember that we're a world-wide community, so you might not be communicating in someone else's primary language.
-- **Be respectful.** Not all of us will agree all the time, but disagreement is no excuse for poor behavior and poor manners. We might all experience some frustration now and then, but we cannot allow that frustration to turn into a personal attack. It’s important to remember that a community where people feel uncomfortable or threatened is not a productive one. Members of the Vayu Community should be respectful when dealing with other members as well as with people outside the Vayu Community community.
-- **Be careful in the words that you choose.** We are a community of professionals, and we conduct ourselves professionally. Be kind to others. Do not insult or put down other participants. Harassment and other exclusionary behavior aren't acceptable. This includes, but is not limited to: 
- - Violent threats or language directed against another person.
- - Discriminatory jokes and language.
- - Posting sexually explicit or violent material.
- - Posting (or threatening to post) other people's personally identifying information ("doxing").
- - Personal insults, especially those using racist or sexist terms.
- - Unwelcome sexual attention.
- - Advocating for, or encouraging, any of the above behavior.
- - Repeated harassment of others. In general, if someone asks you to stop, then stop.
-- **When we disagree, try to understand why.** Disagreements, both social and technical, happen all the time and Vayu Community is no exception. It is important that we resolve disagreements and differing views constructively. Remember that we’re different. The strength of Vayu Community comes from its varied community, people from a wide range of backgrounds. Different people have different perspectives on issues. Being unable to understand why someone holds a viewpoint doesn’t mean that they’re wrong. Don’t forget that it is human to err and blaming each other doesn’t get us anywhere. Instead, focus on helping to resolve issues and learning from mistakes.
+The following are not acceptable:
 
-Original text courtesy of the [Speak Up! project](http://web.archive.org/web/20141109123859/http://speakup.io/coc.html).
+- Harassment, intimidation, or threats.
+- Discriminatory or hateful conduct.
+- Personal attacks or targeted insults.
+- Sexual harassment or unwanted sexual attention.
+- Publishing private or identifying information without permission.
+- Deliberately disruptive behavior.
+- Encouraging or advocating harassment or other prohibited behavior.
+- Retaliation against someone who reports a concern.
 
-## Questions?
+## Scope
 
-For reporting details, see [REPORTING_GUIDELINES.md](REPORTING_GUIDELINES.md). For general project questions, use the project's normal GitHub communication channels.
+This Code of Conduct applies to spaces managed by the Vayu project or its maintainers, including repositories, issues, pull requests, discussions, documentation, and other project-managed communication spaces.
+
+## Reporting
+
+If you believe someone is violating this Code of Conduct, report it privately using the contact and reporting process in REPORTING_GUIDELINES.md.
+
+Please include enough information for the maintainers to understand what happened. Avoid publicly posting private or sensitive information.
+
+## Enforcement
+
+Reports will be reviewed as reasonably and confidentially as possible. Maintainers may remove content, close discussions, restrict participation, or take other reasonable action when conduct violates this policy.
+
+## Good-Faith Participation
+
+Technical disagreement is welcome. The goal is to resolve disagreements through evidence, testing, documentation, and respectful discussion.
+
+This document is a project-specific rewrite of the previous Vayu community guidelines.
