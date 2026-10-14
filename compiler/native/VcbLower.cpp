@@ -16,21 +16,18 @@ namespace vayu {
             Float = 3,
             List = 4,
             Map = 5,
+            Tuple = 6,
+            Set = 7,
         };
 
         class Lower {
         public:
             std::string run(const Block& program) {
-                // Pre-pass: collect user function return types from
-                // their `-> T` annotations.  Needed so that
-                //   x = greet(name)   ; x : str
-                // sets lastType_ correctly after the call.
                 for (auto& s : program.stmts) {
                     if (s->kind != StmtKind::Def) continue;
                     auto* d = static_cast<const DefStmt*>(s.get());
-                    VType rt = VType::Int;   // unannotated functions default to int
-                    if (d->returnType &&
-                        d->returnType->kind == ExprKind::NameRef) {
+                    VType rt = VType::Int;
+                    if (d->returnType && d->returnType->kind == ExprKind::NameRef) {
                         const std::string& rtn =
                             static_cast<const NameRefExpr*>(
                                 d->returnType.get())->name;
@@ -39,6 +36,8 @@ namespace vayu {
                         else if (rtn == "float") rt = VType::Float;
                         else if (rtn == "list")  rt = VType::List;
                         else if (rtn == "map")   rt = VType::Map;
+                        else if (rtn == "tuple") rt = VType::Tuple;
+                        else if (rtn == "set")   rt = VType::Set;
                     }
                     fnReturnTypes_[d->name] = rt;
                 }
@@ -110,8 +109,6 @@ namespace vayu {
 
             bool isFloat(VType t) const { return t == VType::Float; }
 
-            // -------- expressions ----------------------------------------
-
             std::string emitExpr(const Expr* e) {
                 if (!e) throw std::runtime_error("VcbLower: null expression");
                 switch (e->kind) {
@@ -168,6 +165,66 @@ namespace vayu {
                     lastType_ = VType::Map;
                     return m;
                 }
+                case ExprKind::TupleLit: {
+                    auto* n = static_cast<const TupleLitExpr*>(e);
+                    int count = (int)n->elements.size();
+                    std::string cnt = fresh();
+                    emit("i64 " + cnt + " = const.i64 " +
+                        std::to_string(count));
+                    std::string t = fresh();
+                    emit("i64 " + t + " = call vayu_tuple_new(" + cnt + ")");
+                    for (int i = 0; i < count; ++i) {
+                        std::string v = emitExpr(n->elements[i].get());
+                        emit("call vayu_tuple_set(" + t + ", " +
+                            std::to_string(i) + ", " + v + ")");
+                    }
+                    lastType_ = VType::Tuple;
+                    return t;
+                }
+                case ExprKind::SetLit: {
+                    auto* n = static_cast<const SetLitExpr*>(e);
+                    std::string s = fresh();
+                    emit("i64 " + s + " = call vayu_set_new()");
+                    for (auto& el : n->elements) {
+                        std::string v = emitExpr(el.get());
+                        emit("call vayu_set_add(" + s + ", " + v + ")");
+                    }
+                    lastType_ = VType::Set;
+                    return s;
+                }
+                case ExprKind::Slice: {
+                    auto* n = static_cast<const SliceExpr*>(e);
+                    std::string tgt = emitExpr(n->target.get());
+                    VType tt = lastType_;
+                    if (tt != VType::Str && tt != VType::List)
+                        throw std::runtime_error(
+                            "VcbLower: slice on this type not yet supported "
+                            "at line " + std::to_string(e->loc.line));
+                    std::string a;
+                    if (n->start) a = emitExpr(n->start.get());
+                    else {
+                        a = fresh();
+                        emit("i64 " + a + " = const.i64 0");
+                    }
+                    std::string b;
+                    if (n->end) b = emitExpr(n->end.get());
+                    else {
+                        b = fresh();
+                        if (tt == VType::Str)
+                            emit("i64 " + b + " = call vayu_str_len(" + tgt + ")");
+                        else
+                            emit("i64 " + b + " = call vayu_list_len(" + tgt + ")");
+                    }
+                    std::string t = fresh();
+                    if (tt == VType::Str)
+                        emit("i64 " + t + " = call vayu_str_slice(" + tgt +
+                            ", " + a + ", " + b + ")");
+                    else
+                        emit("i64 " + t + " = call vayu_list_slice(" + tgt +
+                            ", " + a + ", " + b + ")");
+                    lastType_ = tt;
+                    return t;
+                }
                 case ExprKind::StringLit: {
                     auto* n = static_cast<const StringLitExpr*>(e);
                     std::string esc;
@@ -221,7 +278,6 @@ namespace vayu {
                         lastType_ = VType::Bool;
                         return t;
                     }
-                    // Phase 30 -- bitwise NOT.
                     case UnOp::BNot: {
                         if (operandType != VType::Int)
                             throw std::runtime_error(
@@ -244,16 +300,14 @@ namespace vayu {
                 case ExprKind::Binary: {
                     auto* b = static_cast<const BinaryExpr*>(e);
 
-                    // Phase 30 -- short-circuit `and`.
                     if (b->op == BinOp::And) {
                         std::string slotName = "__and_" +
                             std::to_string(nextTemp_++);
-                        std::string slot =
-                            declareSlot(slotName, VType::Int);
+                        std::string slot = declareSlot(slotName, VType::Int);
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
                         std::string evalR = freshLabel("and_eval");
-                        std::string done  = freshLabel("and_done");
+                        std::string done = freshLabel("and_done");
                         emit("store " + l + ", " + slot);
                         emit("br " + l + ", " + evalR + ", " + done);
                         emitLabel(evalR);
@@ -268,16 +322,14 @@ namespace vayu {
                         return t;
                     }
 
-                    // Phase 30 -- short-circuit `or`.
                     if (b->op == BinOp::Or) {
                         std::string slotName = "__or_" +
                             std::to_string(nextTemp_++);
-                        std::string slot =
-                            declareSlot(slotName, VType::Int);
+                        std::string slot = declareSlot(slotName, VType::Int);
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
                         std::string evalR = freshLabel("or_eval");
-                        std::string done  = freshLabel("or_done");
+                        std::string done = freshLabel("or_done");
                         emit("store " + l + ", " + slot);
                         emit("br " + l + ", " + done + ", " + evalR);
                         emitLabel(evalR);
@@ -292,7 +344,6 @@ namespace vayu {
                         return t;
                     }
 
-                    // Phase 30 -- integer exponentiation.
                     if (b->op == BinOp::Pow) {
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
@@ -319,8 +370,6 @@ namespace vayu {
                         return t;
                     }
 
-                    // `in` is asymmetric: LHS is a scalar, RHS is a
-                    // collection.  Handle it before the general switch.
                     if (b->op == BinOp::In) {
                         std::string l = emitExpr(b->lhs.get());
                         VType lt = lastType_;
@@ -344,7 +393,6 @@ namespace vayu {
                     std::string r = emitExpr(b->rhs.get());
                     VType rt = lastType_;
 
-                    // ---- str operations ----------------------------------
                     if (lt == VType::Str && rt == VType::Str) {
                         if (b->op == BinOp::Add) {
                             std::string t = fresh();
@@ -495,6 +543,12 @@ namespace vayu {
                         lastType_ = VType::Int;
                         return t;
                     }
+                    if (tgtType == VType::Tuple) {
+                        emit("i64 " + t + " = call vayu_tuple_get(" + tgt +
+                            ", " + idx + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
                     throw std::runtime_error(
                         "VcbLower: index on non-collection at line " +
                         std::to_string(e->loc.line));
@@ -506,8 +560,6 @@ namespace vayu {
                         std::to_string(e->loc.line));
                 }
             }
-
-            // -------- calls: NameRef callee -------------------------------
 
             std::string emitCall(const std::string& name, const CallExpr* c) {
                 std::vector<std::string> args;
@@ -538,6 +590,12 @@ namespace vayu {
                             break;
                         case VType::Map:
                             emit("call vayu_print_map(" + args[i] + ")");
+                            break;
+                        case VType::Tuple:
+                            emit("call vayu_print_tuple(" + args[i] + ")");
+                            break;
+                        case VType::Set:
+                            emit("call vayu_print_list(" + args[i] + ")");
                             break;
                         case VType::Int:
                         default:
@@ -574,6 +632,14 @@ namespace vayu {
                         emit("i64 " + t + " = call vayu_map_len(" +
                             args[0] + ")");
                         break;
+                    case VType::Tuple:
+                        emit("i64 " + t + " = call vayu_tuple_len(" +
+                            args[0] + ")");
+                        break;
+                    case VType::Set:
+                        emit("i64 " + t + " = call vayu_set_len(" +
+                            args[0] + ")");
+                        break;
                     default:
                         throw std::runtime_error(
                             "VcbLower: len() on non-collection at line " +
@@ -606,8 +672,6 @@ namespace vayu {
                     lastType_ = VType::Float;
                     return t;
                 }
-                // Phase 30 -- str(str) identity.  str(int/bool/float)
-                // is Phase 30 Part 2.
                 if (name == "str") {
                     if (args.size() != 1)
                         throw std::runtime_error("VcbLower: str() takes one arg");
@@ -615,21 +679,25 @@ namespace vayu {
                         lastType_ = VType::Str;
                         return args[0];
                     }
+                    if (argTypes[0] == VType::Bool) {
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_bool_to_str(" +
+                            args[0] + ")");
+                        lastType_ = VType::Str;
+                        return t;
+                    }
+                    if (argTypes[0] == VType::Int) {
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_int_to_str(" +
+                            args[0] + ")");
+                        lastType_ = VType::Str;
+                        return t;
+                    }
                     throw std::runtime_error(
-                        "VcbLower: str() for non-str is not yet supported "
-                        "(Phase 30 Part 2) at line " +
-                        std::to_string(c->loc.line));
+                        "VcbLower: str() for this type is not yet supported "
+                        "at line " + std::to_string(c->loc.line));
                 }
 
-                // Phase 28.5 -- builtin guard.
-                //
-                // Reaching this point means `name` is not one of the
-                // builtins handled above (print, exit, len, int,
-                // float) and not a user-defined function.  Emitting a
-                // call to it would produce an unresolved external
-                // reference that only fails at link time with an
-                // opaque message.  Fail here with the location and
-                // the name of the offending builtin.
                 auto fnRit = fnReturnTypes_.find(name);
                 if (fnRit == fnReturnTypes_.end()) {
                     throw std::runtime_error(
@@ -648,8 +716,6 @@ namespace vayu {
                 return t;
             }
 
-            // -------- calls: Attr callee (list / map methods) -------------
-
             std::string emitMethodCall(const AttrExpr* attr, const CallExpr* c) {
                 std::string recv = emitExpr(attr->target.get());
                 VType recvType = lastType_;
@@ -663,6 +729,40 @@ namespace vayu {
                         std::string t = fresh();
                         emit("i64 " + t + " = call vayu_str_len(" + recv + ")");
                         lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "char_at") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: str.char_at takes 1 argument");
+                        std::string i = emitExpr(c->args[0].value.get());
+                        std::string one = fresh();
+                        emit("i64 " + one + " = const.i64 1");
+                        std::string iEnd = fresh();
+                        emit("i64 " + iEnd + " = add " + i + ", " + one);
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_slice(" + recv +
+                            ", " + i + ", " + iEnd + ")");
+                        lastType_ = VType::Str;
+                        return t;
+                    }
+                    if (m == "to_int") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: str.to_int takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_to_int(" +
+                            recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "strip") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: str.strip takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_strip(" + recv + ")");
+                        lastType_ = VType::Str;
                         return t;
                     }
                     if (m == "upper" || m == "lower") {
@@ -709,6 +809,82 @@ namespace vayu {
                         emit("i64 " + t + " = call vayu_list_len(" + recv + ")");
                         lastType_ = VType::Int;
                         return t;
+                    }
+                    if (m == "pop") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: list.pop takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_list_pop(" + recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "contains") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: list.contains takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_list_contains(" + recv +
+                            ", " + v + ")");
+                        lastType_ = VType::Bool;
+                        return t;
+                    }
+                }
+
+                if (recvType == VType::Set) {
+                    if (m == "add") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: set.add takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        emit("call vayu_set_add(" + recv + ", " + v + ")");
+                        std::string z = fresh();
+                        emit("i64 " + z + " = const.i64 0");
+                        lastType_ = VType::Int;
+                        return z;
+                    }
+                    if (m == "contains") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: set.contains takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_set_contains(" +
+                            recv + ", " + v + ")");
+                        lastType_ = VType::Bool;
+                        return t;
+                    }
+                    if (m == "len") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: set.len takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_set_len(" +
+                            recv + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
+                    if (m == "remove") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: set.remove takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        emit("call vayu_set_remove(" + recv + ", " + v + ")");
+                        std::string z = fresh();
+                        emit("i64 " + z + " = const.i64 0");
+                        lastType_ = VType::Int;
+                        return z;
+                    }
+                    if (m == "clear") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: set.clear takes no arguments");
+                        emit("call vayu_set_clear(" + recv + ")");
+                        std::string z = fresh();
+                        emit("i64 " + z + " = const.i64 0");
+                        lastType_ = VType::Int;
+                        return z;
                     }
                 }
 
@@ -764,8 +940,6 @@ namespace vayu {
                     "' at line " + std::to_string(c->loc.line));
             }
 
-            // -------- statements -----------------------------------------
-
             void emitStmt(const Stmt* s) {
                 if (!s) return;
                 switch (s->kind) {
@@ -802,7 +976,6 @@ namespace vayu {
                 case StmtKind::Assign: {
                     auto* n = static_cast<const AssignStmt*>(s);
 
-                    // Phase 30 -- index assignment: arr[i] = v.
                     if (n->target->kind == ExprKind::Index) {
                         auto* ix = static_cast<const IndexExpr*>(
                             n->target.get());
@@ -921,6 +1094,82 @@ namespace vayu {
             }
 
             void emitFor(const ForStmt* n) {
+                bool isRangeCall = false;
+                if (n->iterable->kind == ExprKind::Call) {
+                    auto* c = static_cast<const CallExpr*>(
+                        n->iterable.get());
+                    if (c->callee->kind == ExprKind::NameRef &&
+                        static_cast<const NameRefExpr*>(
+                            c->callee.get())->name == "range")
+                        isRangeCall = true;
+                }
+                if (!isRangeCall) {
+                    std::string listExpr = emitExpr(n->iterable.get());
+                    VType it = lastType_;
+                    if (it != VType::List && it != VType::Set)
+                        throw std::runtime_error(
+                            "VcbLower: for-in over this type is not yet "
+                            "supported at line " +
+                            std::to_string(n->loc.line));
+
+                    std::string count = fresh();
+                    if (it == VType::List)
+                        emit("i64 " + count + " = call vayu_list_len(" +
+                            listExpr + ")");
+                    else
+                        emit("i64 " + count + " = call vayu_set_len(" +
+                            listExpr + ")");
+
+                    std::string idxName = "__foridx_" +
+                        std::to_string(nextTemp_++);
+                    std::string idxSlot = declareSlot(idxName, VType::Int);
+                    std::string zero = fresh();
+                    emit("i64 " + zero + " = const.i64 0");
+                    emit("store " + zero + ", " + idxSlot);
+
+                    std::string topL = freshLabel("fl_top");
+                    std::string bodyL = freshLabel("fl_body");
+                    std::string stepL = freshLabel("fl_step");
+                    std::string exitL = freshLabel("fl_exit");
+
+                    emitLabel(topL);
+                    std::string i = fresh();
+                    emit("i64 " + i + " = load " + idxSlot);
+                    std::string cmp = fresh();
+                    emit("i64 " + cmp + " = lt " + i + ", " + count);
+                    emit("br " + cmp + ", " + bodyL + ", " + exitL);
+
+                    emitLabel(bodyL);
+                    std::string elem = fresh();
+                    if (it == VType::List)
+                        emit("i64 " + elem + " = call vayu_list_get(" +
+                            listExpr + ", " + i + ")");
+                    else
+                        emit("i64 " + elem + " = call vayu_list_get(" +
+                            listExpr + ", " + i + ")");
+                    std::string tSlot = declareSlot(n->targetName, VType::Int);
+                    emit("store " + elem + ", " + tSlot);
+
+                    breakStack_.push_back(exitL);
+                    continueStack_.push_back(stepL);
+                    emitBlock(n->body);
+                    continueStack_.pop_back();
+                    breakStack_.pop_back();
+                    if (!terminated_) emit("jmp " + stepL);
+
+                    emitLabel(stepL);
+                    std::string i2 = fresh();
+                    emit("i64 " + i2 + " = load " + idxSlot);
+                    std::string one = fresh();
+                    emit("i64 " + one + " = const.i64 1");
+                    std::string iN = fresh();
+                    emit("i64 " + iN + " = add " + i2 + ", " + one);
+                    emit("store " + iN + ", " + idxSlot);
+                    emit("jmp " + topL);
+
+                    emitLabel(exitL);
+                    return;
+                }
                 if (n->iterable->kind != ExprKind::Call)
                     throw std::runtime_error(
                         "VcbLower: `for` requires `range(...)` at line " +
@@ -963,9 +1212,6 @@ namespace vayu {
                     stepReg = one;
                 }
                 else {
-                    // Phase 30 -- 3-arg range.  The step must be a
-                    // compile-time literal so the loop can pick a
-                    // comparison direction once.
                     if (call->args[2].value->kind != ExprKind::IntLit)
                         throw std::runtime_error(
                             "VcbLower: range() step must be an int "
@@ -1058,6 +1304,8 @@ namespace vayu {
                         else if (tn == "float") pt = VType::Float;
                         else if (tn == "list")  pt = VType::List;
                         else if (tn == "map")   pt = VType::Map;
+                        else if (tn == "tuple") pt = VType::Tuple;
+                        else if (tn == "set")   pt = VType::Set;
                     }
                     std::string slot = declareSlot(d->params[i].name, pt);
                     emit("store %p" + std::to_string(i) + ", " + slot);
@@ -1086,8 +1334,6 @@ namespace vayu {
                     emitStmt(s.get());
                     if (terminated_) break;
                 }
-                // If the file defines `def main() -> T`, call it and
-                // return its value.  Otherwise fall through with 0.
                 if (!terminated_ && hasUserMain) {
                     std::string t = fresh();
                     emit("i64 " + t + " = call __vayu_user_main()");
