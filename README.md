@@ -557,7 +557,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 27 Parts 1–17 are complete. The WDAC structural fix is done but remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-link path replaces that dependency. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
+**Phases 27 through 31.5 are complete. This includes VCB object emission and external linking, the Phase 29 and 30 backend additions, and Phase 31.1–31.5 tuple, set, slicing, string, and collection work. Phase 31.6 is next: additional string methods and predicates. Phase 25 remains intentionally skipped for now. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
 
 Current implemented areas include:
 
@@ -591,7 +591,7 @@ The completed work covers the ELF writer and Linux runtime subset, Linux heap/li
 
 **Phase 27 Parts 1–16 -- Done.**
 
-**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is complete, while the object + external-linker path becomes the next major backend transition.
+**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is marked done, with intermittent behavior still reported for some binaries. The object-emission and external-linker transition is complete; Phase 31.6 is the next roadmap item.
 
 **Phase 18 -- Vayu developer tooling**
 
@@ -609,25 +609,29 @@ The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu its
 | WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
-| 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| -- | waiting | Awaiting your next prompt |
-| 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
-| 28.2 | queued | ELF `.o` emitter |
-| 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |
-| 28.4 | queued | `vayuc --native` external-link default |
-| 28.5 | queued | VcbLower builtin guard |
-| 29 | queued | MAC policy templates |
-| 30 | queued | Small VcbLower additions |
-| 31 | queued | Tuples, sets, slicing |
-| 32 | queued | Classes, structs, inheritance |
-| 33 | queued | Lambdas, closures |
-| 34 | queued | Exceptions |
-| 35 | queued | Pointers, FFI |
-| 36 | queued | Modules and stdlib |
-| 37 | queued | `.text` size limit removal |
-| 38 | queued | Self-hosting on VCB IR |
-| 39 | queued | Full benchmark suite |
-| 40 | queued | Version cut |
+| 28.0 | done | Phase 28 test-harness and integration cleanup |
+| 28.1 | done | COFF `.obj` emitter + `vcb emit-obj` |
+| 28.2 | done | ELF `.o` emitter |
+| 28.3 | done | `vcb link` with `lld-link` / `ld.lld` dispatch |
+| 28.4 | done | `vayuc --native` external-link default |
+| 28.5 | done | VcbLower builtin guard |
+| 29 | done | MAC policy templates |
+| 30 | done | Small VcbLower additions |
+| 31.1 | done | Tuple support |
+| 31.2 | done | Set support |
+| 31.3 | done | Slicing support |
+| 31.4 | done | `str.split`, single-character `str.replace`, `list.index`, `set.copy`, tuple slicing |
+| 31.5 | done | Multicharacter `str.replace`, `str.count` |
+| 31.6 | not started | `str.strip(chars)`, `str.rjust`, `str.ljust`, `str.is*` predicates |
+| 32 | not started | Classes, structs, inheritance |
+| 33 | not started | Lambdas, closures |
+| 34 | not started | Exceptions |
+| 35 | not started | Pointers, FFI |
+| 36 | not started | Modules and standard library |
+| 37 | not started | `.text` size limit removal |
+| 38 | not started | Self-hosting on VCB IR |
+| 39 | not started | Full benchmark suite |
+| 40 | not started | Version cut |
 
 ## DeepSeek
 

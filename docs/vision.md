@@ -27,7 +27,7 @@ The current source tree demonstrates a substantially expanded language/compiler 
 
 The current development history records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phase 26 Part 1 and Part 2 are complete. Phase 27 Parts 1–17 are complete. The WDAC structural fix is done but remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-linker path replaces that dependency.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phases 26 and 27 are complete, and Phases 28, 29, 30, and 31.1–31.5 are also complete. The WDAC structural fix is marked done, although behavior remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-linker path replaces that dependency.
 
 ## Roadmap
 
@@ -39,25 +39,29 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
-| 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| -- | waiting | Awaiting your next prompt |
-| 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
-| 28.2 | queued | ELF `.o` emitter |
-| 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |
-| 28.4 | queued | `vayuc --native` external-link default |
-| 28.5 | queued | VcbLower builtin guard |
-| 29 | queued | MAC policy templates |
-| 30 | queued | Small VcbLower additions |
-| 31 | queued | Tuples, sets, slicing |
-| 32 | queued | Classes, structs, inheritance |
-| 33 | queued | Lambdas, closures |
-| 34 | queued | Exceptions |
-| 35 | queued | Pointers, FFI |
-| 36 | queued | Modules and stdlib |
-| 37 | queued | `.text` size limit removal |
-| 38 | queued | Self-hosting on VCB IR |
-| 39 | queued | Full benchmark suite |
-| 40 | queued | Version cut |
+| 28.0 | done | Phase 28 test-harness and integration cleanup |
+| 28.1 | done | COFF `.obj` emitter + `vcb emit-obj` |
+| 28.2 | done | ELF `.o` emitter |
+| 28.3 | done | `vcb link` with `lld-link` / `ld.lld` dispatch |
+| 28.4 | done | `vayuc --native` external-link default |
+| 28.5 | done | VcbLower builtin guard |
+| 29 | done | MAC policy templates |
+| 30 | done | Small VcbLower additions |
+| 31.1 | done | Tuple support |
+| 31.2 | done | Set support |
+| 31.3 | done | Slicing support |
+| 31.4 | done | `str.split`, single-character `str.replace`, `list.index`, `set.copy`, tuple slicing |
+| 31.5 | done | Multicharacter `str.replace`, `str.count` |
+| 31.6 | not started | `str.strip(chars)`, `str.rjust`, `str.ljust`, `str.is*` predicates |
+| 32 | not started | Classes, structs, inheritance |
+| 33 | not started | Lambdas, closures |
+| 34 | not started | Exceptions |
+| 35 | not started | Pointers, FFI |
+| 36 | not started | Modules and standard library |
+| 37 | not started | `.text` size limit removal |
+| 38 | not started | Self-hosting on VCB IR |
+| 39 | not started | Full benchmark suite |
+| 40 | not started | Version cut |
 
 ### Phase 25 -- Skipped for now
 
@@ -73,15 +77,15 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 **27 Parts 1–17 -- Done. The WDAC structural fix is complete but remains intermittent for some binaries; signing is removed from the roadmap.** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, WDAC supplemental-policy generation, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
 
-**27 Part 17 -- Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
+**27 Parts 1–17 -- Done.** The completed phase covered PE import-table work, Linux ELF support, runtime metadata, and target validation.
 
-### Phase 28 -- Object emission and external linking
+### Completed VCB phases 28–31.5
 
-Phase 28 replaces the direct executable-output boundary with relocatable object emission and external linking. Windows will emit COFF `.obj` files and Linux will emit ELF `.o` files, with VCB providing the object-level sections, symbols, and relocations. `NativeCompiler` will use external linking by default while retaining the embedded path as an explicit option.
+Phase 28 completed relocatable COFF/ELF object emission, external-linker dispatch, native compiler integration, and VcbLower validation. Phases 29 and 30 completed their planned backend additions. Phases 31.1–31.5 completed tuple, set, slicing, and the listed string and collection operations.
 
-### Phase 29 -- Version cut
+### Phase 31.6 -- String methods and predicates
 
-The VCB-era Vayu toolchain is prepared for a release cut once the required native targets, runtime coverage, packaging and validation are complete.
+Next: `str.strip(chars)`, `str.rjust`, `str.ljust`, and `str.is*` predicates.
 
 
 ### Phase 19–21 -- GUI, 2D Graphics and 3D Raster
@@ -204,7 +208,7 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phases 1–26 Part 1 are complete development phases. Phase 26 Part 2 is the current direction. Phase 25 is skipped for now and will be revisited after VCB.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
+**Phases 1–24 are complete, Phase 25 is skipped for now, and VCB Phases 26–31.5 are complete. Phase 31.6 is the current roadmap item.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
@@ -230,7 +234,7 @@ x86-64 machine code + runtime
 PE / ELF executable
 ```
 
-VCB is a companion backend project, not a replacement for the Vayu frontend. Its current native path is implemented for Windows PE and Linux ELF targets, with Phase 27 continuing backend hardening and target validation.
+VCB is a companion backend project, not a replacement for the Vayu frontend. Its native path supports Windows PE and Linux ELF targets; VCB roadmap work is complete through Phase 31.5, with Phase 31.6 next.
 
 ## Developer Ecosystem
 

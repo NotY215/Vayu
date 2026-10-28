@@ -853,7 +853,7 @@ These are VCB development goals and should not be confused with every capability
 
 # 28. Development Direction
 
-The current project is in the VCB native-backend transition from direct executable emission to relocatable object emission and external linking. Phase 27 is complete. Phase 28 is next and covers the Windows COFF object path, Linux ELF object path, external linker wrapper, NativeCompiler integration, and VcbLower builtin validation.
+Phases 27 through 31.5 are complete, including the VCB object-emission and external-linking path, VcbLower additions, and collection/string operations. Phase 31.6 is next and covers additional string methods and predicates.
 
 The C++ `vayuc` implementation acts as the bootstrap/reference compiler while the Vayu implementation is developed toward feature parity.
 
@@ -881,25 +881,29 @@ C++ bootstrap can eventually be retired
 | WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
 | Signing | removed | Not needed once obj+linker path lands |
 | Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
-| 28.0 | prep, one patch remaining | `run_all.ps1` line 214 last-line stderr |
-| -- | waiting | Awaiting your next prompt |
-| 28.1 | queued | COFF `.obj` emitter + `vcb emit-obj` |
-| 28.2 | queued | ELF `.o` emitter |
-| 28.3 | queued | `vcb link` - `lld-link` / `ld.lld` dispatch |
-| 28.4 | queued | `vayuc --native` external-link default |
-| 28.5 | queued | VcbLower builtin guard |
-| 29 | queued | MAC policy templates |
-| 30 | queued | Small VcbLower additions |
-| 31 | queued | Tuples, sets, slicing |
-| 32 | queued | Classes, structs, inheritance |
-| 33 | queued | Lambdas, closures |
-| 34 | queued | Exceptions |
-| 35 | queued | Pointers, FFI |
-| 36 | queued | Modules and stdlib |
-| 37 | queued | `.text` size limit removal |
-| 38 | queued | Self-hosting on VCB IR |
-| 39 | queued | Full benchmark suite |
-| 40 | queued | Version cut |
+| 28.0 | done | Phase 28 test-harness and integration cleanup |
+| 28.1 | done | COFF `.obj` emitter + `vcb emit-obj` |
+| 28.2 | done | ELF `.o` emitter |
+| 28.3 | done | `vcb link` with `lld-link` / `ld.lld` dispatch |
+| 28.4 | done | `vayuc --native` external-link default |
+| 28.5 | done | VcbLower builtin guard |
+| 29 | done | MAC policy templates |
+| 30 | done | Small VcbLower additions |
+| 31.1 | done | Tuple support |
+| 31.2 | done | Set support |
+| 31.3 | done | Slicing support |
+| 31.4 | done | `str.split`, single-character `str.replace`, `list.index`, `set.copy`, tuple slicing |
+| 31.5 | done | Multicharacter `str.replace`, `str.count` |
+| 31.6 | not started | `str.strip(chars)`, `str.rjust`, `str.ljust`, `str.is*` predicates |
+| 32 | not started | Classes, structs, inheritance |
+| 33 | not started | Lambdas, closures |
+| 34 | not started | Exceptions |
+| 35 | not started | Pointers, FFI |
+| 36 | not started | Modules and standard library |
+| 37 | not started | `.text` size limit removal |
+| 38 | not started | Self-hosting on VCB IR |
+| 39 | not started | Full benchmark suite |
+| 40 | not started | Version cut |
 
 # 30. Current Status
 
