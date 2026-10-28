@@ -22,6 +22,11 @@ NotY215 does not claim ownership of third-party software, source code, binaries,
 | Microsoft Visual C++ runtime | `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft Visual C++ runtime; exact redistributable package/build unverified. | Microsoft Visual Studio / Visual C++ Redistributable terms govern redistribution. Verify these files came from an authorized redistributable package and that its terms permit the intended distribution. |
 | Python file catalog | `tools/DLLs/python_lib.cat` | Catalog file present; origin and signing relationship have not been independently verified. | Preserve it with the distribution only if it belongs to the chosen Python package and is required by the packaging/signing setup. |
 | VCB executable | `tools/vcb.exe` | VCB project binary bundled alongside Vayu tools. | This is a project build, not listed here as a third-party dependency. Its own dependencies still need to comply with their licenses. |
+| LLVM/LLD linker tools | `tools/lld-link.exe`, `tools/ld.lld.exe` (expected companion tools) | Used by VCB's COFF/PE and ELF external-linking paths. Exact LLVM distribution/version must be verified from the binaries. | LLVM components are generally Apache License 2.0 with LLVM exceptions. Ship the matching license/notice files and verify the exact distribution and any bundled runtime dependencies. |
+| Windows import library | `tools/kernel32.lib` (expected companion file) | Windows API import library used by the PE link path. Exact source package and provenance must be recorded. | Verify the library's origin and redistribution terms before packaging. Do not assume its license from the filename alone. |
+| NVA package manager | `tools/nva.vyu` | Vayu source maintained in this repository. | Covered by the Vayu repository license, subject to any dependencies it invokes. |
+| NVA reference registry server | `tools/nva-server.vyu` | Vayu source for a read-only package registry reference server. | Covered by the Vayu repository license, subject to any dependencies it invokes. |
+| ONNX example generator | `tools/make_tiny_onnx.py` | Python helper using NumPy and the `onnx` package to generate `examples/assets/tiny_mlp.onnx`. | The helper is project source. NumPy and ONNX are external dependencies when running it; comply with their respective licenses. The generated model should be tracked separately from the generator. |
 
 ## Official license and project references
 
@@ -35,7 +40,7 @@ NotY215 does not claim ownership of third-party software, source code, binaries,
 - Tcl/Tk source and license information: https://www.tcl-lang.org/
 - Microsoft Visual C++ Redistributable and deployment guidance: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist
 
-These references explain upstream licensing; they do not prove that every binary currently in the repository came from the referenced official package. Keep the exact upstream license files and notices associated with the package actually used.
+These references explain upstream licensing; they do not prove that every binary currently in the repository came from the referenced official package. The linker and import-library entries above describe the expected toolchain layout; verify the actual tracked files and their provenance before making a release. Keep the exact upstream license files and notices associated with the package actually used.
 
 ## Redistribution checklist
 
