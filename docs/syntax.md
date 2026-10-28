@@ -649,7 +649,7 @@ Words such as match, case, defer, namespace, static, public, protected, and priv
 ```text
 vayuc file.vyu
 vayuc file.vyu --vm
-vayuc file.vyu --native
+vayuc file.vyu --native  # VIB native code generation not implemented yet
 vayuc file.vyu --native-out output.exe
 vayuc file.vyu --check
 vayuc file.vyu --dump-tokens
@@ -657,7 +657,7 @@ vayuc file.vyu --dump-ast
 vayuc file.vyu --dump-bytecode
 vayuc file.vyu --dump-ir
 vayuc file.vyu --bench 10
-vayuc --emit-runtime runtime.c
+vayuc --emit-runtime runtime.c (currently unavailable)
 ```
 
 Debugging flags also include `--no-check` and `--no-opt`.
@@ -702,7 +702,6 @@ vayuc file.vyu --dump-ast
 vayuc file.vyu --dump-bytecode
 vayuc file.vyu --dump-ir
 vayuc file.vyu --bench [N]
-vayuc --emit-runtime runtime.c
 ```
 
 Current compiler flags also include:
@@ -714,7 +713,7 @@ Current compiler flags also include:
 --emit-runtime <path>
 ```
 
-`--opt` controls the native optimization level used by the native compilation path. `--no-opt` disables the VM bytecode optimizer; these are separate controls.
+`--no-opt` disables the VM bytecode optimizer. Native optimization levels will be documented when VIB code generation implements them.
 
 ## Native / Backend Boundary
 
