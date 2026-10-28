@@ -201,9 +201,9 @@ flowchart TD
 
 > Transition status: the old external-backend lowering/invocation has been removed from the active native compiler source. VIB native code generation is not implemented yet; use `--run` or `--vm` for execution until the roadmap's native conformance gates pass.
 
-## 🧰 Windows Toolchain and Runtime Layout## 🧰 Windows Toolchain and Runtime Layout
+## 🧰 Windows Toolchain and Runtime Layout
 
-The Windows development layout contains Vayu-source utilities, optional platform tools, the ONNX example helper, and the CPython bridge runtime. The table below describes the local toolchain layout, not a guarantee that every listed binary is already tracked on GitHub.
+The Windows development layout contains Vayu-source utilities, optional platform tools, the ONNX example helper, and the CPython bridge runtime. The table below lists expected roles, not a guarantee that every optional binary is included in the repository.
 
 | Path | Purpose |
 |---|---|
