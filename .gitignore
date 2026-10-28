@@ -11,3 +11,6 @@ benchmarks/java/*.class
 _vayu_tmp
 !tools/*.exe
 code.txt
+tools/kernel32.Lib
+tools/lld-link.exe
+tools/ld.lld.exe
