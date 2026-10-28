@@ -707,11 +707,11 @@ vayuc file.vyu --bench [N]
 Current compiler flags also include:
 
 ```text
---opt <0-3>
 --no-check
 --no-opt
---emit-runtime <path>
 ```
+
+Native optimization controls and runtime export will be documented when VIB implements them.
 
 `--no-opt` disables the VM bytecode optimizer. Native optimization levels will be documented when VIB code generation implements them.
 
