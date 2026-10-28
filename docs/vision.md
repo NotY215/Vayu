@@ -132,7 +132,9 @@ Phase 28 completed relocatable COFF/ELF object emission, external-linker dispatc
 
 ### Phase 31.6 -- String methods and predicates
 
-Next: `str.strip(chars)`, `str.rjust`, `str.ljust`, and `str.is*` predicates.
+- **31.6a, current drop:** `str.is_digit`, `str.is_alpha`, `str.is_space`, `str.is_lower`, `str.is_upper`, `str.is_alnum`, and `str.is_ascii`.
+- **31.6b, current drop:** `str.ljust(width[, fill])`, `str.rjust`, `str.center`, and `str.zfill(width)`.
+- **31.6c, next drop:** `str.strip(chars)`, `str.lstrip([chars])`, and `str.rstrip([chars])`.
 
 
 ### Phase 19–21 -- GUI, 2D Graphics and 3D Raster
@@ -281,7 +283,7 @@ x86-64 machine code + runtime
 PE / ELF executable
 ```
 
-VCB is a companion backend project, not a replacement for the Vayu frontend. Its native path supports Windows PE and Linux ELF targets; VCB roadmap work is complete through Phase 31.5, with Phase 31.6 next.
+VCB is a companion backend project, not a replacement for the Vayu frontend. Its native path supports Windows PE and Linux ELF targets; VCB roadmap work is complete through Phase 31.5; Phase 31.6a and 31.6b are the current drop, with 31.6c next.
 
 ## Developer Ecosystem
 
