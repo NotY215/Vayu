@@ -664,18 +664,9 @@ Debugging flags also include `--no-check` and `--no-opt`.
 
 ## Backend boundary
 
-The current project contains tree-walking, bytecode/VM, and native compilation paths. C FFI, raw native integration, and the CPython bridge are native-oriented features.
+The current project contains tree-walking and bytecode/VM execution paths. Native-oriented language features exist in the frontend/runtime, but the new VIB native code generator is not implemented yet.
 
-VCB is the companion backend project that now provides the native machine-code and executable-generation layer:
-
-```text
-Vayu Source
-  -> Frontend
-  -> Vayu IR
-  -> VCB
-  -> Native Assembly
-  -> Executable
-```
+VIB (Vayu Integration Backend) is the integrated toolchain system being built inside this repository. See [VIB architecture](vib.md) and the [engineering roadmap](../Roadmap.md).
 
 ## Developer Tooling
 
@@ -727,21 +718,9 @@ Current compiler flags also include:
 
 ## Native / Backend Boundary
 
-The current repository contains tree-walking/interpreter, bytecode/VM, and native compilation paths. Native compilation now uses **VCB** for direct native code generation and executable emission.
+The target architecture routes Vayu source through the existing frontend into a Vayu-owned verified IR (VIR), then into interpreter, VM, or VIB native execution. VIR and native code generation remain planned work. The old external-backend invocation path has been removed from the active native compiler; `--native` currently reports that VIB code generation is not implemented.
 
-The intended long-term architecture is:
-
-```text
-Vayu Source
-  -> Frontend
-  -> Vayu IR
-  -> VCB
-  -> Native Assembly / Machine Code
-  -> Executable
-```
-
-For architecture and roadmap information, see `Documentation.md` and `docs/vision.md`.
-
+For architecture and roadmap information, see [VIB](vib.md) and [Roadmap.md](../Roadmap.md).
 
 # 26. Native Raster & 3D Graphics
 
@@ -850,4 +829,4 @@ Raster matrix, position, normal, UV and lighting values use the native Q16.16/fi
 
 # 27. Current Syntax Status
 
-The current syntax is shared across the Vayu frontend and its execution paths. Native `float` literals, mixed integer/float expressions, `float()`/`int()`/`str()` conversions, `math.*`, `list<float>`, and `map<str, float>` are implemented. Native compilation now lowers through VCB. Phase 27 Parts 1–17 are complete, covering the ELF writer, Linux runtime, PE correctness, validation, and backend hardening. The WDAC structural fix is done but remains intermittent for some binaries. Signing is removed from the roadmap. Phase 28 next moves native output toward COFF/ELF object emission and external linking. `gui` and `raster` remain native-oriented modules.
+The language frontend, interpreter, VM, and native execution are separate capability routes. The VIB native route is currently under implementation and must regain support feature-by-feature through shared conformance tests. GUI, raster, FFI, pointer, and CPython capabilities must not be described as native-supported on a target until the corresponding VIB implementation and tests are present.
