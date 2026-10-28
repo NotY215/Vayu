@@ -104,9 +104,9 @@ Vayu Source (.vyu)
 
 VCB is developed as a separate backend project. The Vayu compiler now uses VCB for the native path; the older QBE + GCC backend chain is historical.
 
-## Bundled Windows Toolchain
+## Windows Toolchain Layout
 
-The repository's tools directory is the companion-tool and embedded-runtime layout for Windows development:
+The tools directory is intended to hold the companion tools and embedded runtime for Windows development. This list documents the required layout, not a claim that every binary is already present in the remote repository:
 
 - `vcb.exe`: VCB backend executable.
 - `lld-link.exe`: COFF linker for `vcb link --target pe`.
@@ -117,7 +117,7 @@ The repository's tools directory is the companion-tool and embedded-runtime layo
 - `make_tiny_onnx.py`: generates the small ONNX model used by examples.
 - `python313.dll`, `python313.zip`, `Lib.zip`, `DLLs/`, and the Visual C++ runtime DLLs: CPython bridge runtime and native dependencies.
 
-See [tools/README.md](tools/README.md) for layout and usage details, and [Third_Party.md](Third_Party.md) for third-party notices and redistribution cautions.
+At the time of this update, `lld-link.exe`, `ld.lld.exe`, and `kernel32.lib` were not present in the GitHub tools listing and still need to be committed from the local toolchain. See [tools/README.md](tools/README.md) for layout and usage details, and [Third_Party.md](Third_Party.md) for third-party notices and redistribution cautions.
 
 ---
 
