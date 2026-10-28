@@ -805,6 +805,20 @@ namespace vayu {
                         lastType_ = VType::Str;
                         return t;
                     }
+                    if (m == "count") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: str.count takes 1 argument");
+                        std::string sub = emitExpr(c->args[0].value.get());
+                        if (lastType_ != VType::Str)
+                            throw std::runtime_error(
+                                "VcbLower: str.count argument must be str");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_count(" + recv +
+                            ", " + sub + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
                     if (m == "upper" || m == "lower") {
                         if (!c->args.empty())
                             throw std::runtime_error(
