@@ -202,9 +202,9 @@ flowchart LR
 
 **[→ Full Vayu + VCB Data Flow](docs/data-flow.md)**
 
-## 🧰 Bundled Toolchain and Runtime
+## 🧰 Windows Toolchain and Runtime Layout
 
-The Windows development layout keeps the Vayu source utilities, VCB backend, linker tools, ONNX example helper, and CPython bridge runtime together under the tools directory.
+The intended Windows development layout keeps the Vayu source utilities, VCB backend, linker tools, ONNX example helper, and CPython bridge runtime together under the tools directory. The table below describes the local toolchain layout, not a guarantee that every listed binary is already tracked on GitHub.
 
 | Path | Purpose |
 |---|---|
@@ -218,7 +218,7 @@ The Windows development layout keeps the Vayu source utilities, VCB backend, lin
 | `tools/python313.dll`, `tools/DLLs/`, `tools/Lib.zip`, `tools/python313.zip` | CPython 3.13 runtime and extension modules used by the native Python bridge |
 | `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
 
-The PE and ELF linkers are target-specific requirements. Keep them beside `vcb.exe` so the toolchain can resolve its companion tools. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
+The PE and ELF linkers are target-specific requirements. Keep them beside `vcb.exe` so the toolchain can resolve its companion tools. At the time this documentation was updated, the GitHub tools listing did not include `lld-link.exe`, `ld.lld.exe`, or `kernel32.lib`; those local files still need to be committed separately for the remote repository to match this layout. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
 
 For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
 
