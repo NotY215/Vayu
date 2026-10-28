@@ -557,7 +557,7 @@ Vayu is an **early-stage independent programming language project** with an expa
 
 **Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
 
-**Phase 27 Parts 1–17 are complete. The WDAC structural fix is done but remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-link path replaces that dependency. Phase 25 is intentionally skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
+**Phases 27 through 31.5 are complete. This includes VCB object emission and external linking, the Phase 29 and 30 backend additions, and Phase 31.1–31.5 tuple, set, slicing, string, and collection work. Phase 31.6 is next: additional string methods and predicates. Phase 25 remains intentionally skipped for now. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
 
 Current implemented areas include:
 
@@ -591,7 +591,7 @@ The completed work covers the ELF writer and Linux runtime subset, Linux heap/li
 
 **Phase 27 Parts 1–16 -- Done.**
 
-**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is complete, while the object + external-linker path becomes the next major backend transition.
+**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is marked done, with intermittent behavior still reported for some binaries. The object-emission and external-linker transition is complete; Phase 31.6 is the next roadmap item.
 
 **Phase 18 -- Vayu developer tooling**
 
