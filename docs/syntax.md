@@ -657,7 +657,7 @@ vayuc file.vyu --dump-ast
 vayuc file.vyu --dump-bytecode
 vayuc file.vyu --dump-ir
 vayuc file.vyu --bench 10
-vayuc --emit-runtime runtime.c (currently unavailable)
+vayuc --emit-runtime runtime.c  # currently unavailable
 ```
 
 Debugging flags also include `--no-check` and `--no-opt`.
