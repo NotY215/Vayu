@@ -63,7 +63,7 @@ The package ecosystem remains a separate concern from the native graphics APIs: 
 
 
 
-The package ecosystem remains under development. The current repository already provides the language/module foundations needed by packages:
+The package ecosystem remains under development, but the package-manager implementation is more than a future design. The Vayu source implementation is in `tools/nva.vyu`, with a companion reference registry server in `tools/nva-server.vyu`. The current repository already provides the language/module foundations needed by packages:
 
 - `.vyu` source modules
 - `import` / `from ... import ...`
@@ -86,14 +86,14 @@ Vayu already has source modules, `import`/`from ... import ...`, aliases, built-
 
 ## Current Package Status
 
-The following remain planned rather than complete: project manifests, dependency resolution, lock files, package registry, `nva install`, publishing, package caching, reproducible package builds, and platform-aware native dependency resolution.
+Implemented in `tools/nva.vyu`: semver matching, local/remote registry configuration, search and publish flows, package installation/update, Git dependencies, transitive dependency traversal, conflict detection, and dependency-tree output. The exact registry protocol and manifest/lockfile behavior still need continued hardening.
 
-The `nva install` workflow is implemented in `tools/nva.vyu`; it resolves registry packages and Git dependencies according to the project's current manifest and resolver logic.
+Still evolving or planned: robust lockfile/reproducibility guarantees, package caching, a stable public package index, hardened remote publishing, platform-aware native dependency resolution, and compatibility guarantees across compiler versions.
 
 
 ## Roadmap Alignment
 
-The long-term package roadmap expands beyond the current `nva` design into:
+The next package-system work expands beyond the current `nva` implementation into:
 
 - project manifests
 - dependency resolution
