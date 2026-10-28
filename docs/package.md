@@ -57,7 +57,7 @@ The long-term package workflow is intended to connect source packages with the V
 
 ## Current Status
 
-Vayu has completed the GUI and graphics foundation through Phase 21. The Phase 22 package-ecosystem direction is complete. VCB phases 27 through 31.5 are complete, including object emission, external linking, and the listed collection/string operations. Phase 31.6 is the next roadmap item. Phase 25 benchmarking remains intentionally skipped for now.
+Vayu has completed the GUI and graphics foundation through Phase 21. The Phase 22 package-ecosystem direction is complete. VCB phases 27 through 31.5 are complete, including object emission, external linking, and the listed collection/string operations. Phase 31.6a and 31.6b are the current drop for string predicates and alignment/padding; Phase 31.6c is next for character-based trimming. Phase 25 benchmarking remains intentionally skipped for now.
 
 The package ecosystem remains a separate concern from the native graphics APIs: `gui` and `raster` are compiler/runtime capabilities, not package-registry features.
 
