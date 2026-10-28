@@ -43,20 +43,20 @@ static void usage() {
         "Modes (default --run):\n"
         "  --run                tree-walking interpreter\n"
         "  --vm                 bytecode virtual machine\n"
-        "  --native             VCB native compilation and execution\n"
+        "  --native             VIB native compilation and execution\n"
         "  --native-out <path>  compile to native exe at <path>, do not run\n"
         "  --check              type-check only\n"
         "  --dump-tokens        print the lexer output\n"
         "  --dump-ast           print the parsed AST\n"
         "  --dump-bytecode      compile to bytecode and print disassembly\n"
-        "  --dump-ir            print the VCB IR\n"
+        "  --dump-ir            print VIB IR (when implemented)\n"
         "\n"
         "Flags:\n"
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
         "  --bench [N]          run the program N times (default 5)\n"
         "  --link=external      emit-obj + external link (default, --native)\n"
-        "  --link=embedded      vcb build (VCB's own PE writer, no linker)\n"
+        "  --link=embedded      reserved compatibility option; linking is VIB-managed\n"
         "\n"
         "Utility:\n"
         "  --emit-runtime <path>  write the native runtime C source to <path>\n");
@@ -145,10 +145,10 @@ int main(int argc, char** argv) {
                 return 1;
             }
             std::string b = argv[++i];
-            if (b != "vcb" && b != "auto") {
+            if (b != "integrator" && b != "auto") {
                 std::fprintf(stderr,
                     "vayuc: backend '%s' no longer exists; "
-                    "VCB is the only native backend\n", b.c_str());
+                    "VIB is the integrated native-toolchain architecture\n", b.c_str());
                 return 1;
             }
         }
