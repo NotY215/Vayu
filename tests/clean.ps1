@@ -1,5 +1,5 @@
 # tests/clean.ps1
-# Removes transient native-compiler artifacts.  Keeps the built tools
+# Removes transient compiler artifacts.  Keeps the built tools
 # (nva.exe, vayu.exe, vcode.exe, vlex.exe, vparse.exe) and the CMake
 # build tree.  Use -Full to wipe the tools too.
 
@@ -31,10 +31,6 @@ Get-ChildItem -File -Filter '*.o' | ForEach-Object {
     Remove-Item $_.FullName -Force
 }
 Get-ChildItem -File -Filter '*_rt.c' | ForEach-Object {
-    Write-Host ("rm " + $_.Name)
-    Remove-Item $_.FullName -Force
-}
-Get-ChildItem -File -Filter '*.vcbir' | ForEach-Object {
     Write-Host ("rm " + $_.Name)
     Remove-Item $_.FullName -Force
 }

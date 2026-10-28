@@ -1,4 +1,5 @@
-# vcb_flow.vyu -- exercises control flow through the VCB backend.
+# Native compiler regression fixture. Native tests are gated until VIB code generation is implemented.
+# native_flow.vyu -- exercises control flow through the VIB native backend.
 # Expected stdout:
 #   1
 #   -1

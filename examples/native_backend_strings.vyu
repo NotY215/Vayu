@@ -1,5 +1,6 @@
-# vcb_strings.vyu -- exercises bool printing, string literals, and
-# string methods through the VCB backend.
+# Native backend conformance fixture. Execute in native mode after VIB code generation lands.
+# native_backend_strings.vyu -- exercises bool printing, string literals, and
+# string methods through the VIB native backend.
 #
 # Expected stdout:
 #   3 4

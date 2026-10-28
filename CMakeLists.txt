@@ -13,7 +13,7 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# The native backend is VCB (E:\VCB), invoked at runtime as
-# tools\vcb.exe.  QBE and gcc are no longer part of the pipeline.
+# VIB (Vayu Integration Backend) is the integrated compiler/runtime architecture.
+# Native code-generation milestones are tracked in Roadmap.md.
 
 add_subdirectory(compiler)

@@ -43,7 +43,7 @@
 
 **Vayu** brings together Python-inspired readability, native-performance goals, low-level control, modern typing, AI/ML ambitions, and application-development capabilities in one language.
 
-**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🧭 Roadmap](docs/vision.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🧭 Roadmap](Roadmap.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
 
 </div>
 
@@ -183,42 +183,40 @@ The goal is to provide:
 
 ---
 
-## 🔄 Vayu + VCB Data Flow
+## 🔄 Vayu + VIB Integrator Data Flow
 
-Vayu owns the language frontend and lowers supported programs into VCBIR. VCB parses VCBIR, generates x86-64 machine code, emits the required runtime, and writes the final PE or ELF executable.
+Vayu is moving its native compiler into **VIB (Vayu Integration Backend)**, the integrated toolchain implementing the Integrator architecture. VIB will own the Vayu IR, verification, native code generation, runtime integration, optional platform-linker adapter, cache, incremental compilation, and execution dispatch. It is not a separate required executable.
 
 ```mermaid
-flowchart LR
+flowchart TD
     S[".vyu Source"] --> F["Vayu Frontend"]
-    F --> L["VcbLower"]
-    L --> I["VCBIR"]
-    I --> V["VCB"]
-    V --> C["x86-64 Codegen + Runtime"]
-    C --> P["PE Writer"]
-    C --> E["ELF Writer"]
-    P --> W["Windows PE"]
-    E --> X["Linux ELF"]
+    F --> A["AST + Semantic Analysis"]
+    A --> I["Vayu IR (planned)"]
+    I --> V["VIB Integrator"]
+    V --> N["Native Code Generation (planned)"]
+    N --> E["Native Artifact (planned)"]
 ```
 
-**[→ Full Vayu + VCB Data Flow](docs/data-flow.md)**
+**[→ VIB Architecture](docs/vib.md) · [→ Full Roadmap](Roadmap.md)**
+
+> Transition status: the old external-backend lowering/invocation has been removed from the active native compiler source. VIB native code generation is not implemented yet; use `--run` or `--vm` for execution until the roadmap's native conformance gates pass.
 
 ## 🧰 Windows Toolchain and Runtime Layout
 
-The intended Windows development layout keeps the Vayu source utilities, VCB backend, linker tools, ONNX example helper, and CPython bridge runtime together under the tools directory. The table below describes the local toolchain layout, not a guarantee that every listed binary is already tracked on GitHub.
+The Windows development layout contains Vayu-source utilities, optional platform tools, the ONNX example helper, and the CPython bridge runtime. The table below lists expected roles, not a guarantee that every optional binary is included in the repository.
 
 | Path | Purpose |
 |---|---|
-| `tools/vcb.exe` | Bundled VCB backend executable copied from the VCB Release build |
-| `tools/lld-link.exe` | COFF linker used by `vcb link --target pe` |
-| `tools/ld.lld.exe` | ELF linker used by `vcb link --target elf` |
-| `tools/kernel32.lib` | Windows import library required by the PE link path |
+| `tools/lld-link.exe` | optional COFF linker for future VIB object-linking support |
+| `tools/ld.lld.exe` | optional ELF linker for future VIB object-linking support |
+| `tools/kernel32.lib` | Optional Windows import library for a future VIB PE-link configuration |
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
 | `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
 | `tools/python313.dll`, `tools/DLLs/`, `tools/Lib.zip`, `tools/python313.zip` | CPython 3.13 runtime and extension modules used by the native Python bridge |
 | `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
 
-The PE and ELF linkers are target-specific requirements. Keep them beside `vcb.exe` so the toolchain can resolve its companion tools. At the time this documentation was updated, the GitHub tools listing did not include `lld-link.exe`, `ld.lld.exe`, or `kernel32.lib`; those local files still need to be committed separately for the remote repository to match this layout. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
+Platform linkers may be used later through a VIB-owned adapter, but they are not a substitute for Vayu-owned code generation. Check the actual repository/distribution before assuming any optional tool is present. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
 
 For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
 
@@ -423,7 +421,7 @@ The official language name is **Vayu** and the official source extension is **`.
 | [`docs/syntax.md`](docs/syntax.md) | Complete language syntax and implemented features |
 | [`docs/package.md`](docs/package.md) | Package manager and ecosystem |
 | [`docs/ai.md`](docs/ai.md) | AI/ML direction and ecosystem |
-| [`docs/vision.md`](docs/vision.md) | Long-term vision, phased roadmap, and current development status |
+| [`Roadmap.md`](Roadmap.md) | Long-term vision, phased roadmap, and current development status |
 | [`CODE OF CONDUCT.md`](CODE%20OF%20CONDUCT.md) | Community standards and contributor conduct |
 | [`REPORTING_GUIDELINES.md`](REPORTING_GUIDELINES.md) | Guidelines for reporting and handling unacceptable behavior |
 
@@ -453,7 +451,7 @@ The long-term vision includes:
 - Metaprogramming
 - Professional developer tooling
 
-**[→ Read the Vayu Vision](docs/vision.md)**
+**[→ Read the Vayu Vision](Roadmap.md)**
 
 ---
 
@@ -573,132 +571,20 @@ The long-term goal is to make Vayu useful for everything from small programs and
 
 # 📊 Current Status
 
-Vayu is an **early-stage independent programming language project** with an expanding compiler, runtime, tooling, FFI layer, Python/CPython interoperability, and native-backend work.
+Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The native compiler is transitioning to **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository.
 
-**Phase 23 has been completed.** Phases 19 and 20 established the native window/event/widget and 2D graphics foundations; Phase 21 completed the software raster and 3D pipeline; Phase 22 established the package-ecosystem direction and continued runtime/UI work; Phase 23 completed the single-binary native-toolchain direction toward VCB. The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting.
+The legacy external-backend lowering and invocation have been removed from the active native compiler source. The VIB native code generator and verified IR are not implemented yet, so `--native` and `--native-out` report this transition state instead of invoking an external backend. Use `--run` or `--vm` for execution.
 
-**Phases 27 through 31.5 are complete. Phase 31.6a and 31.6b are the current drop for string predicates and alignment/padding methods; Phase 31.6c is next for character-based trimming. Phase 25 remains intentionally skipped for now. VCB is the active native backend for Vayu, with Windows PE and Linux ELF output, runtime emission, executable-format handling, and target validation.**
+Current language and runtime features remain subject to execution-mode coverage. Native support must be re-established feature-by-feature through the shared conformance suite rather than inferred from interpreter support.
 
-Current implemented areas include:
+**Engineering roadmap:** [Roadmap.md](Roadmap.md)  
+**VIB architecture:** [docs/vib.md](docs/vib.md)  
+**VIB implementation:** [VIB/README.md](VIB/README.md)  
+**Benchmark predictions:** [VIB/docs/BENCHMARK_PREDICTIONS.md](VIB/docs/BENCHMARK_PREDICTIONS.md)
 
-- indentation-based `.vyu` syntax
-- static type checking and type inference
-- functions, recursion, lambdas, closures and higher-order functions
-- lists, maps, tuples and sets, including slicing
-- structs, classes, inheritance, overriding and `super()`
-- exceptions and modules
-- `const`, `enum`, static members and visibility modifiers
-- `match`, `with`, `defer`, `yield` and generators
-- bitwise operators and compound assignment
-- ownership/reference types such as `unique<T>`, `shared<T>`, and `weak<T>`
-- raw pointers, references, pointer arithmetic, `malloc()` and `free()`
-- C FFI, function pointers, external-library linking and supported struct-by-value FFI
-- runtime modules including math, filesystem/OS, regex, threading, networking, crypto, random, time and JSON
-- native floating-point values, mixed int/float arithmetic, comparisons and conversions
-- native `math.*` operations, float lists and float-valued maps
-- VCB-backed native compilation and executable emission
-- native CPython loading and expanded Python value/call interoperability
+The roadmap maps the historical language/tooling phases to the new VIB implementation phases. Performance expectations, including comparisons with JIT compilers, are hypotheses until measured reproducibly.
 
-### Current Development Direction
-
-**Current development -- VCB-backed native toolchain**
-
-Vayu's native compiler now lowers supported Vayu programs into VCB IR and uses VCB for native code generation and executable emission. Windows native output is backed by VCB's PE path, and the Linux path is covered by VCB's ELF target and the Phase 27 ELF matrix.
-
-**Phase 27 Parts 1–16 -- Done**
-
-The completed work covers the ELF writer and Linux runtime subset, Linux heap/list/map/string runtime, PE correctness and padding, relocations and ASLR, `.pdata` / `.xdata`, kernel32 heap APIs, Linux `vayu_print_float`, PE layout corrections, WDAC diagnosis and signing tools, shared x86-64 emitter extraction, the 11-program PE matrix, runtime `.pdata` / `.xdata` coverage, and the Linux ELF matrix.
-
-**Phase 27 Parts 1–16 -- Done.**
-
-**Phase 27 Parts 1–17 -- Done. The WDAC structural fix is marked done, with intermittent behavior still reported for some binaries. The object-emission and external-linker transition is complete. Phase 31.6a and 31.6b are the current drop; 31.6c is next.
-
-**Phase 18 -- Vayu developer tooling**
-
-The current development track focuses on making Vayu practical to use inside a modern editor and development workflow. The repository now contains the Vayu Language Server, formatter, linter, and VS Code extension, alongside the existing compiler/runtime infrastructure.
-
-**Phase 17 -- Vayu self-hosting / compiler bootstrap**
-
-The existing C++ `vayuc` remains the bootstrap/reference compiler while Vayu itself is developed toward feature parity. The long-term objective is for Vayu to compile its own compiler and eventually allow the C++ bootstrap implementation to be dropped.
-
-### Vayu Roadmap
-
-| Phase / Item | Status | Scope |
-|---|---|---|
-| 27 Parts 1-17 | done | ELF writer, Linux runtime, PE correctness, validator |
-| WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
-| Signing | removed | Not needed once obj+linker path lands |
-| Tools | ready | `VCB/tools/`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
-| 28.0 | done | Phase 28 test-harness and integration cleanup |
-| 28.1 | done | COFF `.obj` emitter + `vcb emit-obj` |
-| 28.2 | done | ELF `.o` emitter |
-| 28.3 | done | `vcb link` with `lld-link` / `ld.lld` dispatch |
-| 28.4 | done | `vayuc --native` external-link default |
-| 28.5 | done | VcbLower builtin guard |
-| 29 | done | MAC policy templates |
-| 30 | done | Small VcbLower additions |
-| 31.1 | done | Tuple literal/index/len; set literal/add/contains/len; string slice `s[a:b]` |
-| 31.2 | done | `s[a:]`, `s[:b]`, `s[:]`; tuple/set printing; set remove/clear |
-| 31.3 | done | List slicing, `str.strip()`, `list.pop()`, `list.contains(v)` |
-| 31.4 | done | `str.split`, single-character `str.replace`, `list.index`, `set.copy`, tuple slicing |
-| 31.5 | done | Multicharacter `str.replace`, `str.count(sub)` |
-| 31.6a | this drop | `str.is_digit`, `is_alpha`, `is_space`, `is_lower`, `is_upper`, `is_alnum`, `is_ascii` |
-| 31.6b | this drop | `str.ljust(width[, fill])`, `str.rjust`, `str.center`, `str.zfill(width)` |
-| 31.6c | next drop | `str.strip(chars)`, `str.lstrip([chars])`, `str.rstrip([chars])` |
-| 31.7 | not started | Bug fixes: `types.vyu` float, `vm_arith.vyu`, `vm_flow.vyu`, `vcb_collections.vyu` truncation, `fib.vyu` segfault, stack-overflow guards |
-| 31.8 | not started | Dict: `keys`, `values`, `items`, `pop`, `pop_or`, `update`, `setdefault`, `get_or`, `copy`, `clear` |
-| 31.9 | not started | List: `sort`, `reverse`, `remove`, `insert`, `count`, `extend`, `clear`, `copy`, `first`, `last` |
-| 31.10 | not started | String: `find`, `rfind`, `index`, `partition`, `rpartition`, `format` |
-| 31.11 | not started | Tuple: `index`, `count`; set: `union`, `intersection`, `difference`, `symmetric_difference`, `issubset`, `issuperset` |
-| 32.1 | not started | Struct definitions: heap field layout, constructor, field access and assignment |
-| 32.2 | not started | Struct methods: `self` binding, method calls, field access through `self` |
-| 32.3 | not started | Classes with `__init__` and positional constructor arguments |
-| 32.4 | not started | Inherited fields visible in child types |
-| 32.5 | not started | Method inheritance, overrides, dynamic-type dispatch |
-| 32.6 | not started | `super().__init__(...)` and `super().method(...)` |
-| 32.7 | not started | Static fields: `ClassName.field` read/write |
-| 32.8 | not started | `str(obj)` and `print(obj)` as `Name(field=val, ...)` |
-| 32.9 | not started | `type(x)`, `isinstance(x, T)`, `hasattr(x, "f")` |
-| 32.10 | not started | Enforce public/private/protected visibility in sema and VcbLower |
-| 32.11 | not started | Keyword arguments for class constructors and method calls |
-| 33.1 | not started | Lambda expression, single-expression body, no captures |
-| 33.2 | not started | Capturing lambdas with heap-allocated upvalue block, one cell per captured name |
-| 33.3 | not started | Nested `def` inside `def` using the same upvalue system |
-| 33.4 | not started | First-class functions: return, pass as arguments, store in lists/maps |
-| 33.5 | not started | Bound method values: capture `obj.method` as callable |
-| 33.6 | not started | `map`, `filter`, `reduce`, `sorted(key=...)` accept Vayu lambdas |
-| 33.7 | not started | Closure recursion and forward references |
-| 33.8 | not started | Python-like late-binding closure capture semantics |
-| 34.1 | not started | VCB `.pdata` and `.xdata` emission (COFF prerequisite) |
-| 34.2 | not started | Basic `try/except`, single handler, no `as` binding |
-| 34.3 | not started | `except Exc as e` binding |
-| 34.4 | not started | Multiple handlers with type matching |
-| 34.5 | not started | Unconditional `finally` |
-| 34.6 | not started | `raise Exc(msg)` and bare `raise` |
-| 34.7 | not started | Custom exception classes subclassing `Exception` |
-| 34.8 | not started | Exception propagation through call stack |
-| 34.9 | not started | Uncaught exception stderr traceback and exit code 1 |
-| 34.10 | not started | Linux exception path via `.eh_frame` or minimal `__cxa_throw` equivalent |
-| 34.11 | not started | Linux `vayu_print_float` |
-| 34.12 | not started | `defer` runs on normal and exception exits |
-| 35.1 | not started | Preserve `VType::Ptr` through VcbLower expressions and assignments |
-| 35.2 | not started | `ptr<T>`, address-of `&x`, and dereference `*p` on locals |
-| 35.3 | not started | `&obj.field` and `*obj.field = v` |
-| 35.4 | not started | `&arr[i]` and `*arr[i] = v` |
-| 35.5 | not started | Pointer arithmetic: `p + i`, `p - i`, `p1 - p2` |
-| 35.6 | not started | `malloc(size)` / `free(p)`: Windows HeapAlloc/HeapFree, Linux `brk` |
-| 35.7 | not started | Single-function `extern "C"` declarations such as `def puts(s: str) -> int` |
-| 35.8 | not started | Mixed-signature foreign calls: up to 4 Win64 or 6 SysV arguments |
-| 35.9 | not started | Foreign struct layout with field alignment |
-| 35.10 | not started | FFI callbacks passing Vayu function pointers to C and back |
-| 35.11 | not started | C string conversions: `str_to_cstr`, `cstr_to_str` |
-| 35.12 | not started | `unsafe:` blocks for raw pointer access and manual casts |
-| 35.13 | not started | `ref<T>` with non-null invariant enforced by sema |
-| 36 | not started | Modules and standard library |
-| 37 | not started | `.text` size limit removal |
-| 38 | not started | Self-hosting on VCB IR |
-| 39 | not started | Full benchmark suite |
-| 40 | not started | Version cut |
+---
 
 ## DeepSeek
 

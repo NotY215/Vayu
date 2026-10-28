@@ -1,4 +1,5 @@
-# vcb_collections.vyu -- exercises lists and maps through VCB.
+# Native backend conformance fixture. Execute in native mode after VIB code generation lands.
+# native_backend_collections.vyu -- exercises lists and maps through VIB.
 #
 # Expected stdout:
 #   [10, 20, 30]

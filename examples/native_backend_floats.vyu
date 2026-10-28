@@ -1,4 +1,5 @@
-# vcb_floats.vyu -- exercises floats through the VCB backend.
+# Native backend conformance fixture. Execute in native mode after VIB code generation lands.
+# native_backend_floats.vyu -- exercises floats through the VIB native backend.
 #
 # Expected stdout:
 #   3.5

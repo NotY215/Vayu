@@ -1,4 +1,5 @@
-# vcb_smoke.vyu -- exercises the VCB backend.
+# Native compiler regression fixture. Native tests are gated until VIB code generation is implemented.
+# native_smoke.vyu -- exercises the VIB native backend.
 # Expected stdout:
 #   7
 #   -1
