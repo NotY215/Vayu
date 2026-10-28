@@ -4,10 +4,7 @@
 #   -Test <name>           one example only, interpreter + VM, no fixpoint
 #   -FixpointOnly          skip examples, run the fixpoint (stubbed)
 #   -NoFixpoint            examples only (fast iteration)
-#   -FailOnDenied          treat Windows ACCESS_DENIED as a failure.
-#                          Default: skip.  Denied means the WDAC inbox
-#                          policy blocked the freshly-built unsigned
-#                          binary at launch, not a codegen bug.
+#   -FailOnDenied          retained for compatibility during VIB bootstrap.
 
 param(
     [string]$Test = "",
