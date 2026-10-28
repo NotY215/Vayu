@@ -209,7 +209,7 @@ The Windows development layout contains Vayu-source utilities, optional platform
 |---|---|
 | `tools/lld-link.exe` | optional COFF linker for future VIB object-linking support |
 | `tools/ld.lld.exe` | optional ELF linker for future VIB object-linking support |
-| `tools/kernel32.lib` | Windows import library required by the PE link path |
+| `tools/kernel32.lib` | Optional Windows import library for a future VIB PE-link configuration |
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
 | `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
