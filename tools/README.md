@@ -1,6 +1,6 @@
 # Vayu Tools Directory
 
-This directory contains companion executables, Vayu-source utilities, example-generation helpers, and the embedded CPython runtime used by the Windows development setup.
+This directory is intended to contain companion executables, Vayu-source utilities, example-generation helpers, and the embedded CPython runtime used by the Windows development setup. This guide documents the required local layout; it does not assert that every listed binary is currently tracked in GitHub.
 
 ## Expected layout
 
@@ -20,7 +20,7 @@ This directory contains companion executables, Vayu-source utilities, example-ge
       vcruntime140.dll        Microsoft Visual C++ runtime dependency
       vcruntime140_1.dll      Microsoft Visual C++ runtime dependency
 
-The exact directory contents can vary as the toolchain evolves. The PE linker, ELF linker, and Windows import library are required companion files for the corresponding VCB linking workflows. Do not infer that a required file is present merely because it is listed here; check the repository tree and local distribution before building a release.
+The exact directory contents can vary as the toolchain evolves. The PE linker, ELF linker, and Windows import library are required companion files for the corresponding VCB linking workflows. At the time of this update, the GitHub tools listing did not contain `lld-link.exe`, `ld.lld.exe`, or `kernel32.lib`; the local files still need to be committed or included through the release packaging process. Do not infer that a required file is present merely because it is listed here; check the repository tree and local distribution before building a release.
 
 ## VCB linking
 
