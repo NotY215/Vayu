@@ -196,7 +196,8 @@ namespace vayu {
                     auto* n = static_cast<const SliceExpr*>(e);
                     std::string tgt = emitExpr(n->target.get());
                     VType tt = lastType_;
-                    if (tt != VType::Str && tt != VType::List)
+                    if (tt != VType::Str && tt != VType::List &&
+                        tt != VType::Tuple)
                         throw std::runtime_error(
                             "VcbLower: slice on this type not yet supported "
                             "at line " + std::to_string(e->loc.line));
@@ -212,15 +213,20 @@ namespace vayu {
                         b = fresh();
                         if (tt == VType::Str)
                             emit("i64 " + b + " = call vayu_str_len(" + tgt + ")");
-                        else
+                        else if (tt == VType::List)
                             emit("i64 " + b + " = call vayu_list_len(" + tgt + ")");
+                        else
+                            emit("i64 " + b + " = call vayu_tuple_len(" + tgt + ")");
                     }
                     std::string t = fresh();
                     if (tt == VType::Str)
                         emit("i64 " + t + " = call vayu_str_slice(" + tgt +
                             ", " + a + ", " + b + ")");
-                    else
+                    else if (tt == VType::List)
                         emit("i64 " + t + " = call vayu_list_slice(" + tgt +
+                            ", " + a + ", " + b + ")");
+                    else
+                        emit("i64 " + t + " = call vayu_tuple_slice(" + tgt +
                             ", " + a + ", " + b + ")");
                     lastType_ = tt;
                     return t;
@@ -765,6 +771,40 @@ namespace vayu {
                         lastType_ = VType::Str;
                         return t;
                     }
+                    // Phase 31.4.
+                    if (m == "split") {
+                        if (c->args.size() > 1)
+                            throw std::runtime_error(
+                                "VcbLower: str.split takes 0 or 1 argument");
+                        std::string sep;
+                        if (c->args.empty()) {
+                            sep = fresh();
+                            emit("i64 " + sep + " = const.str \" \"");
+                        }
+                        else {
+                            sep = emitExpr(c->args[0].value.get());
+                            if (lastType_ != VType::Str)
+                                throw std::runtime_error(
+                                    "VcbLower: str.split separator must be str");
+                        }
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_split(" + recv +
+                            ", " + sep + ")");
+                        lastType_ = VType::List;
+                        return t;
+                    }
+                    if (m == "replace") {
+                        if (c->args.size() != 2)
+                            throw std::runtime_error(
+                                "VcbLower: str.replace takes 2 arguments");
+                        std::string old_s = emitExpr(c->args[0].value.get());
+                        std::string new_s = emitExpr(c->args[1].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_str_replace(" + recv +
+                            ", " + old_s + ", " + new_s + ")");
+                        lastType_ = VType::Str;
+                        return t;
+                    }
                     if (m == "upper" || m == "lower") {
                         if (!c->args.empty())
                             throw std::runtime_error(
@@ -830,6 +870,17 @@ namespace vayu {
                         lastType_ = VType::Bool;
                         return t;
                     }
+                    if (m == "index") {
+                        if (c->args.size() != 1)
+                            throw std::runtime_error(
+                                "VcbLower: list.index takes 1 argument");
+                        std::string v = emitExpr(c->args[0].value.get());
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_list_index(" + recv +
+                            ", " + v + ")");
+                        lastType_ = VType::Int;
+                        return t;
+                    }
                 }
 
                 if (recvType == VType::Set) {
@@ -885,6 +936,15 @@ namespace vayu {
                         emit("i64 " + z + " = const.i64 0");
                         lastType_ = VType::Int;
                         return z;
+                    }
+                    if (m == "copy") {
+                        if (!c->args.empty())
+                            throw std::runtime_error(
+                                "VcbLower: set.copy takes no arguments");
+                        std::string t = fresh();
+                        emit("i64 " + t + " = call vayu_set_copy(" + recv + ")");
+                        lastType_ = VType::Set;
+                        return t;
                     }
                 }
 
