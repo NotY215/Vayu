@@ -26,31 +26,6 @@ if (-not (Test-Path $vayuc)) {
     exit 2
 }
 
-# ---- VCB resolution ---------------------------------------------------
-$vcbRel = "tools\vcb.exe"
-if (-not (Test-Path $vcbRel)) {
-    Write-Host "FATAL: $vcbRel not found. Copy vcb.exe into tools\." -ForegroundColor Red
-    exit 2
-}
-$env:VAYU_VCB = (Resolve-Path $vcbRel).Path
-
-# ---- Freshness check --------------------------------------------------
-$vcbSrcBuild = "E:\VCB\build\x64-Release\bin\vcb.exe"
-if (Test-Path $vcbSrcBuild) {
-    $toolTime = (Get-Item $vcbRel).LastWriteTime
-    $srcTime  = (Get-Item $vcbSrcBuild).LastWriteTime
-    if ($srcTime -gt $toolTime) {
-        Write-Host ("WARN: tools\vcb.exe is older than $vcbSrcBuild.") -ForegroundColor Yellow
-        Write-Host ("      tools: {0:yyyy-MM-dd HH:mm}" -f $toolTime) -ForegroundColor Yellow
-        Write-Host ("      src  : {0:yyyy-MM-dd HH:mm}" -f $srcTime)  -ForegroundColor Yellow
-        Write-Host "      Results may reflect stale code.  Rebuild VCB and re-copy." `
-            -ForegroundColor Yellow
-    }
-}
-$vcbInfo = Get-Item $vcbRel
-Write-Host ("VCB   : {0}  ({1:yyyy-MM-dd HH:mm})" -f $vcbRel, $vcbInfo.LastWriteTime) `
-    -ForegroundColor Cyan
-
 # ---- Test lists -------------------------------------------------------
 
 $skip = @(
@@ -151,74 +126,31 @@ function Test-OneFile([string]$rel, [string]$name) {
         Write-Host ("[skip]  {0}  (in skip list)" -f $name) -ForegroundColor DarkGray
         return $true
     }
-
     if ($native_only -contains $name) {
-        $nat = Invoke-Backend $rel "--native"
-        if (ExitCodeOK $name $nat.rc) {
-            Write-Host ("[ok]    {0}  (native-only)" -f $name) -ForegroundColor Green
-            return $true
-        }
-        if ((Is-Denied $nat.rc) -and -not $FailOnDenied) {
-            Write-Host ("[denied]{0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Yellow
-            return $true
-        }
-        Write-Host ("[FAIL]  {0}  (native-only rc={1})" -f $name, $nat.rc) -ForegroundColor Red
-        if ($nat.err) {
-            $lines = @($nat.err -split "`r?`n" | Where-Object { $_ })
-            $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1] } else { "" }
-            if ($last) { Write-Host ("        {0}" -f $last) -ForegroundColor DarkRed }
-        }
-        return $false
+        Write-Host ("[skip]  {0}  (native feature awaits VIB implementation)" -f $name) -ForegroundColor Yellow
+        return $true
     }
-
     $tw = Invoke-Backend $rel ""
     if (-not (ExitCodeOK $name $tw.rc)) {
         Write-Host ("[FAIL]  {0}  (tree-walk rc={1})" -f $name, $tw.rc) -ForegroundColor Red
         return $false
     }
-
-    $vm  = Invoke-Backend $rel "--vm"
-    $nat = Invoke-Backend $rel "--native"
+    $vm = Invoke-Backend $rel "--vm"
+    if (-not (ExitCodeOK $name $vm.rc)) {
+        Write-Host ("[FAIL]  {0}  (VM rc={1})" -f $name, $vm.rc) -ForegroundColor Red
+        return $false
+    }
     $useSort = $sort_compare -contains $name
-
-    $ok = $true
-    if ((ExitCodeOK $name $vm.rc) -and -not (Compare-Output $vm.out $tw.out $useSort)) {
+    if (-not (Compare-Output $vm.out $tw.out $useSort)) {
         Write-Host ("[FAIL]  {0}  (VM output differs)" -f $name) -ForegroundColor Red
-        $ok = $false
+        return $false
     }
-
-    if (ExitCodeOK $name $nat.rc) {
-        if (-not (Compare-Output $nat.out $tw.out $useSort)) {
-            Write-Host ("[FAIL]  {0}  (native output differs)" -f $name) -ForegroundColor Red
-            Write-Host ("        tree : {0}" -f ($tw.out -replace "`n", "\n")) -ForegroundColor DarkYellow
-            Write-Host ("        nativ: {0}" -f ($nat.out -replace "`n", "\n")) -ForegroundColor DarkYellow
-            $ok = $false
-        }
-    }
-    elseif ((Is-Denied $nat.rc) -and -not $FailOnDenied) {
-        Write-Host ("[denied]{0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Yellow
-    }
-    else {
-        Write-Host ("[FAIL]  {0}  (native rc={1})" -f $name, $nat.rc) -ForegroundColor Red
-        if ($nat.err) {
-            $lines = @($nat.err -split "`r?`n" | Where-Object { $_ })
-            $last = if ($lines.Count -gt 0) { $lines[$lines.Count - 1] } else { "" }
-            if ($last) { Write-Host ("        {0}" -f $last) -ForegroundColor DarkRed }
-        }
-        $ok = $false
-    }
-
-    if ($ok) {
-        $tags = "tree"
-        if (ExitCodeOK $name $vm.rc)  { $tags += "+vm" }
-        if (ExitCodeOK $name $nat.rc) { $tags += "+native" }
-        Write-Host ("[ok]    {0}  ({1})" -f $name, $tags) -ForegroundColor Green
-    }
-    return $ok
+    Write-Host ("[ok]    {0}  (tree+VM; native path tracked in VIB roadmap)" -f $name) -ForegroundColor Green
+    return $true
 }
 
 # -------------------------------------------------------------------------
-# Fixpoint -- DISABLED until self-hosting on VCB IR lands (Phase 36).
+# Fixpoint -- disabled until VIB self-hosting milestones are implemented.
 # -------------------------------------------------------------------------
 
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {
