@@ -202,6 +202,26 @@ flowchart LR
 
 **[→ Full Vayu + VCB Data Flow](docs/data-flow.md)**
 
+## 🧰 Bundled Toolchain and Runtime
+
+The Windows development layout keeps the Vayu source utilities, VCB backend, linker tools, ONNX example helper, and CPython bridge runtime together under the tools directory.
+
+| Path | Purpose |
+|---|---|
+| `tools/vcb.exe` | Bundled VCB backend executable copied from the VCB Release build |
+| `tools/lld-link.exe` | COFF linker used by `vcb link --target pe` |
+| `tools/ld.lld.exe` | ELF linker used by `vcb link --target elf` |
+| `tools/kernel32.lib` | Windows import library required by the PE link path |
+| `tools/nva.vyu` | Vayu-source package manager |
+| `tools/nva-server.vyu` | Reference read-only NVA registry server |
+| `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
+| `tools/python313.dll`, `tools/DLLs/`, `tools/Lib.zip`, `tools/python313.zip` | CPython 3.13 runtime and extension modules used by the native Python bridge |
+| `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
+
+The PE and ELF linkers are target-specific requirements. Keep them beside `vcb.exe` so the toolchain can resolve its companion tools. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
+
+For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
+
 ---
 
 ## 🧩 Modern Type System
