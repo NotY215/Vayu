@@ -1,7 +1,7 @@
-# tests\run_all.ps1 -- cross-backend sanity harness.
+# tests\run_all.ps1 -- interpreter and VM conformance harness.
 # Modes:
-#   (no args)              full: examples + fixpoint
-#   -Test <name>           one example only, all backends, no fixpoint
+#   (no args)              full: examples + fixpoint placeholder
+#   -Test <name>           one example only, interpreter + VM, no fixpoint
 #   -FixpointOnly          skip examples, run the fixpoint (stubbed)
 #   -NoFixpoint            examples only (fast iteration)
 #   -FailOnDenied          treat Windows ACCESS_DENIED as a failure.
