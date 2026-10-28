@@ -12,7 +12,8 @@ int NativeCompiler::compileAndRun(const Block& program, const std::string& sourc
     return 0;
 }
 void NativeCompiler::dumpIR(const Block&, const std::string&) {
-    std::fprintf(stderr, "VIB: VIR dumping is not available yet. See Roadmap.md, Phase 3.\n");
+    lastError_ = "VIR dumping is not available yet. See Roadmap.md, Phase 3.";
+    std::fprintf(stderr, "VIB: %s\n", lastError_.c_str());
 }
 bool NativeCompiler::writeRuntimeC(const std::string&) const { return false; }
 } // namespace vayu
