@@ -104,6 +104,21 @@ Vayu Source (.vyu)
 
 VCB is developed as a separate backend project. The Vayu compiler now uses VCB for the native path; the older QBE + GCC backend chain is historical.
 
+## Bundled Windows Toolchain
+
+The repository's tools directory is the companion-tool and embedded-runtime layout for Windows development:
+
+- `vcb.exe`: VCB backend executable.
+- `lld-link.exe`: COFF linker for `vcb link --target pe`.
+- `ld.lld.exe`: ELF linker for `vcb link --target elf`.
+- `kernel32.lib`: Windows import library for PE linking.
+- `nva.vyu`: Vayu-source package manager.
+- `nva-server.vyu`: reference read-only registry server; its publish endpoint intentionally returns HTTP 501.
+- `make_tiny_onnx.py`: generates the small ONNX model used by examples.
+- `python313.dll`, `python313.zip`, `Lib.zip`, `DLLs/`, and the Visual C++ runtime DLLs: CPython bridge runtime and native dependencies.
+
+See [tools/README.md](tools/README.md) for layout and usage details, and [Third_Party.md](Third_Party.md) for third-party notices and redistribution cautions.
+
 ---
 
 # 4. Source Language
