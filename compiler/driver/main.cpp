@@ -137,8 +137,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
-            // Accepted for backwards compatibility.  The only backend
-            // The legacy external-backend selector is retired.
+            // Retained as a temporary CLI compatibility selector; VIB is integrated.
             if (i + 1 >= argc) {
                 std::fprintf(stderr,
                     "vayuc: --backend requires an argument\n");
