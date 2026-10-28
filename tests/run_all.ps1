@@ -71,14 +71,14 @@ $sort_compare = @( "generators.vyu" )
 
 # Examples whose exit code is intentionally non-zero on any backend.
 $expected_exit = @{
-    "vcb_smoke.vyu" = 42
+    "native_smoke.vyu" = 42
 }
 
 # ---- Helpers ----------------------------------------------------------
 
 # Returns @{ rc; out; err }.  Captures stdout and stderr into separate
 # temp files so the comparison is against the child program's stdout
-# only, not against vcb's status lines or vayuc's diagnostics.
+# only, not against native compiler diagnostics or vayuc's diagnostics.
 function Invoke-Backend {
     param($file, $mode)
     $outTmp = [System.IO.Path]::GetTempFileName()
@@ -154,7 +154,7 @@ function Test-OneFile([string]$rel, [string]$name) {
 # -------------------------------------------------------------------------
 
 function Invoke-OneFixpoint([string]$label, [string]$compiler, [string]$source) {
-    Write-Host ("  {0}: fixpoint disabled (self-hosting via VCB pending)" `
+    Write-Host ("  {0}: fixpoint disabled (self-hosting via VIB pending)" `
                 -f $label) -ForegroundColor DarkYellow
     return $true
 }
