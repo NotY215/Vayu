@@ -27,7 +27,7 @@ The current source tree demonstrates a substantially expanded language/compiler 
 
 The current development history records **Phase 23 as completed**. Phases 19 and 20 established the native GUI and 2D graphics foundation, Phase 21 completed the software raster and 3D pipeline, Phase 22 established the package-ecosystem direction, and Phase 23 completed the single-binary native-toolchain direction by establishing VCB as a separate backend project.
 
-The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phases 26 and 27 are complete, and Phases 28, 29, 30, and 31.1–31.5 are also complete. The WDAC structural fix is marked done, although behavior remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-linker path replaces that dependency.
+The C++ `vayuc` compiler remains the bootstrap/reference compiler while the project continues toward self-hosting. Phases 1–24 are complete and Phase 25 is skipped for now. VCB Phases 26–30 are complete. Phase 31 is in progress: 31.1–31.5 are done, 31.6a and 31.6b are this drop, and 31.6c is the next drop. The WDAC structural fix is marked done, although behavior remains intermittent for some binaries. Signing is removed from the roadmap because the object + external-linker path replaces that dependency.
 
 ## Roadmap
 
@@ -38,7 +38,7 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | 27 Parts 1-17 | done | ELF writer, Linux runtime, PE correctness, validator |
 | WDAC structural fix | done | `.rsrc`, rich header, 32 KB minimum image |
 | Signing | removed | Not needed once obj+linker path lands |
-| Tools | ready | `VCB\\tools\\`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
+| Tools | ready | `VCB/tools/`: `lld-link.exe`, `ld.lld.exe` (LLVM 22.1.3), `kernel32.lib`, LLVM inspection tools |
 | 28.0 | done | Phase 28 test-harness and integration cleanup |
 | 28.1 | done | COFF `.obj` emitter + `vcb emit-obj` |
 | 28.2 | done | ELF `.o` emitter |
@@ -47,8 +47,8 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | 28.5 | done | VcbLower builtin guard |
 | 29 | done | MAC policy templates |
 | 30 | done | Small VcbLower additions |
-| 31.1 | done | Tuple literal/index/len, set literal/add/contains/len, string slicing |
-| 31.2 | done | Open-ended string slices, tuple/set printing, set remove/clear |
+| 31.1 | done | Tuple literal/index/len; set literal/add/contains/len; string slice `s[a:b]` |
+| 31.2 | done | `s[a:]`, `s[:b]`, `s[:]`; tuple/set printing; set remove/clear |
 | 31.3 | done | List slicing, `str.strip()`, `list.pop()`, `list.contains(v)` |
 | 31.4 | done | `str.split`, single-character `str.replace`, `list.index`, `set.copy`, tuple slicing |
 | 31.5 | done | Multicharacter `str.replace`, `str.count(sub)` |
@@ -56,54 +56,54 @@ The roadmap below tracks Vayu and the companion VCB backend together.
 | 31.6b | this drop | `str.ljust(width[, fill])`, `str.rjust`, `str.center`, `str.zfill(width)` |
 | 31.6c | next drop | `str.strip(chars)`, `str.lstrip([chars])`, `str.rstrip([chars])` |
 | 31.7 | not started | Bug fixes: `types.vyu` float, `vm_arith.vyu`, `vm_flow.vyu`, `vcb_collections.vyu` truncation, `fib.vyu` segfault, stack-overflow guards |
-| 31.8 | not started | Dict `keys/values/items/pop/pop_or/update/setdefault/get_or/copy/clear` |
-| 31.9 | not started | List `sort/reverse/remove/insert/count/extend/clear/copy/first/last` |
-| 31.10 | not started | String `find/rfind/index/partition/rpartition/format` |
-| 31.11 | not started | Tuple `index/count`; set `union/intersection/difference/symmetric_difference/issubset/issuperset` |
-| 32.1 | not started | Struct definitions, heap field layout, constructors, field access and assignment |
-| 32.2 | not started | Struct methods, `self` binding, calls and field access through `self` |
+| 31.8 | not started | Dict: `keys`, `values`, `items`, `pop`, `pop_or`, `update`, `setdefault`, `get_or`, `copy`, `clear` |
+| 31.9 | not started | List: `sort`, `reverse`, `remove`, `insert`, `count`, `extend`, `clear`, `copy`, `first`, `last` |
+| 31.10 | not started | String: `find`, `rfind`, `index`, `partition`, `rpartition`, `format` |
+| 31.11 | not started | Tuple: `index`, `count`; set: `union`, `intersection`, `difference`, `symmetric_difference`, `issubset`, `issuperset` |
+| 32.1 | not started | Struct definitions: heap field layout, constructor, field access and assignment |
+| 32.2 | not started | Struct methods: `self` binding, method calls, field access through `self` |
 | 32.3 | not started | Classes with `__init__` and positional constructor arguments |
-| 32.4 | not started | Inherited fields visible in child types using the global field-offset table |
-| 32.5 | not started | Method inheritance, overrides and dynamic-type dispatch |
+| 32.4 | not started | Inherited fields visible in child types |
+| 32.5 | not started | Method inheritance, overrides, dynamic-type dispatch |
 | 32.6 | not started | `super().__init__(...)` and `super().method(...)` |
-| 32.7 | not started | Static field reads/writes through `ClassName.field` |
-| 32.8 | not started | Instance stringification and printing as `Name(field=value, ...)` |
+| 32.7 | not started | Static fields: `ClassName.field` read/write |
+| 32.8 | not started | `str(obj)` and `print(obj)` as `Name(field=val, ...)` |
 | 32.9 | not started | `type(x)`, `isinstance(x, T)`, `hasattr(x, "f")` |
 | 32.10 | not started | Enforce public/private/protected visibility in sema and VcbLower |
 | 32.11 | not started | Keyword arguments for class constructors and method calls |
-| 33.1 | not started | Single-expression lambda bodies without captures |
-| 33.2 | not started | Lambda captures using heap-allocated upvalue blocks and one cell per captured name |
+| 33.1 | not started | Lambda expression, single-expression body, no captures |
+| 33.2 | not started | Capturing lambdas with heap-allocated upvalue block, one cell per captured name |
 | 33.3 | not started | Nested `def` inside `def` using the same upvalue system |
-| 33.4 | not started | First-class functions: return, pass as arguments, and store in lists/maps |
-| 33.5 | not started | Bound method values captured as callable objects |
-| 33.6 | not started | Vayu lambdas accepted by `map/filter/reduce/sorted(key=...)` |
-| 33.7 | not started | Recursive closures and forward references |
+| 33.4 | not started | First-class functions: return, pass as arguments, store in lists/maps |
+| 33.5 | not started | Bound method values: capture `obj.method` as callable |
+| 33.6 | not started | `map`, `filter`, `reduce`, `sorted(key=...)` accept Vayu lambdas |
+| 33.7 | not started | Closure recursion and forward references |
 | 33.8 | not started | Python-like late-binding closure capture semantics |
-| 34.1 | not started | VCB `.pdata` and `.xdata` emission for COFF unwind metadata |
-| 34.2 | not started | Basic `try/except` with one handler and no `as` binding |
+| 34.1 | not started | VCB `.pdata` and `.xdata` emission (COFF prerequisite) |
+| 34.2 | not started | Basic `try/except`, single handler, no `as` binding |
 | 34.3 | not started | `except Exc as e` binding |
-| 34.4 | not started | Multiple exception handlers with type matching |
-| 34.5 | not started | Unconditional `finally` execution |
+| 34.4 | not started | Multiple handlers with type matching |
+| 34.5 | not started | Unconditional `finally` |
 | 34.6 | not started | `raise Exc(msg)` and bare `raise` |
-| 34.7 | not started | Custom exception classes derived from `Exception` |
-| 34.8 | not started | Exception propagation through the call stack |
-| 34.9 | not started | Uncaught exception traceback to stderr and exit code 1 |
+| 34.7 | not started | Custom exception classes subclassing `Exception` |
+| 34.8 | not started | Exception propagation through call stack |
+| 34.9 | not started | Uncaught exception stderr traceback and exit code 1 |
 | 34.10 | not started | Linux exception path via `.eh_frame` or minimal `__cxa_throw` equivalent |
-| 34.11 | not started | Linux `vayu_print_float` runtime support |
-| 34.12 | not started | `defer` syntax sugar running on normal and exceptional exits |
-| 35.1 | not started | Preserve `VType::Ptr` through VcbLower pointer expressions and assignments |
-| 35.2 | not started | Address-of `&x` and dereference `*p` for locals |
+| 34.11 | not started | Linux `vayu_print_float` |
+| 34.12 | not started | `defer` runs on normal and exception exits |
+| 35.1 | not started | Preserve `VType::Ptr` through VcbLower expressions and assignments |
+| 35.2 | not started | `ptr<T>`, address-of `&x`, and dereference `*p` on locals |
 | 35.3 | not started | `&obj.field` and `*obj.field = v` |
 | 35.4 | not started | `&arr[i]` and `*arr[i] = v` |
-| 35.5 | not started | Pointer arithmetic `p + i`, `p - i`, `p1 - p2` |
-| 35.6 | not started | `malloc(size) -> ptr<T>` and `free(p)` using HeapAlloc/HeapFree on Windows and `brk` on Linux |
-| 35.7 | not started | Single-function `extern "C"` declarations |
-| 35.8 | not started | Mixed-signature foreign calls, up to 4 args on Win64 and 6 on SysV |
-| 35.9 | not started | FFI struct layout with field alignment |
-| 35.10 | not started | FFI callbacks passing Vayu function pointers to C and calling back into Vayu |
-| 35.11 | not started | `str_to_cstr` and `cstr_to_str` conversions |
+| 35.5 | not started | Pointer arithmetic: `p + i`, `p - i`, `p1 - p2` |
+| 35.6 | not started | `malloc(size)` / `free(p)`: Windows HeapAlloc/HeapFree, Linux `brk` |
+| 35.7 | not started | Single-function `extern "C"` declarations such as `def puts(s: str) -> int` |
+| 35.8 | not started | Mixed-signature foreign calls: up to 4 Win64 or 6 SysV arguments |
+| 35.9 | not started | Foreign struct layout with field alignment |
+| 35.10 | not started | FFI callbacks passing Vayu function pointers to C and back |
+| 35.11 | not started | C string conversions: `str_to_cstr`, `cstr_to_str` |
 | 35.12 | not started | `unsafe:` blocks for raw pointer access and manual casts |
-| 35.13 | not started | `ref<T>` with a non-null pointer invariant enforced by sema |
+| 35.13 | not started | `ref<T>` with non-null invariant enforced by sema |
 | 36 | not started | Modules and standard library |
 | 37 | not started | `.text` size limit removal |
 | 38 | not started | Self-hosting on VCB IR |
@@ -263,7 +263,7 @@ while keeping the language approachable and giving developers progressively more
 
 The project is moving from broad core-language/runtime capability toward a complete development ecosystem. The immediate areas are compiler/bootstrap stabilization, self-hosting, memory/resource correctness, native backend evolution, standard-library growth, package tooling, concurrency, and continued developer-tooling improvements.
 
-The project has progressed through the GUI/event/widget layer, 2D graphics foundation, software-raster/3D pipeline, package ecosystem, native floats, and the VCB transition. Current work is Phase 26 Part 2: native x86-64 code generation, PE/ELF output, prebuilt runtime integration, and migration of `vayuc` from QBE+GCC to VCB.
+The project has progressed through the GUI/event/widget layer, 2D graphics foundation, software-raster/3D pipeline, package ecosystem, native floats, and the VCB transition. Current VCB roadmap work is Phase 31.6a and 31.6b, with character-based stripping next.
 
 ## Architecture Direction
 
