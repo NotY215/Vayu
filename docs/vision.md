@@ -77,7 +77,7 @@ Benchmarking was intentionally postponed until after the VCB transition. The exi
 
 **27 Parts 1–17 -- Done. The WDAC structural fix is complete but remains intermittent for some binaries; signing is removed from the roadmap.** ELF output, Linux runtime expansion, PE correctness, relocations/ASLR, unwind metadata, kernel32 heap APIs, Linux float printing, PE layout corrections, WDAC diagnosis/signing tools, WDAC supplemental-policy generation, shared x86-64 emitter extraction, the 11-program PE matrix, runtime unwind metadata, and the Linux ELF matrix.
 
-**27 Part 17 -- Next:** move PE import-table construction into `writePe`, remove the `kIdataRva` hardcode, and add Linux `.eh_frame` support.
+**27 Parts 1–17 -- Done.** The completed phase covered PE import-table work, Linux ELF support, runtime metadata, and target validation.
 
 ### Completed VCB phases 28–31.5
 
@@ -208,7 +208,7 @@ while keeping the language approachable and giving developers progressively more
 
 ## Current Phase Status
 
-**Phases 1–26 Part 1 are complete development phases. Phase 26 Part 2 is the current direction. Phase 25 is skipped for now and will be revisited after VCB.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
+**Phases 1–24 are complete, Phase 25 is skipped for now, and VCB Phases 26–31.5 are complete. Phase 31.6 is the current roadmap item.** Phase 15 delivered raw pointer/reference semantics, C FFI, external linking, function-pointer support, supported FFI struct wrapping, and `malloc`/`free`. Phase 16 established native CPython integration with primitive value bridging, Python import/attribute/call support, and reference-count handling. Phase 17 advanced the compiler toward self-hosting. Phase 18 added the LSP, formatter, linter, VS Code extension, expanded LSP capabilities, and related compiler/runtime tooling.
 
 ## Current Direction
 
@@ -234,7 +234,7 @@ x86-64 machine code + runtime
 PE / ELF executable
 ```
 
-VCB is a companion backend project, not a replacement for the Vayu frontend. Its current native path is implemented for Windows PE and Linux ELF targets, with Phase 27 continuing backend hardening and target validation.
+VCB is a companion backend project, not a replacement for the Vayu frontend. Its native path supports Windows PE and Linux ELF targets; VCB roadmap work is complete through Phase 31.5, with Phase 31.6 next.
 
 ## Developer Ecosystem
 
