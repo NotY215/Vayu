@@ -40,7 +40,7 @@ The planned direction includes:
 
 ## Current Status
 
-Vayu has native C/FFI, CPython interoperability, native floating-point support, and a VCB-backed native compiler. A complete native tensor/ML ecosystem remains future work; tensors, autodiff, ONNX, CUDA/GPU execution, and high-level neural-network APIs are not yet complete.
+Vayu has C/FFI and CPython interoperability foundations in the existing codebase; the VIB native compiler is being rebuilt and native feature parity is not yet available. A complete native tensor/ML ecosystem remains future work; tensors, autodiff, ONNX, CUDA/GPU execution, and high-level neural-network APIs are not yet complete.
 
 For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
 
@@ -63,14 +63,12 @@ The native compiler also supports `--emit-runtime` for exporting the native runt
 
 ## Phase Position
 
-**Phases 1–24 are complete development phases. Phase 25 is skipped for now. Phase 26 Part 1 and Part 2 are complete. VCB Phase 27 Parts 1–10 and 12–16 are done; Part 11 is partial, and Part 17 is the next backend milestone.** Phase 16 established the native CPython bridge; Phase 17 advanced the compiler toward self-hosting; Phase 18 added the LSP, formatter, linter, and VS Code integration; Phases 19–21 added GUI/graphics foundations; Phase 22 advanced the package ecosystem; and Phase 23 established the VCB native-backend direction.
-
-Phase 25 remains skipped for now; the native backend/runtime work is currently driven by VCB Phase 27. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
+The historical language/tooling phases are mapped to the new VIB work in [Roadmap.md](../Roadmap.md). VIB must first establish verified IR, native code generation, runtime parity, caching, and incremental compilation before performance-sensitive AI workloads can be claimed as natively supported. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
 
 
 ## Current Implementation Status
 
-The compiler/runtime has completed Phases 1–24 and is now in the VCB-backed native toolchain hardening stage. The native GUI/raster foundation from Phases 19–21 remains available, Phase 22 established the package ecosystem, Phase 23 established the backend transition direction, and Phase 24 completed the native-float and related numerical foundation. Phase 25 is skipped for now; VCB Phase 27 Parts 1–10 and 12–16 are complete; Part 11 is partial, with Part 17 focused on PE import-table cleanup and Linux `.eh_frame` support.
+The native compiler is in the VIB Integrator transition. Native execution is temporarily unavailable until VIB code generation and conformance gates are implemented. Use `--run` or `--vm` for currently available execution routes.
 
 The current AI/ML implementation is still foundational rather than a complete ML framework. Native C FFI and CPython interoperability exist, while tensors, autodiff, ONNX integration, CUDA/GPU execution, and high-level neural-network APIs remain development work.
 
