@@ -55,11 +55,11 @@ static void usage() {
         "  --no-check           skip the type checker\n"
         "  --no-opt             disable bytecode optimizer (VM only)\n"
         "  --bench [N]          run the program N times (default 5)\n"
-        "  --link=external      emit-obj + external link (default, --native)\n"
-        "  --link=embedded      reserved compatibility option; linking is VIB-managed\n"
+        "  --link=external      select VIB-managed external linking (reserved)\n"
+        "  --link=embedded      reserved compatibility option; VIB owns link policy\n"
         "\n"
         "Utility:\n"
-        "  --emit-runtime <path>  write the native runtime C source to <path>\n");
+        "  --emit-runtime <path>  unavailable until VIB runtime emission is implemented\n");
 }
 
 namespace {
@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
             // Accepted for backwards compatibility.  The only backend
-            // is VCB, so any value other than "vcb" or "auto" errors.
+            // The legacy external-backend selector is retired.
             if (i + 1 >= argc) {
                 std::fprintf(stderr,
                     "vayuc: --backend requires an argument\n");
