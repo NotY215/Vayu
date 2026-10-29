@@ -188,7 +188,6 @@ The Windows development layout contains Vayu-source utilities and example-genera
 |---|---|
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
-| `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
 
 VIB's planned native code generation is Vayu-owned. No `lld-link`, `ld.lld`, or bundled platform import library is part of the current tool layout. See [Third-party software and files](Third_Party.md) for the current dependency boundary.
 
@@ -252,7 +251,7 @@ The ecosystem is planned to support:
 - ONNX
 - Vayu-native AI/ML APIs as they are implemented
 
-Vayu will expose AI/ML capabilities through native Vayu APIs as those features are implemented. Libraries from foreign-language ecosystems are not automatically supported.
+Vayu will expose AI/ML capabilities through native Vayu APIs as those features are implemented. ONNX support is deferred until after the Integrator core is stable; the plan is to build a Vayu-owned reader/runtime and native test fixtures. Libraries from foreign-language ecosystems are not automatically supported.
 
 **[→ Read the Vayu AI & ML Documentation](docs/ai.md)**
 
@@ -528,9 +527,9 @@ The goal is to make Vayu useful for small programs, applications, games, AI syst
 
 # 📊 Current Status
 
-Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The native compiler is transitioning to **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository.
+Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The compiler/runtime is transitioning to **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository. The first priority is a small, verified subset and the planned `.vye` Vayu Executable package, which requires a compatible Vayu/Integrator runtime.
 
-The legacy external-backend lowering and invocation have been removed from the active native compiler source. The VIB native code generator and verified IR are not implemented yet, so `--native` and `--native-out` report this transition state instead of invoking an external backend. Use `--run` or `--vm` for execution.
+The first Integrator and `.vye` implementation is still roadmap work until its format, execution path, and tests are present. Do not assume native code generation or `.vye` support is complete. Use the currently supported interpreter/VM paths.
 
 Current language and runtime features remain subject to execution-mode coverage. Native support must be re-established feature-by-feature through the shared conformance suite rather than inferred from interpreter support.
 
