@@ -70,10 +70,8 @@ print(SelfHostColor.BLUE)
 # ============================================================
 # self_host_17_6.vyu -- Phase 17.6 target: tuple literals + set literals.
 #
-# Tuple unpack `(a, b, c) = tuple_values_176` is not exercised here because the C++
-# TypeChecker still rejects TupleLit as an Assign target. To enable it,
-# apply the TypeChecker patch from the previous drop and Rebuild All.
-# This file works on all three backends as-is.
+# Tuple indexing and set literals are covered here.
+# Tuple unpacking coverage is included in collections.vyu.
 
 tuple_values_176 = (10, 20, 30)
 print(tuple_values_176[0])
