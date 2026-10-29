@@ -197,7 +197,7 @@ flowchart TD
     N --> E["Native Artifact (planned)"]
 ```
 
-**[→ VIB Architecture](docs/vib.md) · [→ Full Roadmap](Roadmap.md)**
+**[→ VIB Architecture](docs/vib.md) · [→ Complete VIB Technical Documentation](docs/vib-documentation.md) · [→ Full Roadmap](Roadmap.md)**
 
 > Transition status: the old external-backend lowering/invocation has been removed from the active native compiler source. VIB native code generation is not implemented yet; use `--run` or `--vm` for execution until the roadmap's native conformance gates pass.
 
