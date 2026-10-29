@@ -85,7 +85,7 @@ class Bag:
         self.a = 1
         self.b = 2
 
-def main() -> None:
+def attrs_main() -> None:
     bag = Bag()
     print(bag.a)
     print(bag.b)
@@ -98,13 +98,13 @@ def main() -> None:
     setattr(bag, "b", 99)
     print(bag.b)
 
-main()
+attrs_main()
 
 # ============================================================
 # Combined from static_test.vyu to cover related class/runtime features.
 # ============================================================
 
-class Counter:
+class StaticCounter:
     value: int
     total: int
     static count: int = 0
@@ -113,25 +113,25 @@ class Counter:
     def __init__(self, value: int) -> None:
         self.value = value
         self.total = value * 2
-        Counter.count = Counter.count + 1
+        StaticCounter.count = StaticCounter.count + 1
 
     def report(self) -> int:
-        return self.value + Counter.count
+        return self.value + StaticCounter.count
 
-def main() -> None:
-    print(Counter.count)
-    print(Counter.capacity)
-    a = Counter(10)
-    b = Counter(20)
-    c = Counter(30)
-    print(Counter.count)
+def static_main() -> None:
+    print(StaticCounter.count)
+    print(StaticCounter.capacity)
+    a = StaticCounter(10)
+    b = StaticCounter(20)
+    c = StaticCounter(30)
+    print(StaticCounter.count)
     print(a.report())
     print(b.report())
     print(c.report())
-    Counter.capacity = 200
-    print(Counter.capacity)
+    StaticCounter.capacity = 200
+    print(StaticCounter.capacity)
 
-main()
+static_main()
 
 # ============================================================
 # Combined from inspect.vyu to cover related class/runtime features.
@@ -155,7 +155,7 @@ class Dog(Animal):
     def __init__(self) -> None:
         self.name = "rex"
 
-def main() -> None:
+def inspect_main() -> None:
     print(callable(print))
     print(callable(3))
 
@@ -207,4 +207,4 @@ def main() -> None:
     names = dir(p)
     print(len(names) > 0)
 
-main()
+inspect_main()
