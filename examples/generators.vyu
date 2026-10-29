@@ -44,3 +44,38 @@ def main() -> None:
         print(v)
 
 main()
+
+# ============================================================
+# VM-focused generator coverage, combined from generator_vm.vyu.
+# Kept as a separate section so both generator patterns stay explicit.
+# ============================================================
+
+def vm_countdown(n: int):
+    while n > 0:
+        yield n
+        n = n - 1
+
+def vm_fib():
+    a = 0
+    b = 1
+    while true:
+        yield a
+        t = a + b
+        a = b
+        b = t
+
+def vm_take(g, n: int) -> list<int>:
+    out = []
+    i = 0
+    while i < n:
+        out.append(next(g))
+        i = i + 1
+    return out
+
+def vm_generator_main() -> None:
+    for x in vm_countdown(5):
+        print(x)
+    f = vm_fib()
+    print(vm_take(f, 10))
+
+vm_generator_main()
