@@ -311,7 +311,7 @@ namespace vayu::lint {
                 "tuple","set","setattr","delattr","next","malloc","free",
                 "read_file","write_file","file_exists","args","run_command","exit",
                 "print_raw","join","math","fs","time","json","regex","thread",
-                "net","crypto","random","os","py",
+                "net","crypto","random","os",
                 "Exception","ValueError","TypeError","RuntimeError",
                 "ZeroDivisionError","IndexError","KeyError","NameError",
                 "AttributeError",
