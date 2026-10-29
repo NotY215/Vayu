@@ -190,14 +190,14 @@ print(len(items))
 
 # String methods: casing, padding, counting, searching, partitioning, and character checks.
 
-s = "hello world"
-print(s.capitalize())
-print(s.title())
+method_text = "hello world"
+print(method_text.capitalize())
+print(method_text.title())
 print("Hello World".swapcase())
-print("[" + s.center(20) + "]")
-print("[" + s.center(20, "*") + "]")
-print("[" + s.ljust(15, ".") + "]")
-print("[" + s.rjust(15, ".") + "]")
+print("[" + method_text.center(20) + "]")
+print("[" + method_text.center(20, "*") + "]")
+print("[" + method_text.ljust(15, ".") + "]")
+print("[" + method_text.rjust(15, ".") + "]")
 print("42".zfill(5))
 print("-42".zfill(6))
 print("banana".count("an"))
@@ -221,21 +221,21 @@ print("hello".is_ascii())
 # Combined from sets.vyu to keep collection coverage in one runnable example.
 # ============================================================
 
-s = {1, 2, 3}
-print(len(s))
-print(1 in s)
-print(99 in s)
-s.add(4)
-print(len(s))
-s.add(1)
-print(len(s))
-print(s.contains(3))
-print(s.contains(99))
-s.remove(2)
-print(len(s))
-print(s.contains(2))
-s.discard(99)
-print(len(s))
+set_values = {1, 2, 3}
+print(len(set_values))
+print(1 in set_values)
+print(99 in set_values)
+set_values.add(4)
+print(len(set_values))
+set_values.add(1)
+print(len(set_values))
+print(set_values.contains(3))
+print(set_values.contains(99))
+set_values.remove(2)
+print(len(set_values))
+print(set_values.contains(2))
+set_values.discard(99)
+print(len(set_values))
 a = {1, 2, 3}
 b = {3, 4, 5}
 u = a.union(b)
@@ -255,35 +255,35 @@ print(len(a))
 print(len(c))
 for x in a:
     print(x)
-empty = set([])
-print(len(empty))
-print(empty)
+empty_set = set([])
+print(len(empty_set))
+print(empty_set)
 
 # ============================================================
 # Combined from tuples.vyu to keep collection coverage in one runnable example.
 # ============================================================
 
-t = (1, 2, 3)
-print(t)
-print(t[0])
-print(t[1])
-print(t[2])
-print(len(t))
+tuple_values = (1, 2, 3)
+print(tuple_values)
+print(tuple_values[0])
+print(tuple_values[1])
+print(tuple_values[2])
+print(len(tuple_values))
 u = (42,)
 print(u)
 print(u[0])
 print(len(u))
-empty = ()
-print(empty)
-print(len(empty))
+empty_tuple = ()
+print(empty_tuple)
+print(len(empty_tuple))
 mixed = (1, "two", true)
 print(mixed)
-print(t == (1, 2, 3))
-print(t == (1, 2, 4))
-print(t.count(2))
-print(t.count(99))
-print(t.index(3))
-for x in t:
+print(tuple_values == (1, 2, 3))
+print(tuple_values == (1, 2, 4))
+print(tuple_values.count(2))
+print(tuple_values.count(99))
+print(tuple_values.index(3))
+for x in tuple_values:
     print(x)
 print(tuple([10, 20, 30]))
 print(tuple("abc"))
@@ -300,27 +300,27 @@ print(xs[:])
 print(xs[0:0])
 print(xs[3:1])
 
-s = "hello world"
-print(s[0:5])
-print(s[6:])
-print(s[:5])
-print(s[:])
-print(s[-5:])
+slice_text = "hello world"
+print(slice_text[0:5])
+print(slice_text[6:])
+print(slice_text[:5])
+print(slice_text[:])
+print(slice_text[-5:])
 
-t = (1, 2, 3, 4)
-print(t[1:3])
-print(t[:2])
-print(t[2:])
-print(t[:])
+slice_tuple = (1, 2, 3, 4)
+print(slice_tuple[1:3])
+print(slice_tuple[:2])
+print(slice_tuple[2:])
+print(slice_tuple[:])
 
-a = (1, 2)
-b = (3, 4)
-c = a + b
-print(c)
-print(len(c))
+slice_a = (1, 2)
+slice_b = (3, 4)
+slice_c = slice_a + slice_b
+print(slice_c)
+print(len(slice_c))
 
-empty = ()
-print(empty + empty)
+slice_empty = ()
+print(slice_empty + slice_empty)
 
 # ============================================================
 # Combined from zip_enum.vyu to keep collection coverage in one runnable example.
@@ -332,9 +332,9 @@ for (i, x) in enumerate([10, 20, 30]):
     print(x)
 
 print("--- zip ---")
-a = [1, 2, 3]
-b = ["x", "y", "z"]
-for (k, v) in zip(a, b):
+zip_left = [1, 2, 3]
+zip_right = ["x", "y", "z"]
+for (k, v) in zip(zip_left, zip_right):
     print(k)
     print(v)
 
