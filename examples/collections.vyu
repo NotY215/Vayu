@@ -119,3 +119,238 @@ def total_of(lst: list<int>) -> int:
     return s
 
 print(total_of([10, 20, 30, 40]))
+
+# ============================================================
+# Combined from list_methods.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+# List methods: append, extend, count, first, last, copy, reverse, and sort.
+
+xs = [3, 1, 2]
+xs.append(5)
+print(xs)
+ys = [10, 20]
+xs.extend(ys)
+print(xs)
+print(xs.count(5))
+print(xs.count(99))
+print(xs.first())
+print(xs.last())
+zs = xs.copy()
+zs.reverse()
+print(zs)
+print(xs)
+nums = [3, 1, 4, 1, 5, 9, 2, 6]
+nums.sort()
+print(nums)
+words = ["banana", "apple", "cherry"]
+words.sort()
+print(words)
+
+# ============================================================
+# Combined from map_methods.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+# Map methods: set, get_or, has_key, pop, pop_or, update, copy, and items.
+
+m = {"a": 1, "b": 2}
+m.set("c", 3)
+
+print(len(m))
+print(m.get_or("a", -1))
+print(m.get_or("zzz", -1))
+print(m.has_key("b"))
+print(m.has_key("zzz"))
+
+print(m.pop("a"))
+print(m.has_key("a"))
+print(m.pop_or("zzz", 99))
+print(len(m))
+
+n = {"x": 10, "y": 20}
+m.update(n)
+print(m.get("b"))
+print(m.get("c"))
+print(m.get("x"))
+print(m.get("y"))
+
+snapshot = m.copy()
+snapshot.set("fresh", 100)
+print(m.get_or("fresh", -1))
+print(snapshot.get_or("fresh", -1))
+print(len(m))
+print(len(snapshot))
+
+items = m.items()
+print(len(items))
+
+# ============================================================
+# Combined from string_methods.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+# String methods: casing, padding, counting, searching, partitioning, and character checks.
+
+s = "hello world"
+print(s.capitalize())
+print(s.title())
+print("Hello World".swapcase())
+print("[" + s.center(20) + "]")
+print("[" + s.center(20, "*") + "]")
+print("[" + s.ljust(15, ".") + "]")
+print("[" + s.rjust(15, ".") + "]")
+print("42".zfill(5))
+print("-42".zfill(6))
+print("banana".count("an"))
+print("banana".count("a"))
+print("banana".rfind("a"))
+print("a-b-c".partition("-"))
+print("a-b-c".rpartition("-"))
+print("nosep".partition("-"))
+print("nosep".rpartition("-"))
+print("a\nb\r\nc".splitlines())
+print("a,b,c,d".rsplit(",", 2))
+print("HELLO".is_lower())
+print("hello".is_lower())
+print("hello".is_upper())
+print("HELLO".is_upper())
+print("abc123".is_alnum())
+print("abc 123".is_alnum())
+print("hello".is_ascii())
+
+# ============================================================
+# Combined from sets.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+s = {1, 2, 3}
+print(len(s))
+print(1 in s)
+print(99 in s)
+s.add(4)
+print(len(s))
+s.add(1)
+print(len(s))
+print(s.contains(3))
+print(s.contains(99))
+s.remove(2)
+print(len(s))
+print(s.contains(2))
+s.discard(99)
+print(len(s))
+a = {1, 2, 3}
+b = {3, 4, 5}
+u = a.union(b)
+i = a.intersection(b)
+d = a.difference(b)
+print(len(u))
+print(len(i))
+print(len(d))
+print(1 in u)
+print(3 in i)
+print(4 in i)
+print(1 in d)
+print(3 in d)
+c = a.copy()
+c.add(99)
+print(len(a))
+print(len(c))
+for x in a:
+    print(x)
+empty = set([])
+print(len(empty))
+print(empty)
+
+# ============================================================
+# Combined from tuples.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+t = (1, 2, 3)
+print(t)
+print(t[0])
+print(t[1])
+print(t[2])
+print(len(t))
+u = (42,)
+print(u)
+print(u[0])
+print(len(u))
+empty = ()
+print(empty)
+print(len(empty))
+mixed = (1, "two", true)
+print(mixed)
+print(t == (1, 2, 3))
+print(t == (1, 2, 4))
+print(t.count(2))
+print(t.count(99))
+print(t.index(3))
+for x in t:
+    print(x)
+print(tuple([10, 20, 30]))
+print(tuple("abc"))
+
+# ============================================================
+# Combined from slice_concat.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+xs = [10, 20, 30, 40, 50]
+print(xs[1:3])
+print(xs[:3])
+print(xs[2:])
+print(xs[:])
+print(xs[0:0])
+print(xs[3:1])
+
+s = "hello world"
+print(s[0:5])
+print(s[6:])
+print(s[:5])
+print(s[:])
+print(s[-5:])
+
+t = (1, 2, 3, 4)
+print(t[1:3])
+print(t[:2])
+print(t[2:])
+print(t[:])
+
+a = (1, 2)
+b = (3, 4)
+c = a + b
+print(c)
+print(len(c))
+
+empty = ()
+print(empty + empty)
+
+# ============================================================
+# Combined from zip_enum.vyu to keep collection coverage in one runnable example.
+# ============================================================
+
+print("--- enumerate ---")
+for (i, x) in enumerate([10, 20, 30]):
+    print(i)
+    print(x)
+
+print("--- zip ---")
+a = [1, 2, 3]
+b = ["x", "y", "z"]
+for (k, v) in zip(a, b):
+    print(k)
+    print(v)
+
+print("--- zip direct index ---")
+pairs = zip([1, 2], ["a", "b"])
+print(pairs[0][0])
+print(pairs[0][1])
+print(pairs[1][0])
+print(pairs[1][1])
+
+print("--- len of zip result ---")
+print(len(zip([1, 2, 3], [4, 5, 6])))
+
+print("--- enumerate indexable ---")
+e = enumerate(["foo", "bar"])
+print(e[0][0])
+print(e[0][1])
+print(e[1][0])
+print(e[1][1])
