@@ -2846,96 +2846,6 @@ class Codegen:
             return true
         return false
 
-    def gen_py_call(self, n: Node, callee: Node) -> str:
-        m = callee.value
-        if m == "init":
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_init()")
-            self.last_kind = "bool"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "version":
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_version()")
-            self.last_kind = "str"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "run" or m == "exec":
-            arg = self.gen_expr(n.right)
-            cstr = self.new_temp()
-            self.emit(cstr + " =l call $vayu_str_cstr(l " + arg + ")")
-            self.emit("call $vayu_py_run(l " + cstr + ")")
-            self.last_kind = ""
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return "0"
-        if m == "int":
-            arg = self.gen_expr(n.right)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_int(l " + arg + ")")
-            self.last_kind = "int"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "str":
-            arg = self.gen_expr(n.right)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_str(l " + arg + ")")
-            self.last_kind = "int"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "bool":
-            arg = self.gen_expr(n.right)
-            w = self.new_temp()
-            self.emit(w + " =w cnel " + arg + ", 0")
-            ext = self.new_temp()
-            self.emit(ext + " =l extsw " + w)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_bool(l " + ext + ")")
-            self.last_kind = "int"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "from_int":
-            arg = self.gen_expr(n.right)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_from_int(l " + arg + ")")
-            self.last_kind = "int"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "from_str":
-            arg = self.gen_expr(n.right)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_from_str(l " + arg + ")")
-            self.last_kind = "str"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        if m == "from_bool":
-            arg = self.gen_expr(n.right)
-            t = self.new_temp()
-            self.emit(t + " =l call $vayu_py_from_bool(l " + arg + ")")
-            self.last_kind = "bool"
-            self.last_class = ""
-            self.last_elem_class = ""
-            self.last_val_class = ""
-            return t
-        print("vayu: py has no method '" + m + "'")
-        exit(1)
-        return "0"
-
     def gen_call(self, n: Node) -> str:
         callee = self.ast.nodes[n.left]
         if callee.kind == "Attr":
@@ -2946,8 +2856,6 @@ class Codegen:
                     if inner_callee.kind == "Name":
                         if inner_callee.value == "super":
                             return self.gen_super_call(n, callee)
-                if inner.kind == "Name" and inner.value == "py":
-                    return self.gen_py_call(n, callee)
             return self.gen_method_call(n, callee)
         if callee.kind != "Name":
             print("vayu: unsupported call target")
