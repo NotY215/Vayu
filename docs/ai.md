@@ -20,13 +20,13 @@ These are goals, not a claim that every subsystem is currently implemented.
 
 AI features should be exposed through Vayu modules, Vayu types, and documented native APIs. Core functionality must not depend on a Python interpreter or Python package manager. External model formats and native platform libraries may be supported only through dedicated, tested implementations.
 
-A tool written in Python may still be used by developers to generate test assets, such as a small ONNX fixture. Such a development helper is not part of Vayu's language runtime and does not mean Vayu can execute Python code.
+The repository does not bundle a Python ONNX generator or generated ONNX fixture. Future ONNX tests should use Vayu-owned fixtures and a Vayu-owned reader/runtime.
 
 ## Current implementation status
 
 The VIB native compiler is under implementation. Native feature support must be established feature-by-feature through code and shared conformance tests. Interpreter or VM support does not automatically establish native support.
 
-Tensors, automatic differentiation, ONNX execution, CUDA/GPU execution, and high-level neural-network APIs must each be considered unsupported until their implementations and tests are present. Do not infer support from an example file, planned API, or external dependency.
+Tensors, automatic differentiation, ONNX execution, CUDA/GPU execution, and high-level neural-network APIs must each be considered unsupported until their implementations and tests are present. ONNX work must follow the Integrator-first roadmap and must not add a Python/NumPy/ONNX package dependency to Vayu's compiler or runtime. Do not infer support from an example file, planned API, or external dependency.
 
 ## Development sequence
 
@@ -34,7 +34,7 @@ Tensors, automatic differentiation, ONNX execution, CUDA/GPU execution, and high
 2. Implement and test Vayu-native numeric and tensor primitives.
 3. Add deterministic tensor operations and shape validation.
 4. Add automatic differentiation with numerical-gradient tests.
-5. Implement model-format support with malformed-file tests.
+5. After the Integrator and `.vye` format are stable, implement a Vayu-owned ONNX reader with malformed-file tests.
 6. Add optional GPU paths behind capability checks and CPU-equivalence tests.
 7. Benchmark compile time, startup, memory, and steady-state execution separately.
 
