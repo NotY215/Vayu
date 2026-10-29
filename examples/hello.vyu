@@ -1,11 +1,14 @@
-# Vayu hello world
-name = "NotY"
-age = 19
+# Vayu basics: printing, strings, variables, and integer input
 
-def greet(who: str) -> str:
-    return "Hello, " + who
+name = input("Name: ")
+message = "Hello, " + name
+print(message)
 
-if age >= 18:
-    print(greet(name))
-else:
-    print("Minor")
+print("Enter an integer:")
+age = read_int()
+next_age = age + 1
+
+print("Your age is:")
+print(age)
+print("Next year you will be:")
+print(next_age)
