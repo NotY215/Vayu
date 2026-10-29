@@ -54,7 +54,7 @@
         },
         {
           "name": "support.constant.vayu",
-          "match": "\\b(math|fs|time|json|regex|thread|net|crypto|random|os|py)\\b"
+          "match": "\\b(math|fs|time|json|regex|thread|net|crypto|random|os)\\b"
         }
       ]
     },
