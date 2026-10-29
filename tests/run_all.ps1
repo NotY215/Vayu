@@ -27,7 +27,7 @@ if (-not (Test-Path $vayuc)) {
 
 $skip = @(
     "nn.vyu",
-    "input.vyu", "native_io.vyu", "type_errors.vyu", "expr.vyu",
+    "native_io.vyu", "type_errors.vyu", "expr.vyu",
     "vlex_test.vyu", "vparse_test.vyu", "vcode_test.vyu",
     "native_collections.vyu"
 )
