@@ -354,3 +354,35 @@ print(e[0][0])
 print(e[0][1])
 print(e[1][0])
 print(e[1][1])
+
+# ============================================================
+# Tuple unpacking and destructuring, combined from unpack.vyu.
+# ============================================================
+
+unpack_tuple = (1, 2, 3)
+unpack_a, unpack_b, unpack_c = unpack_tuple
+print(unpack_a)
+print(unpack_b)
+print(unpack_c)
+print(unpack_a + unpack_b + unpack_c)
+
+unpack_pair = ("hello", "world")
+unpack_x, unpack_y = unpack_pair
+print(unpack_x)
+print(unpack_y)
+print(unpack_x + " " + unpack_y)
+
+unpack_one = (42,)
+unpack_z = unpack_one[0]
+print(unpack_z)
+
+unpack_pairs = [(1, 2), (3, 4), (5, 6)]
+unpack_total = 0
+for (unpack_k, unpack_v) in unpack_pairs:
+    print(unpack_k)
+    print(unpack_v)
+    unpack_total = unpack_total + unpack_k + unpack_v
+print(unpack_total)
+
+for unpack_item in [10, 20, 30]:
+    print(unpack_item)
