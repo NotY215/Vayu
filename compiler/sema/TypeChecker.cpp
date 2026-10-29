@@ -140,7 +140,6 @@ namespace vayu {
         B("crypto", Types::Any());
         B("random", Types::Any());
         B("os", Types::Any());
-        B("py", Types::Any());
     }
 
     void TypeChecker::installBuiltinExceptions() {
