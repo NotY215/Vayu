@@ -204,8 +204,7 @@ Implement in staged groups:
 6. exceptions and cleanup;
 7. memory operations, pointers, and unsafe features where defined;
 8. standard-library operations and file/process interaction;
-9. C FFI, callbacks, and ABI layout;
-10. CPython bridge and other runtime integrations where technically supported.
+9. Vayu-owned runtime helpers and documented platform ABI boundaries, only where explicitly implemented and tested.
 
 For each group:
 - define its capability boundary;
