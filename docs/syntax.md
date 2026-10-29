@@ -607,7 +607,7 @@ Native FFI also provides an extern C declaration path and native function-pointe
 
 ## Runtime utility surface
 
-The current runtime/native implementation contains utility families for reflection, numeric helpers, iteration, collections, functional operations, filesystem/OS work, networking, crypto, randomness, regular expressions, threading, time, JSON, and Python interoperability.
+The language/runtime exposes Vayu-native utility families for reflection, numeric helpers, iteration, collections, functional operations, filesystem/OS work, networking, crypto, randomness, regular expressions, threading, time, and JSON, subject to execution-route coverage. Python-inspired syntax does not imply Python runtime or package compatibility.
 
 ## Parser and AST coverage
 
@@ -828,4 +828,4 @@ Raster matrix, position, normal, UV and lighting values use the native Q16.16/fi
 
 # 27. Current Syntax Status
 
-The language frontend, interpreter, VM, and native execution are separate capability routes. The VIB native route is currently under implementation and must regain support feature-by-feature through shared conformance tests. GUI, raster, FFI, pointer, and CPython capabilities must not be described as native-supported on a target until the corresponding VIB implementation and tests are present.
+The language frontend, interpreter, VM, and native execution are separate capability routes. The VIB native route is currently under implementation and must regain support feature-by-feature through shared conformance tests. GUI, raster, FFI, pointer, and other native capabilities must not be described as supported on a target until the corresponding VIB implementation and tests are present. Python, Java, .NET, and other foreign-language runtime compatibility is not currently supported.
