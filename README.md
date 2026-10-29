@@ -182,19 +182,15 @@ flowchart TD
 
 ## 🧰 Windows Toolchain and Runtime Layout
 
-The Windows development layout contains Vayu-source utilities, optional platform tools, and example-generation helpers. The table below lists expected roles, not a guarantee that every optional binary is included in the repository.
+The Windows development layout contains Vayu-source utilities and example-generation helpers. No bundled DLL directory, LLD executable, or import-library bundle is required.
 
 | Path | Purpose |
 |---|---|
-| `tools/lld-link.exe` | optional COFF linker for future VIB object-linking support |
-| `tools/ld.lld.exe` | optional ELF linker for future VIB object-linking support |
-| `tools/kernel32.lib` | Optional Windows import library for a future VIB PE-link configuration |
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
 | `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
-| `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
 
-Platform linkers may be used later through a VIB-owned adapter, but they are not a substitute for Vayu-owned code generation. Check the actual repository/distribution before assuming any optional tool is present. See [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
+VIB's planned native code generation is Vayu-owned. No `lld-link`, `ld.lld`, or bundled platform import library is part of the current tool layout. See [Third-party software and files](Third_Party.md) for the current dependency boundary.
 
 For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
 
