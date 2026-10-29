@@ -48,3 +48,40 @@ def main() -> None:
             print(x + y)
 
 main()
+
+# ============================================================
+# Constants and enums, combined from const_enum.vyu.
+# ============================================================
+
+const PI = 3
+const MAX: int = 100
+
+enum Color:
+    Red
+    Green
+    Blue
+
+enum Status:
+    Pending
+    Active = 10
+    Closed = 20
+
+def area(r: int) -> int:
+    return PI * r * r
+
+def constants_main() -> None:
+    print(area(2))
+    print(MAX)
+    print(Color.Red)
+    print(Color.Green)
+    print(Color.Blue)
+    print(Status.Pending)
+    print(Status.Active)
+    print(Status.Closed)
+    c = Color.Green
+    if c == 1:
+        print("green is 1")
+    if Status.Closed > Status.Active:
+        print("closed > active")
+
+constants_main()
