@@ -164,32 +164,32 @@ The goal is to provide:
 
 ## 🔄 Vayu + VIB Integrator Data Flow
 
-Vayu is moving its native compiler into **VIB (Vayu Integration Backend)**, the integrated toolchain implementing the Integrator architecture. VIB will own the Vayu IR, verification, native code generation, runtime integration, optional platform-linker adapter, cache, incremental compilation, and execution dispatch. It is not a separate required executable.
+Vayu is building **VIB (Vayu Integration Backend)**, the integrated toolchain implementing the Integrator architecture. The first goal is a small, verified language subset that can be packaged as `.vye` (Vayu Executable) and run through a compatible Vayu/Integrator runtime. Broader language coverage, native code generation, caching, and incremental compilation come later. VIB is not a separate required executable.
 
 ```mermaid
 flowchart TD
     S[".vyu Source"] --> F["Vayu Frontend"]
     F --> A["AST + Semantic Analysis"]
-    A --> I["Vayu IR (planned)"]
-    I --> V["VIB Integrator"]
-    V --> N["Native Code Generation (planned)"]
-    N --> E["Native Artifact (planned)"]
+    A --> I["Small Verified Integrator Representation (planned)"]
+    I --> P[".vye Package Writer (planned)"]
+    P --> E[".vye Vayu Executable"]
+    E --> R["Compatible Vayu / Integrator Runtime (planned)"]
 ```
 
 **[→ VIB Architecture](docs/vib.md) · [→ Complete VIB Technical Documentation](docs/vib-documentation.md) · [→ Full Roadmap](Roadmap.md)**
 
-> Transition status: the old external-backend lowering/invocation has been removed from the active native compiler source. VIB native code generation is not implemented yet; use `--run` or `--vm` for execution until the roadmap's native conformance gates pass.
+> Status: the initial Integrator, `.vye` format, and package execution path are planned work, not yet complete. Use the currently supported interpreter/VM paths until the new pipeline has passing tests.
 
 ## 🧰 Windows Toolchain and Runtime Layout
 
-The Windows development layout contains Vayu-source utilities and example-generation helpers. No bundled DLL directory, LLD executable, or import-library bundle is required.
+The Windows development layout contains Vayu-source utilities. No bundled DLL directory, LLD executable, import-library bundle, or external compiler backend is required.
 
 | Path | Purpose |
 |---|---|
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
 
-VIB's planned native code generation is Vayu-owned. No `lld-link`, `ld.lld`, or bundled platform import library is part of the current tool layout. See [Third-party software and files](Third_Party.md) for the current dependency boundary.
+The first Integrator milestone targets the `.vye` runtime package, not native OS executables. Native compilation is later work and must not add a bundled linker/backend dependency. See [Third-party software and files](Third_Party.md) for the current dependency boundary.
 
 For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
 
