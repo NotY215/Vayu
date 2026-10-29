@@ -43,7 +43,7 @@
 
 **Vayu** brings together Python-inspired readability, native-performance goals, low-level control, modern typing, AI/ML ambitions, and application-development capabilities in one language.
 
-**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🧭 Roadmap](Roadmap.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🖼️ Icon Support](docs/icons.md) · [🧭 Roadmap](Roadmap.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
 
 </div>
 
@@ -94,6 +94,10 @@ The extension provides editor-side integration for Vayu, including:
 - Vayu configuration support
 
 The compiler repository also contains the standalone `vls`, `vfmt`, and `vlint` tooling used by the extension.
+
+### Vayu icons
+
+The Windows build flow is configured to embed `assets/Vayu_logo.ico` into the generated `vayu.exe`. The VS Code extension package includes light and dark `.vyu` language icons and declares them in its language contribution. Actual executable generation remains dependent on the VIB native compiler being implemented; the current native compiler reports that this path is not ready. See [Icon Support](docs/icons.md) for asset paths, build behavior, theme handling, and Visual Studio limitations.
 
 ---
 
