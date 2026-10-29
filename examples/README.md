@@ -27,7 +27,7 @@ The former `control.vyu` example repeated the basic conditional and while-loop c
 From the repository root, run an individual example with:
 
 ```powershell
-.`build\x64-Release\bin\vayuc.exe` examples\hello.vyu
+& ".\\build\\x64-Release\\bin\\vayuc.exe" examples\\hello.vyu
 ```
 
 The cross-backend harness is available at [`tests/run_all.ps1`](../tests/run_all.ps1). Some examples are intentionally skipped or require native-only capabilities that are still tracked in the VIB roadmap.
