@@ -208,3 +208,34 @@ def inspect_main() -> None:
     print(len(names) > 0)
 
 inspect_main()
+
+# ============================================================
+# Attribute mutation, combined from setattr.vyu.
+# ============================================================
+
+class AttrCounter:
+    value: int
+    def __init__(self, v: int) -> None:
+        self.value = v
+
+class AttrBox:
+    inner: AttrCounter
+    def __init__(self, c: AttrCounter) -> None:
+        self.inner = c
+
+def setattr_main() -> None:
+    c = AttrCounter(10)
+    print(c.value)
+
+    setattr(c, "value", 42)
+    print(c.value)
+
+    setattr(c, "value", 100)
+    print(c.value)
+
+    b = AttrBox(c)
+    print(b.inner.value)
+    setattr(b.inner, "value", 999)
+    print(b.inner.value)
+
+setattr_main()
