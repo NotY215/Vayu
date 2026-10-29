@@ -73,17 +73,7 @@ namespace vayu {
     // bi_malloc / bi_free); anonymous namespaces in the same TU are
     // merged, so a forward decl here is enough.
     namespace {
-        Value pyStubInit(const std::vector<Value>&);
-        Value pyStubVersion(const std::vector<Value>&);
-        Value pyStubRun(const std::vector<Value>&);
-        Value pyStubExec(const std::vector<Value>&);
-        // Phase 16.1 -- value bridging stubs.
-        Value pyStubInt(const std::vector<Value>&);
-        Value pyStubStr(const std::vector<Value>&);
-        Value pyStubBool(const std::vector<Value>&);
-        Value pyStubFromInt(const std::vector<Value>&);
-        Value pyStubFromStr(const std::vector<Value>&);
-        Value pyStubFromBool(const std::vector<Value>&);
+
     }
 
     std::string staticGlobalName(const std::string& cls, const std::string& m) {
@@ -758,46 +748,12 @@ namespace vayu {
         if (n->moduleName == "gui") {
             throw RuntimeError("gui module requires the native backend", n->loc);
         }
-        // Phase 16.0: `py` is a stub module on tree/VM.
-        if (n->moduleName == "py") {
-            auto mod = std::make_shared<ModuleValue>();
-            mod->name = "py";
-
-            auto mk = [](const char* nm, NativeFnPtr fn) -> Value {
-                auto c = std::make_shared<Callable>();
-                c->kind = Callable::Kind::Native;
-                c->name = nm;
-                c->nativeFn = fn;
-                return Value(c);
-                };
-            mod->members["init"] = mk("init", pyStubInit);
-            mod->members["version"] = mk("version", pyStubVersion);
-            mod->members["run"] = mk("run", pyStubRun);
-            mod->members["exec"] = mk("exec", pyStubExec);
-            // Phase 16.1 -- value bridging.
-            mod->members["int"] = mk("int", pyStubInt);
-            mod->members["str"] = mk("str", pyStubStr);
-            mod->members["bool"] = mk("bool", pyStubBool);
-            mod->members["from_int"] = mk("from_int", pyStubFromInt);
-            mod->members["from_str"] = mk("from_str", pyStubFromStr);
-            mod->members["from_bool"] = mk("from_bool", pyStubFromBool);
-
-            const std::string& bind =
-                n->alias.empty() ? n->moduleName : n->alias;
-            env_->define(bind, Value(mod));
-            return;
-        }
         Value mod = loadModule(n->moduleName, n->loc);
         const std::string& bind = n->alias.empty() ? n->moduleName : n->alias;
         env_->define(bind, Value(mod));
     }
 
     void Interpreter::execFromImport(const FromImportStmt* n) {
-        // Phase 16.0: from py import ... is not supported on tree/VM.
-        if (n->moduleName == "py") {
-            throw RuntimeError(
-                "from py import ... requires the native backend", n->loc);
-        }
         Value mod = loadModule(n->moduleName, n->loc);
         if (!mod.isModule())
             throw RuntimeError("'" + n->moduleName + "' is not a module", n->loc);
@@ -3342,47 +3298,6 @@ namespace vayu {
             if (a.size() != 1)
                 throw std::runtime_error("free(p) takes one argument");
             return Value();
-        }
-        // Phase 16.0: py.* stubs for tree/VM.
-        Value pyStubInit(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.init() requires the native backend");
-        }
-        Value pyStubVersion(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.version() requires the native backend");
-        }
-        Value pyStubRun(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.run() requires the native backend");
-        }
-        Value pyStubExec(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.exec() requires the native backend");
-        }
-        Value pyStubInt(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.int() requires the native backend");
-        }
-        Value pyStubStr(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.str() requires the native backend");
-        }
-        Value pyStubBool(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.bool() requires the native backend");
-        }
-        Value pyStubFromInt(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.from_int() requires the native backend");
-        }
-        Value pyStubFromStr(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.from_str() requires the native backend");
-        }
-        Value pyStubFromBool(const std::vector<Value>&) {
-            throw std::runtime_error(
-                "py.from_bool() requires the native backend");
         }
         Value bi_next(const std::vector<Value>& a) {
             if (a.size() != 1 || !a[0].isGenerator())
