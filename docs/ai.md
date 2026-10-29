@@ -1,79 +1,45 @@
-# Vayu AI & Machine Learning
+# Vayu AI and Machine Learning
 
-Vayu is designed with AI/ML as a first-class long-term ecosystem target while keeping the core language useful for general-purpose programming.
+This document describes Vayu's native AI/ML direction. Vayu is its own language and runtime. Python-inspired syntax is a design influence, not Python compatibility. Vayu does not currently embed or execute Python, import Python modules, or promise compatibility with NumPy, PyTorch, TensorFlow, or other foreign-language packages.
 
 ## Goals
 
-The AI/ML roadmap includes:
+The long-term AI/ML direction includes:
+- tensor and matrix operations implemented for Vayu;
+- automatic differentiation;
+- neural-network building blocks;
+- data loading and transformation;
+- computer-vision and image-processing primitives;
+- ONNX model support through an explicitly implemented Vayu-native reader/runtime;
+- GPU acceleration through documented platform interfaces where implemented;
+- performance measurement against representative workloads.
 
-- numerical computing
-- tensor operations
-- machine learning
-- deep learning
-- data processing
-- computer vision
-- GPU acceleration
-- CUDA integration
-- ONNX integration
-- interoperability with established Python AI ecosystems
+These are goals, not a claim that every subsystem is currently implemented.
 
-## Python Ecosystem Interoperability
+## Native-first design
 
-Vayu is intended to interoperate with Python where that provides practical value, especially for mature AI, ML, scientific, and data-processing libraries.
+AI features should be exposed through Vayu modules, Vayu types, and documented native APIs. Core functionality must not depend on a Python interpreter or Python package manager. External model formats and native platform libraries may be supported only through dedicated, tested implementations.
 
-Potential ecosystem targets include NumPy, PyTorch, TensorFlow, OpenCV, ONNX, CUDA, and ROCm.
+A tool written in Python may still be used by developers to generate test assets, such as a small ONNX fixture. Such a development helper is not part of Vayu's language runtime and does not mean Vayu can execute Python code.
 
-The current source now has a real native CPython bridge, but these higher-level ecosystems are not automatically supported merely because CPython is available.
+## Current implementation status
 
-## Native AI Direction
+The VIB native compiler is under implementation. Native feature support must be established feature-by-feature through code and shared conformance tests. Interpreter or VM support does not automatically establish native support.
 
-The long-term goal is to make performance-sensitive AI workloads possible without requiring developers to abandon Vayu for native extensions whenever low-level control is needed.
+Tensors, automatic differentiation, ONNX execution, CUDA/GPU execution, and high-level neural-network APIs must each be considered unsupported until their implementations and tests are present. Do not infer support from an example file, planned API, or external dependency.
 
-The planned direction includes:
+## Development sequence
 
-1. stable native compiler/runtime foundations
-2. efficient numerical and memory primitives
-3. native library interoperability
-4. GPU/runtime integrations
-5. higher-level tensor and ML APIs
-6. tooling for AI development and deployment
+1. Establish the VIB IR, verifier, and execution contracts.
+2. Implement and test Vayu-native numeric and tensor primitives.
+3. Add deterministic tensor operations and shape validation.
+4. Add automatic differentiation with numerical-gradient tests.
+5. Implement model-format support with malformed-file tests.
+6. Add optional GPU paths behind capability checks and CPU-equivalence tests.
+7. Benchmark compile time, startup, memory, and steady-state execution separately.
 
-## Current Status
+## Support policy
 
-Vayu has C/FFI and CPython interoperability foundations in the existing codebase; the VIB native compiler is being rebuilt and native feature parity is not yet available. A complete native tensor/ML ecosystem remains future work; tensors, autodiff, ONNX, CUDA/GPU execution, and high-level neural-network APIs are not yet complete.
+The documented support matrix must identify each feature, execution route, platform, and passing test. Features without implementation evidence remain planned. No foreign-language runtime or package compatibility is implied.
 
-For current project status and roadmap information, visit the [official Vayu website](https://vayu.gt.tc) or the [Vayu repository](https://github.com/NotY215/Vayu).
-
-
-## Current Native Python Foundation
-
-The native `py` module currently supports `py.init()`, `py.version()`, `py.run()`, `py.exec()`, primitive value bridging, `py.import()`, `py.getattr()`, `py.call()`, and `py.decref()`. The native compiler dynamically loads a compatible CPython runtime and routes supported operations through the CPython C API.
-
-This is an implemented interoperability foundation, not yet complete NumPy/PyTorch/TensorFlow interoperability. Rich Python objects, buffers, callbacks, tensor exchange, and broader package integration remain future work.
-
-## Current AI-Relevant Low-Level Features
-
-The current language/runtime also provides `ptr<T>`, address-of/dereference, pointer arithmetic, `malloc()`, `free()`, `unique<T>`, `shared<T>`, `weak<T>`, C FFI, external library linking, tuples, sets, slicing, and expanded math/utility built-ins. These are foundations for future numerical and AI libraries.
-
-## Tooling and Current Integration
-
-Vayu's current developer tooling includes the Vayu Language Server (`vls`), formatter (`vfmt`), linter (`vlint`), and the official VS Code extension. These tools improve the workflow for developing AI-oriented Vayu code, while the actual tensor/ML runtime remains a future ecosystem layer.
-
-The native compiler also supports `--emit-runtime` for exporting the native runtime C source and `--opt <0-3>` for native optimization-level selection.
-
-## Phase Position
-
-The historical language/tooling phases are mapped to the new VIB work in [Roadmap.md](../Roadmap.md). VIB must first establish verified IR, native code generation, runtime parity, caching, and incremental compilation before performance-sensitive AI workloads can be claimed as natively supported. The dedicated AI/ML roadmap remains focused on tensors, autodiff, ONNX, CUDA/GPU integration, and higher-level AI libraries. CPython availability does not by itself mean NumPy, PyTorch, TensorFlow, or other Python packages are fully supported.
-
-
-## Current Implementation Status
-
-The native compiler is in the VIB Integrator transition. Native execution is temporarily unavailable until VIB code generation and conformance gates are implemented. Use `--run` or `--vm` for currently available execution routes.
-
-The current AI/ML implementation is still foundational rather than a complete ML framework. Native C FFI and CPython interoperability exist, while tensors, autodiff, ONNX integration, CUDA/GPU execution, and high-level neural-network APIs remain development work.
-
-These graphics capabilities provide useful infrastructure for future scientific and AI/ML visualization, but they are not an implemented tensor/autodiff/ONNX/CUDA stack.
-
-The completed native-float work provides the numerical foundation needed for later AI work: native float values, mixed int/float operations, conversions, `math.*`, `list<float>`, and `map<str, float>`. The dedicated AI/ML roadmap remains focused on tensors, automatic differentiation, ONNX interoperability, GPU/CUDA acceleration and higher-level AI libraries.
-
-The current native raster API includes framebuffers, depth buffers, Q16.16 matrices, mesh and texture resources, mipmaps, filtering, perspective-correct rasterization, lighting, render-to-texture and post-processing. These are native graphics APIs rather than AI/ML APIs.
+For project status, see the [Vayu repository](https://github.com/NotY215/Vayu) and [Roadmap](../Roadmap.md).
