@@ -1,0 +1,60 @@
+# Native-only self-hosting feature examples.
+# Keep this suite separate because it exercises extern/unsafe pointers and py conversions.
+
+# ============================================================
+# Combined from self_host_17_7.vyu.
+# ============================================================
+extern "C":
+    def llabs(x: int) -> int
+
+class Point:
+    x: int
+    y: int
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+def phase_17_7() -> None:
+    r = llabs(0 - 42)
+    print(r)
+
+    unsafe:
+        x: int = 10
+        p = &x
+        print(*p)
+        *p = 20
+        print(x)
+
+    unsafe:
+        arr: list<int> = [1, 2, 3]
+        q = &arr[1]
+        print(*q)
+        *q = 99
+        print(arr[1])
+
+    unsafe:
+        pt = Point(5, 7)
+        pf = &pt.x
+        print(*pf)
+        *pf = 55
+        print(pt.x)
+
+phase_17_7()
+
+# ============================================================
+# Combined from self_host_17_8.vyu.
+# ============================================================
+def phase_17_8() -> None:
+    a = py.int(7)
+    b = py.str("x")
+    c = py.bool(true)
+    d = py.from_int(a)
+    e = py.from_str(b)
+    f = py.from_bool(c)
+    print(d)
+    print(e)
+    print(f)
+    print("done")
+
+phase_17_8()
+
