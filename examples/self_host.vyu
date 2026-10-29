@@ -1,0 +1,205 @@
+# Combined self-hosting feature examples.
+# These cases are grouped by phase while preserving separate entry functions
+# and unique top-level names so unrelated cases do not overwrite each other.
+
+# ============================================================
+# Combined from self_host_17.vyu.
+# ============================================================
+# self_host_17.vyu -- Phase 17.2: bitwise + compound bitwise.
+
+bit_a: int = 12
+bit_b: int = 10
+print(bit_a & bit_b)      # 8
+print(bit_a | bit_b)      # 14
+print(bit_a ^ bit_b)      # 6
+print(bit_a << 2)     # 48
+print(bit_a >> 1)     # 6
+print(~bit_a)         # -13
+
+bit_c: int = 12
+bit_c &= 10           # 8
+bit_c |= 1            # 9
+bit_c ^= 3            # 10
+bit_c <<= 1           # 20
+bit_c >>= 2           # 5
+print(bit_c)
+
+bit_d: int = 3
+bit_d **= 2           # 9
+bit_d //= 2           # 4
+print(bit_d)
+
+# ============================================================
+# Combined from self_host_17_4.vyu.
+# ============================================================
+# self_host_17_4.vyu -- Phase 17.4 target.
+
+base_a: int = 0b1100
+base_b: int = 0o17
+base_c: int = 0xFF
+base_d: int = 42
+
+print(base_a)   # 12
+print(base_b)   # 15
+print(base_c)   # 255
+print(base_d)   # 42
+print(base_a + base_b + base_c + base_d)  # 324
+
+# ============================================================
+# Combined from self_host_17_5.vyu.
+# ============================================================
+# self_host_17_5.vyu -- Phase 17.5 target: const + enum.
+
+const SELF_HOST_MAX: int = 100
+const SELF_HOST_RATIO: int = 3
+
+enum SelfHostColor:
+    RED
+    GREEN = 5
+    BLUE
+
+print(SELF_HOST_MAX)
+print(SELF_HOST_RATIO)
+print(SELF_HOST_MAX // SELF_HOST_RATIO)
+print(SelfHostColor.RED)
+print(SelfHostColor.GREEN)
+print(SelfHostColor.BLUE)
+
+# ============================================================
+# Combined from self_host_17_6.vyu.
+# ============================================================
+# self_host_17_6.vyu -- Phase 17.6 target: tuple literals + set literals.
+#
+# Tuple unpack `(a, b, c) = tuple_values_176` is not exercised here because the C++
+# TypeChecker still rejects TupleLit as an Assign target. To enable it,
+# apply the TypeChecker patch from the previous drop and Rebuild All.
+# This file works on all three backends as-is.
+
+tuple_values_176 = (10, 20, 30)
+print(tuple_values_176[0])
+print(tuple_values_176[1])
+print(tuple_values_176[2])
+
+set_values_176 = {4, 5, 6}
+print(len(set_values_176))
+
+pair_values_176 = (7, 11)
+print(pair_values_176[0] + pair_values_176[1])
+
+# ============================================================
+# Combined from self_host_compound.vyu.
+# ============================================================
+# self_host_compound.vyu -- Phase 17.1 target.
+
+def phase_17_1() -> None:
+    x: int = 10
+    x += 5      # 15
+    x -= 3      # 12
+    x *= 2      # 24
+    x %= 5      # 4
+    print(x)
+
+phase_17_1()
+
+# ============================================================
+# Combined from self_host_17_9.vyu.
+# ============================================================
+def self_host_might_fail(x: int) -> int:
+    if x < 0:
+        raise "negative"
+    return x
+
+def phase_17_9() -> None:
+    try:
+        r = self_host_might_fail(5)
+        print(r)
+    except Exception:
+        print("caught1")
+
+    try:
+        r = self_host_might_fail(0 - 1)
+        print(r)
+    except Exception:
+        print("caught2")
+
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        print("caught3")
+    except Exception:
+        print("wrong")
+
+    print("done")
+
+phase_17_9()
+
+# ============================================================
+# Combined from self_host_17_10a.vyu.
+# ============================================================
+class SelfHostFoo:
+    public x: int
+    static total: int = 0
+    def __init__(self) -> None:
+        self.x = 1
+
+def phase_17_10a() -> None:
+    f = SelfHostFoo()
+    print(f.x)
+    print(SelfHostFoo.total)
+    SelfHostFoo.total = 42
+    print(SelfHostFoo.total)
+
+phase_17_10a()
+
+# ============================================================
+# Combined from self_host_17_10b.vyu.
+# ============================================================
+def self_host_classify(x: int) -> str:
+    match x:
+        case 0:
+            return "zero"
+        case 1:
+            return "one"
+        case n:
+            return "other"
+
+def phase_17_10b() -> None:
+    print(self_host_classify(0))
+    print(self_host_classify(1))
+    print(self_host_classify(5))
+
+phase_17_10b()
+
+# ============================================================
+# Combined from self_host_17_10c.vyu.
+# ============================================================
+def self_host_counter(n: int) -> None:
+    i: int = 0
+    while i < n:
+        yield i
+        i = i + 1
+
+def phase_17_10c() -> None:
+    for x in self_host_counter(3):
+        print(x)
+
+phase_17_10c()
+
+# ============================================================
+# Combined from self_host_17_exc.vyu.
+# ============================================================
+# self_host_17_exc.vyu -- Phase 17.3: try / raise / except.
+# Native try/except is not yet supported; harness runs tree+vm only.
+
+try:
+    raise "boom"
+except:
+    print(1)
+
+try:
+    raise "boom"
+except ValueError:
+    print(2)
+except:
+    print(3)
+
