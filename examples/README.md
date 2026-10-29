@@ -14,13 +14,15 @@ The examples folder is organized around runnable feature suites. Files that test
 - [`generics_advanced.vyu`](generics_advanced.vyu): advanced generic inference and type-bound examples.
 - [`generators.vyu`](generators.vyu): countdown and Fibonacci generators, iteration, explicit `next()`, cleanup, and VM-focused generator coverage.
 - [`combinatorics.vyu`](combinatorics.vyu): combinations, permutations, integer square roots, factorials, and recursive Fibonacci.
+- [`self_host.vyu`](self_host.vyu): consolidated self-hosting language-feature phases, including compound/bitwise operators, literals, enums, collections, exceptions, classes, match statements, and generators.
+- [`self_host_native.vyu`](self_host_native.vyu): native-only self-hosting coverage for extern calls, unsafe pointers, and Python interop conversions.
 - [`vm_flow.vyu`](vm_flow.vyu): conditional branches, loops, ranges, nested loops, and break behavior.
 - [`native_arith.vyu`](native_arith.vyu), [`vm_arith.vyu`](vm_arith.vyu): arithmetic and expression behavior for their respective compiler paths.
 - [`native_io.vyu`](native_io.vyu): input, file operations, string processing, and command-line arguments.
 
 ## Why some files remain separate
 
-GUI and raster examples demonstrate distinct visual features and require native-only support. FFI, filesystem, networking, threading, tensor, CUDA/DirectML, compiler-tool, self-hosting, and package-layout examples also remain separate because they exercise distinct subsystems, have special prerequisites, or need to remain individually diagnosable in conformance tests. Backend-specific `native_*` and `vm_*` examples are not merged when keeping the execution path explicit is useful for diagnosing regressions.
+GUI and raster examples demonstrate distinct visual features and require native-only support. FFI, filesystem, networking, threading, tensor, CUDA/DirectML, compiler-tool, and package-layout examples remain separate because they exercise distinct subsystems or need independent diagnostics. Self-hosting phase examples are consolidated into `self_host.vyu` and `self_host_native.vyu`; the native-only suite remains separate because its prerequisites differ. Backend-specific `native_*` and `vm_*` examples are not merged when keeping the execution path explicit is useful for diagnosing regressions.
 
 ## Running an example
 
@@ -29,5 +31,7 @@ From the repository root:
 ```powershell
 & ".\\build\\x64-Release\\bin\\vayuc.exe" examples\\hello.vyu
 ```
+
+Package-manager demos live under `scratch/`, which is the maintained dependency-package example. It includes a versioned `mathlib` package with square, cube, greeting, and circle-area helpers. The older duplicate `demopkg/` tree has been removed.
 
 The cross-backend harness is available at [`tests/run_all.ps1`](../tests/run_all.ps1). Some examples are intentionally skipped or require native-only capabilities still tracked in the VIB roadmap.
