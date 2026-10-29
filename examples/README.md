@@ -1,33 +1,32 @@
 # Vayu examples
 
-Each top-level `.vyu` file demonstrates a focused language feature or subsystem. Filenames describe the main work performed rather than using numbered names such as `lists2.vyu`.
+The examples folder is organized around runnable feature suites. Files that test a unique subsystem or backend remain separate; overlapping language-feature demos have been combined to reduce clutter without dropping their code coverage.
 
 ## Getting started
 
 - [`hello.vyu`](hello.vyu): printing, string input, variables, integer input, arithmetic, and string concatenation.
-
-## Language features
-
+- [`lang_features.vyu`](lang_features.vyu): namespaces, constants, pattern matching, context managers, and deferred actions.
+- [`collections.vyu`](collections.vyu): lists and list methods, maps and map methods, sets, tuples, slicing, string methods, enumerate, zip, loops, and collection functions.
+- [`classes.vyu`](classes.vyu): classes, inheritance, overriding, static members, attribute inspection and mutation, reflection helpers, and instance methods.
+- [`generics.vyu`](generics.vyu): generic functions and typed collection examples.
+- [`generics_classes.vyu`](generics_classes.vyu): generic classes, multiple type parameters, and constrained generic functions.
+- [`generics_advanced.vyu`](generics_advanced.vyu): advanced generic inference and type-bound examples.
+- [`generators.vyu`](generators.vyu): countdown and Fibonacci generators, iteration, explicit `next()`, cleanup, and VM-focused generator coverage.
 - [`combinatorics.vyu`](combinatorics.vyu): combinations, permutations, integer square roots, and factorials.
-- [`list_methods.vyu`](list_methods.vyu): list mutation, lookup, copying, reversing, and sorting.
-- [`map_methods.vyu`](map_methods.vyu): map lookup, insertion, removal, merging, copying, and items.
-- [`string_methods.vyu`](string_methods.vyu): string casing, padding, searching, partitioning, and character predicates.
 - [`vm_flow.vyu`](vm_flow.vyu): conditional branches, loops, ranges, nested loops, and break behavior.
 - [`native_arith.vyu`](native_arith.vyu), [`vm_arith.vyu`](vm_arith.vyu): arithmetic and expression behavior for their respective compiler paths.
 - [`native_io.vyu`](native_io.vyu): input, file operations, string processing, and command-line arguments.
 
-## Why some similar-looking files remain separate
+## Why some files remain separate
 
-Files prefixed with `native_` or `vm_` can overlap intentionally: they are backend-specific conformance examples and should remain independently runnable so a failure identifies the affected execution path. GUI, FFI, filesystem, networking, tensor, compiler-tool, self-hosting, and other subsystem fixtures also remain separate because they exercise distinct capabilities or have special execution requirements.
-
-The former `control.vyu` example repeated the basic conditional and while-loop cases already covered by `vm_flow.vyu`, which also demonstrates additional loop forms. Use `vm_flow.vyu` for that combined coverage.
+GUI and raster examples demonstrate distinct visual features and require native-only support. FFI, filesystem, networking, threading, tensor, CUDA/DirectML, compiler-tool, self-hosting, and package-layout examples also remain separate because they exercise distinct subsystems, have special prerequisites, or need to remain individually diagnosable in conformance tests. Backend-specific `native_*` and `vm_*` examples are not merged when keeping the execution path explicit is useful for diagnosing regressions.
 
 ## Running an example
 
-From the repository root, run an individual example with:
+From the repository root:
 
 ```powershell
 & ".\\build\\x64-Release\\bin\\vayuc.exe" examples\\hello.vyu
 ```
 
-The cross-backend harness is available at [`tests/run_all.ps1`](../tests/run_all.ps1). Some examples are intentionally skipped or require native-only capabilities that are still tracked in the VIB roadmap.
+The cross-backend harness is available at [`tests/run_all.ps1`](../tests/run_all.ps1). Some examples are intentionally skipped or require native-only capabilities still tracked in the VIB roadmap.
