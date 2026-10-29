@@ -1,13 +1,12 @@
 # Vayu Tools Directory
 
-This directory contains Vayu-source utilities, example-generation helpers, and the coordinated CPython bridge runtime used by the development setup. Optional platform tools may be included when needed, but no external compiler backend executable is required.
+This directory contains Vayu-source utilities, example-generation helpers, and optional platform tools. It does not define or provide a foreign-language runtime for Vayu. No external compiler backend executable is required.
 
 ## Current and expected contents
 
 - `nva.vyu`: Vayu-source package manager.
 - `nva-server.vyu`: reference read-only registry server.
 - `make_tiny_onnx.py`: generates `examples/assets/tiny_mlp.onnx`.
-- `python313.dll`, `python313._pth`, `python313.zip`, `Lib.zip`, `DLLs/`: coordinated CPython bridge runtime files.
 - `vcruntime140.dll`, `vcruntime140_1.dll`: Microsoft C++ runtime dependencies, where legally distributable.
 
 This list describes roles, not a guarantee that every file is present in every checkout. Verify the repository tree and release package.
@@ -35,10 +34,6 @@ python tools/make_tiny_onnx.py
 
 Run the command from the repository root. The generated file is an example asset, not a replacement for the generator source.
 
-## CPython bridge runtime
-
-The CPython DLL, archives, extension modules, and Visual C++ runtime files form a coordinated embedded-Python environment. Keep these files compatible with the CPython build used by the bridge. Do not update only one DLL or extension module independently.
-
 ## Licensing and provenance
 
-See [Third_Party.md](../Third_Party.md) before redistribution. Verify exact source versions and licenses for Python, native extensions, linkers, import libraries, and Microsoft runtime files. Keep applicable notices with releases.
+See [Third_Party.md](../Third_Party.md) before redistribution. Verify exact source versions and licenses for optional linkers, import libraries, and Microsoft runtime files. Keep applicable notices with releases.
