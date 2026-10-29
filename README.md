@@ -192,7 +192,6 @@ The Windows development layout contains Vayu-source utilities, optional platform
 | `tools/nva.vyu` | Vayu-source package manager |
 | `tools/nva-server.vyu` | Reference read-only NVA registry server |
 | `tools/make_tiny_onnx.py` | Generates `examples/assets/tiny_mlp.onnx` for AI/ML examples |
-| `tools/python313.dll`, `tools/DLLs/`, `tools/Lib.zip`, `tools/python313.zip` | CPython 3.13 runtime and extension modules used by the native Python bridge |
 | `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
 
 Platform linkers may be used later through a VIB-owned adapter, but they are not a substitute for Vayu-owned code generation. Check the actual repository/distribution before assuming any optional tool is present. See [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
@@ -257,7 +256,7 @@ The ecosystem is planned to support:
 - ONNX
 - Vayu-native AI/ML APIs as they are implemented
 
-Target compatibility includes technologies such as NumPy, PyTorch, TensorFlow, OpenCV, ONNX, CUDA, and ROCm.
+Vayu will expose AI/ML capabilities through native Vayu APIs as those features are implemented. Libraries from foreign-language ecosystems are not automatically supported.
 
 **[→ Read the Vayu AI & ML Documentation](docs/ai.md)**
 
@@ -336,7 +335,13 @@ Vayu is designed to cover more than command-line programs.
 
 ---
 
-# 🔗 Language and Runtime Boundary\n\nVayu is its own programming language with `.vyu` source files, its own frontend, semantics, runtime, and compiler toolchain. Python-inspired syntax is a design influence only. Vayu does not currently provide Python, Java, .NET, or other foreign-language source/runtime compatibility. Native system-library interfaces, where explicitly implemented, are low-level platform interfaces and do not make those languages supported by Vayu.\n\n---\n\n# 🌍 Cross-Platform
+# 🔗 Language and Runtime Boundary
+
+Vayu is its own programming language with `.vyu` source files, its own frontend, semantics, runtime, and compiler toolchain. Python-inspired syntax is a design influence only. Vayu does not currently provide Python, Java, .NET, or other foreign-language source/runtime compatibility. Native system-library interfaces, where explicitly implemented, are low-level platform interfaces and do not make those languages supported by Vayu.
+
+---
+
+# 🌍 Cross-Platform
 
 Vayu is designed to become a cross-platform language.
 
