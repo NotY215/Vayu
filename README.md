@@ -255,7 +255,7 @@ The ecosystem is planned to support:
 - GPU acceleration
 - CUDA
 - ONNX
-- Python AI ecosystem interoperability
+- Vayu-native AI/ML APIs as they are implemented
 
 Target compatibility includes technologies such as NumPy, PyTorch, TensorFlow, OpenCV, ONNX, CUDA, and ROCm.
 
