@@ -96,3 +96,7 @@ The old native implementation must not be removed until the VIB replacement has 
 7. run repository-wide reference search and full supported test suite.
 
 See [`../Roadmap.md`](../Roadmap.md) for phase-by-phase work and exit criteria.
+
+## Full technical reference
+
+For the deep architecture and implementation reference, see [VIB Technical Documentation](vib-documentation.md). It covers compilation flow, component ownership, VIR, verification, semantics, native code generation, runtime and ABI, targets and linking, caching, incremental compilation, dispatch, diagnostics, testing, benchmarking, and failure handling.
