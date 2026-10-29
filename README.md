@@ -131,28 +131,7 @@ The language focuses on:
 - Game and graphics development
 - Systems and performance-oriented programming
 - Cross-platform development
-- C/C++ interoperability
-- Python ecosystem interoperability
-- Future Java and .NET interoperability
-
----
-
-# Vayu vs Other Languages
-
-| Capability | Python | C++ | Java | C# | **Vayu** |
-|---|---:|---:|---:|---:|---:|
-| Beginner-friendly syntax | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Native performance | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Low-level control | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Type inference | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Memory control | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| AI/ML ecosystem | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| GUI/application development | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Game development | ⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Cross-platform | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Simplicity + performance | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-
-**These ratings represent Vayu's design goals, not a claim that it currently has the maturity or ecosystem size of established languages.**
+- Vayu-native APIs and runtime
 
 ---
 
@@ -203,7 +182,7 @@ flowchart TD
 
 ## 🧰 Windows Toolchain and Runtime Layout
 
-The Windows development layout contains Vayu-source utilities, optional platform tools, the ONNX example helper, and the CPython bridge runtime. The table below lists expected roles, not a guarantee that every optional binary is included in the repository.
+The Windows development layout contains Vayu-source utilities, optional platform tools, and example-generation helpers. The table below lists expected roles, not a guarantee that every optional binary is included in the repository.
 
 | Path | Purpose |
 |---|---|
@@ -216,7 +195,7 @@ The Windows development layout contains Vayu-source utilities, optional platform
 | `tools/python313.dll`, `tools/DLLs/`, `tools/Lib.zip`, `tools/python313.zip` | CPython 3.13 runtime and extension modules used by the native Python bridge |
 | `tools/vcruntime140.dll`, `tools/vcruntime140_1.dll` | Microsoft C runtime dependencies for the bundled runtime |
 
-Platform linkers may be used later through a VIB-owned adapter, but they are not a substitute for Vayu-owned code generation. Check the actual repository/distribution before assuming any optional tool is present. The Python files and native extensions must remain a compatible set; see [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
+Platform linkers may be used later through a VIB-owned adapter, but they are not a substitute for Vayu-owned code generation. Check the actual repository/distribution before assuming any optional tool is present. See [Third-party software and files](Third_Party.md) for provenance and redistribution checks.
 
 For the file-by-file layout, build expectations, and local verification commands, see [tools/README.md](tools/README.md).
 
@@ -357,29 +336,7 @@ Vayu is designed to cover more than command-line programs.
 
 ---
 
-# 🔗 Interoperability
-
-Vayu is intended to work with existing ecosystems instead of isolating developers.
-
-### C / C++
-
-Native interoperability is a major part of Vayu's systems-programming direction, allowing existing native libraries and platform APIs to be used.
-
-### Python
-
-Vayu is designed to interact with the Python ecosystem through runtime/FFI interoperability where appropriate, especially for AI, ML, data science, and scientific computing.
-
-### Java
-
-Future interoperability is intended through JVM/JNI-based integration.
-
-### C#
-
-Future interoperability is intended through .NET integration.
-
----
-
-# 🌍 Cross-Platform
+# 🔗 Language and Runtime Boundary\n\nVayu is its own programming language with `.vyu` source files, its own frontend, semantics, runtime, and compiler toolchain. Python-inspired syntax is a design influence only. Vayu does not currently provide Python, Java, .NET, or other foreign-language source/runtime compatibility. Native system-library interfaces, where explicitly implemented, are low-level platform interfaces and do not make those languages supported by Vayu.\n\n---\n\n# 🌍 Cross-Platform
 
 Vayu is designed to become a cross-platform language.
 
@@ -493,8 +450,7 @@ Before contributing, please read **[CODE OF CONDUCT.md](CODE%20OF%20CONDUCT.md)*
 - Game-development goals
 - Systems-programming capabilities
 - Cross-platform ambitions
-- C/C++ interoperability
-- Python ecosystem interoperability
+- Vayu-native runtime and library development
 - Beginner-friendly philosophy
 - Professional-development ambitions
 - One unified ecosystem instead of many disconnected languages
@@ -565,7 +521,7 @@ Software should be able to move across platforms with minimal changes.
 Features should solve real development problems rather than exist only because they are technically possible.
 
 ### 7. One Ecosystem
-The long-term goal is to make Vayu useful for everything from small programs and applications to games, AI systems, and native software.
+The goal is to make Vayu useful for small programs, applications, games, AI systems, and native software through Vayu-native language and library support.
 
 ---
 
@@ -642,7 +598,7 @@ It provided substantial assistance with:
 
 Vayu is an ambitious independent experiment:
 
-**What if the simplicity of Python, the performance and control of C++, the portability of Java, and the application-development strengths of C# could move toward one unified language?**
+**What if a readable syntax, native execution, and low-level control could be combined in one purpose-built language?**
 
 Vayu is an attempt to explore that idea.
 
