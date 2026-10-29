@@ -85,3 +85,63 @@ def constants_main() -> None:
         print("closed > active")
 
 constants_main()
+
+# ============================================================
+# Type inference, annotations, promotions, and return types, combined from types.vyu.
+# ============================================================
+
+# Types that should all pass
+
+x = 5
+y = 3.14
+name = "NotY"
+flag = true
+
+# Inference
+a: int = 10
+b: float = 2.5
+c: str = "hello"
+
+# Promotion
+promoted = a + b           # float
+
+# Arithmetic
+n = a * 2
+d = a / 2                  # float
+f = a // 2                 # int
+m = a % 3                  # int
+p = 2 ** 10                # int
+s = "a" * 3                # str
+
+# Comparisons → bool
+check = a > 5
+equal = a == 10
+notEq = a != 0
+
+# Logical
+ok = flag and check
+either = flag or notEq
+
+# Function with proper types
+def add(p: int, q: int) -> int:
+    return p + q
+
+def scale(v: float, k: float) -> float:
+    return v * k
+
+r1 = add(1, 2)
+r2 = scale(1.5, 2.0)
+r3 = scale(1, 2.0)         # int → float promotion OK
+
+# Function that uses another function
+def twice(n: int) -> int:
+    return add(n, n)
+
+r4 = twice(21)
+
+# Empty return
+def noop():
+    return
+
+print("All type checks passed.")
+print(r1, r2, r3, r4)
