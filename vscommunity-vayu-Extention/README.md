@@ -16,10 +16,10 @@ Native Visual Studio Community language support for .vyu files using Visual Stud
 - Vayu .vyu language registration
 - TextMate syntax highlighting
 - Language configuration
-- Vayu icons
+- Light and dark `.vyu` icon assets included in the VSIX
 - Native Visual Studio VSIX installation
 
-This extension is intentionally lightweight and does not embed the Vayu compiler or Language Server.
+This extension is intentionally lightweight and does not embed the Vayu compiler or Language Server. Its current TextMate-based registration associates `.vyu` files with the Vayu language, but does not by itself implement theme-aware Solution Explorer file icons. Both icon assets are packaged for future Visual Studio file-icon integration; their presence in the VSIX should not be treated as proof that Visual Studio automatically displays them.
 
 ## Build
 
@@ -40,6 +40,8 @@ Do **not** use `vsce package` for this extension. `vsce` creates a VS Code-style
 Double-click the generated .vsix file, or use Visual Studio's VSIX installer.
 
 The package targets the Visual Studio 17.14+ Community core editor.
+
+For the current icon implementation status and the distinction between VS Code and Visual Studio icon behavior, see the [icon support guide](../docs/icons.md).
 
 ## Repository
 
