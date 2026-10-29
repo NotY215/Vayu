@@ -41,9 +41,9 @@ Foreign-language runtimes are not part of Vayu's supported runtime surface. Audi
 
 Before publishing releases or distributing installers:
 
-5. Retain the applicable notices for OpenSSL, libffi, zlib, Tcl/Tk, and any other bundled component. Verify the exact SQLite and Microsoft runtime distribution terms as well.
-6. Remove components that Vayu does not need, especially test-only extensions, if doing so is compatible with the build and runtime.
-7. Keep this document and a copy of the relevant license texts with the release package. Update the inventory whenever bundled binaries change.
+1. Retain applicable notices for bundled components such as OpenSSL, libffi, zlib, Tcl/Tk, and verify exact SQLite and Microsoft runtime distribution terms.
+2. Remove components that Vayu does not need, especially test-only extensions, when safe for the build and runtime.
+3. Keep this document and the relevant license texts with releases. Update the inventory whenever bundled binaries change.
 
 ## Important limitation
 
