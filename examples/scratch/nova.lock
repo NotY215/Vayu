@@ -1,4 +1,4 @@
 # nva lock file, format v1
 # do not edit by hand; regenerate with 'nva build'
 # fields: name version path
-mathlib 0.1.0 nova_modules/mathlib
+mathlib 0.2.0 nova_modules/mathlib
