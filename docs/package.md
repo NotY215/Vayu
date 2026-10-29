@@ -72,7 +72,6 @@ The package ecosystem remains under development, but the package-manager impleme
 - native compilation
 - C FFI and external-library linking
 - native dependency support
-- CPython interoperability
 - compiler and developer tooling through `vls`, `vfmt`, and `vlint`
 
 The package tool already contains semantic-version matching, local/remote registry configuration, local/remote publish and search operations, install/update flows, Git dependencies, transitive dependency traversal, conflict detection, and dependency-tree output. The registry ecosystem and reproducible package-build story are still evolving.
@@ -82,7 +81,7 @@ For current project status and roadmap updates, visit the [official Vayu website
 
 ## Current Foundation
 
-Vayu already has source modules, `import`/`from ... import ...`, aliases, built-in modules, native compilation, C FFI, external library linking, native dependency capability, and CPython interoperability. These are foundations for the future package ecosystem.
+Vayu already has source modules, `import`/`from ... import ...`, aliases, built-in modules, native compilation, and package-tooling foundations. Package imports resolve Vayu modules and packages; they do not provide compatibility with Python or other foreign-language runtimes.
 
 ## Current Package Status
 
