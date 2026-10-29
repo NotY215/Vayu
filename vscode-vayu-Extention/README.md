@@ -13,6 +13,13 @@ Language support for Vayu (.vyu) in Visual Studio Code and VS Code-compatible ed
 - Formatter integration through `vfmt`
 - Linter integration through `vlint`
 - Restart-language-server command
+- Light/dark `.vyu` language icon declarations
+
+## `.vyu` file icons
+
+The extension package includes `assets/Vyu_Icon.ico` for the light-theme context and `assets/Vyu_Icon_Dark.ico` for the dark-theme context. These are registered in `package.json` under the Vayu language contribution. Editors and file-icon themes decide whether to honor language-provided icons; a user-selected third-party File Icon Theme can override them. If the icon does not update after installation, switch to a theme that honors language icons and reload the VS Code window.
+
+See the repository's [icon support guide](../docs/icons.md) for the complete asset and executable-icon behavior.
 
 ## Toolchain
 
