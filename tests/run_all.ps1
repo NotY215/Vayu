@@ -37,7 +37,7 @@ $native_only = @(
     "thread_test.vyu", "net_test.vyu", "crypto_test.vyu", "random_test.vyu",
     "os_test.vyu", "ptr_arith_test.vyu", "ffi_callback_test.vyu",
     "ffi_test.vyu", "ffi_struct_test.vyu", "ffi_wrap_test.vyu",
-    "self_host_17_7.vyu", "self_host_17_8.vyu",
+    "self_host_native.vyu",
     "gui_window.vyu",
     "gui_events.vyu",
     "gui_widgets.vyu",
