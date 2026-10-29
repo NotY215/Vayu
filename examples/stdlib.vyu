@@ -86,3 +86,30 @@ class Person:
         return "Hello, " + self.name.upper() + "!"
 
 print(Person("alice").greeting())   # Hello, ALICE!
+
+# ============================================================
+# Math module coverage, combined from math_test.vyu.
+# ============================================================
+
+import math
+
+print(math.floor(3.7))
+print(math.ceil(3.2))
+print(math.sqrt(16.0) > 3.99)
+
+print(math.degrees(math.pi) > 179.99)
+print(math.degrees(math.pi) < 180.01)
+
+print(math.radians(180.0) > 3.14)
+
+print(math.hypot(3.0, 4.0) > 4.99)
+print(math.hypot(3.0, 4.0) < 5.01)
+
+print(math.is_finite(1.0))
+print(math.is_nan(1.0))
+print(math.is_inf(1.0))
+
+print(math.trunc(3.9))
+print(math.trunc(-3.9))
+
+print(math.fmod(7.0, 3.0) > 0.99)
