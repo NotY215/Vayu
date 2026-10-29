@@ -1,4 +1,0 @@
-name = input("Name: ")
-print("Hello, " + name)
-age = read_int()
-print(age + 1)
