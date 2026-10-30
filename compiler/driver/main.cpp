@@ -241,6 +241,27 @@ int main(int argc, char** argv) {
     std::string file = argv[1];
 
     enum class Mode { Run, Check, DumpTokens, DumpAst, DumpBytecode, DumpIR, Native };
+    // Convenience: `vayuc path/to/file.vye` runs the package (same as --run-vye).
+    {
+        std::string a1 = argv[1];
+        auto dot = a1.find_last_of('.');
+        if (dot != std::string::npos) {
+            std::string ext = a1.substr(dot);
+            for (char& c : ext) if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+            if (ext == ".vye") {
+                vayu::NativeCompiler nc;
+                int rc = nc.runVye(argv[1]);
+                for (const auto& line : nc.lastStdout()) {
+                    std::fputs(line.c_str(), stdout);
+                    if (line.empty() || line.back() != '\n') std::fputc('\n', stdout);
+                }
+                if (rc != 0 && !nc.lastError().empty())
+                    std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
+                return rc;
+            }
+        }
+    }
+
     Mode mode = Mode::Run;
     bool skipCheck = false;
     bool useVM = false;

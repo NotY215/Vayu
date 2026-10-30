@@ -184,8 +184,12 @@ namespace vib {
             return "?";
         }
 
+        // Phase 6/9: VIR currently uses a single block with intra-block Jump
+        // targets (instruction indices). Only Ret ends a block; Jump is a CFG
+        // edge within the same instruction list (e.g. for-loop back-edge then
+        // fall-through at the exit label after the Jump).
         bool isTerminator(VirOpcode op) {
-            return op == VirOpcode::Ret || op == VirOpcode::Jump;
+            return op == VirOpcode::Ret;
         }
 
         struct BlockerInfo {
