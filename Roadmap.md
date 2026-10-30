@@ -122,7 +122,7 @@ Phases **8.1–8.2 are Completed** for Integrator: `import` / `from import` reso
 
 ### Phase 9 — Verifier hardening and runtime compatibility
 
-Phases **9.1–9.2 are Completed** for structural verifier coverage: Jump/JumpIfFalse targets, empty modules, Call/CallBuiltin arity, and register bounds for arithmetic, logic, string, and collection opcodes (List/Map/Tuple/Set). Dedicated malformed-VIR fixture files may still be expanded later without demoting the phase.
+Build malformed-VIR tests covering invalid opcodes, out-of-range registers/locals, invalid branch targets, malformed operands, invalid type/feature combinations, and runtime compatibility mismatches. Report unsupported features clearly and safely.
 
 **Acceptance:** malformed VIR is rejected before execution, with stable diagnostics and regression coverage.
 

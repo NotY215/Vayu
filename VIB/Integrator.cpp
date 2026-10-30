@@ -366,7 +366,6 @@ namespace vib {
     CompileResult Integrator::compile(const vayu::Block& program,
         const std::string& sourceDir,
         const std::string& outputPath) const {
-        (void)sourceDir;
         (void)outputPath;
 
         VirLowering lowering;
@@ -437,7 +436,7 @@ namespace vib {
     }
 
     DumpIRResult Integrator::dumpIR(const vayu::Block& program,
-        const std::string&) const {
+        const std::string& sourceDir) const {
         VirLowering lowering;
         LoweringResult lr = lowering.lower(program, sourceDir);
         if (!lr.success) {
@@ -475,7 +474,7 @@ namespace vib {
     }
 
     EmitVyeResult Integrator::emitVye(const vayu::Block& program,
-        const std::string&,
+        const std::string& sourceDir,
         const std::string& vyePath) const {
         EmitVyeResult r;
         VirLowering lowering;

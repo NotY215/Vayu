@@ -1205,6 +1205,10 @@ namespace vib {
 
     VerifierResult VirVerifier::verify(const VirModule& module) const {
         VerifierResult r;
+        if (module.functions.empty()) {
+            r.message = "verifier: module has no functions";
+            return r;
+        }
         if (module.entryFunction < 0 ||
             module.entryFunction >= (int)module.functions.size()) {
             r.message = "verifier: entryFunction index " +
@@ -1290,6 +1294,10 @@ namespace vib {
                         instr.opcode == VirOpcode::Mul ||
                         instr.opcode == VirOpcode::Div ||
                         instr.opcode == VirOpcode::Mod ||
+                        instr.opcode == VirOpcode::Pow ||
+                        instr.opcode == VirOpcode::LogAnd ||
+                        instr.opcode == VirOpcode::LogOr ||
+                        instr.opcode == VirOpcode::StrRepeat ||
                         instr.opcode == VirOpcode::CmpEq ||
                         instr.opcode == VirOpcode::CmpNe ||
                         instr.opcode == VirOpcode::CmpLt ||
@@ -1299,7 +1307,11 @@ namespace vib {
                         instr.opcode == VirOpcode::StrConcat ||
                         instr.opcode == VirOpcode::StrEq ||
                         instr.opcode == VirOpcode::StrNe ||
-                        instr.opcode == VirOpcode::StrCmpLt) {
+                        instr.opcode == VirOpcode::StrCmpLt ||
+                        instr.opcode == VirOpcode::ListGet ||
+                        instr.opcode == VirOpcode::MapGet ||
+                        instr.opcode == VirOpcode::MapHas ||
+                        instr.opcode == VirOpcode::SetHas) {
                         if (!regOK(instr.destReg) ||
                             !regOK(instr.lhsReg) ||
                             !regOK(instr.rhsReg)) {
@@ -1315,6 +1327,55 @@ namespace vib {
                             return r;
                         }
                     }
+                    if (instr.opcode == VirOpcode::LogNot ||
+                        instr.opcode == VirOpcode::ListLen) {
+                        if (!regOK(instr.destReg) || !regOK(instr.operandReg)) {
+                            r.message = "verifier: unary op with out-of-range reg in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                    }
+                    if (instr.opcode == VirOpcode::ListNew ||
+                        instr.opcode == VirOpcode::MapNew ||
+                        instr.opcode == VirOpcode::SetNew) {
+                        if (!regOK(instr.destReg)) {
+                            r.message = "verifier: *New destReg out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                    }
+                    if (instr.opcode == VirOpcode::ListPush ||
+                        instr.opcode == VirOpcode::SetAdd) {
+                        if (!regOK(instr.lhsReg) || !regOK(instr.operandReg)) {
+                            r.message = "verifier: *Push/*Add regs out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                    }
+                    if (instr.opcode == VirOpcode::ListSet ||
+                        instr.opcode == VirOpcode::MapSet) {
+                        if (!regOK(instr.lhsReg) || !regOK(instr.rhsReg) ||
+                            !regOK(instr.operandReg)) {
+                            r.message = "verifier: *Set regs out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                    }
+                    if (instr.opcode == VirOpcode::TupleNew) {
+                        if (!regOK(instr.destReg)) {
+                            r.message = "verifier: TupleNew destReg out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                        for (int a : instr.argRegs) {
+                            if (!regOK(a)) {
+                                r.message = "verifier: TupleNew argReg out of range in function \"" +
+                                    fn.name + "\"";
+                                return r;
+                            }
+                        }
+                    }
+
                     if (instr.opcode == VirOpcode::StoreLocal) {
                         if (!regOK(instr.operandReg)) {
                             r.message = "verifier: StoreLocal operandReg out of range in function \"" +
