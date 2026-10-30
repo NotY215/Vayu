@@ -1,15 +1,21 @@
 # tests/vib_baseline.ps1
 #
-# Phase 0/1 baseline harness for VIB Integrator.
+# Phase 0/1/2/3 baseline harness for VIB Integrator.
 #
 # Verifies:
 #   1. Interpreter (--run) and VM (--vm) produce identical stdout on curated fixtures.
-#   2. Native-path flags (--native, --native-out, --dump-ir, --emit-runtime)
-#      each exit non-zero with a capability-derived message.
+#   2. Native-path flags (--native, --native-out, --emit-runtime) fail with
+#      capability-derived messages; --dump-ir succeeds on Phase-2 subset and
+#      fails cleanly on non-lowered constructs; --native executes Phase-3
+#      arithmetic subset through VIR.
 #   3. --vib-status reports every expected feature row.
 #   4. No .md file is modified during the run.
 #
-# Resolves vayuc.exe from the repo's build directory. No absolute paths.
+# Curated fixture notes:
+#   - classes.vyu, collections.vyu, exceptions.vyu, generators.vyu are
+#     intentionally excluded: they fail in the interpreter or VM before
+#     any VIB code runs (baseline project issues outside VIB scope).
+#   - See Roadmap.md "Phase 0.5" for the deferred baseline-fix work.
 
 param(
     [string]$Configuration = "x64-Release"
@@ -163,6 +169,7 @@ if ($r.rc -ne 0) {
     Write-Host "  [ok]   --dump-ir on pass-only prints valid VIR module" -ForegroundColor Green
     $passes++
 }
+Remove-Item -Force $passFile -ErrorAction SilentlyContinue
 
 # --native must execute a Phase-3 subset program through VIR.
 $arithFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase3_arith.vyu")
@@ -174,6 +181,24 @@ if ($r.rc -ne 0) {
     $failures++
 } else {
     Write-Host "  [ok]   --native executes arithmetic-only program via VIR" -ForegroundColor Green
+    $passes++
+}
+Remove-Item -Force $arithFile -ErrorAction SilentlyContinue
+
+# --dump-ir on the same Phase-3 program should now succeed and print VIR.
+$r = Invoke-Cap @($arithFile, "--dump-ir")
+# (recreated for the dump-ir check since we removed above)
+[System.IO.File]::WriteAllText($arithFile,
+    "x = 1 + 2 * 3`nx = x - 1`n", (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($arithFile, "--dump-ir")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --dump-ir on arithmetic-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "Add" -or $r.out -notmatch "Mul" -or $r.out -notmatch "Sub") {
+    Write-Host "  [FAIL] --dump-ir on arithmetic-only missing Add/Mul/Sub" -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --dump-ir on arithmetic-only prints VIR with Add/Mul/Sub" -ForegroundColor Green
     $passes++
 }
 Remove-Item -Force $arithFile -ErrorAction SilentlyContinue
@@ -201,8 +226,6 @@ if ($status.rc -ne 0) {
         "Pointers\s+NotSupported\s+Deferred\s+10\b",
         "VIR\s+Supported\s+Deferred\s+2\b",
         "Verifier\s+Supported\s+Deferred\s+2\b",
-        "Verifier\s+Supported\s+Deferred\s+2\b",
-        "Verifier\s+Scaffolded\s+Deferred\s+2\b",
         "RuntimeEmission\s+Scaffolded\s+Deferred\s+12\b",
         "NativeCodegen\s+Scaffolded\s+Deferred\s+12\b",
         "VyePackaging\s+Deferred\s+Deferred\s+2\b",

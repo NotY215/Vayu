@@ -1,4 +1,5 @@
 #pragma once
+#include "Integrator.hpp"
 #include "Vir.hpp"
 #include <string>
 #include <vector>
