@@ -29,7 +29,12 @@ namespace vib {
         Mul,
         Div,
         Mod,
+        Pow,        // <destReg> = <lhsReg> ** <rhsReg>
         Neg,        // <destReg> = -<operandReg>
+        LogAnd,     // <destReg> = truthy(lhs) && truthy(rhs)
+        LogOr,      // <destReg> = truthy(lhs) || truthy(rhs)
+        LogNot,     // <destReg> = !truthy(operandReg)
+        StrRepeat,  // <destReg> = str * int
         CmpEq,      // <destReg> = <lhsReg> == <rhsReg>   (bool)
         CmpNe,
         CmpLt,

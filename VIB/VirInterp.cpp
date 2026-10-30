@@ -1,5 +1,6 @@
 #include "VirInterp.hpp"
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <sstream>
@@ -215,6 +216,94 @@ namespace vib {
                         return out;
                     }
                     locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+
+                case VirOpcode::Pow: {
+                    const RtValue& a = locals[(size_t)instr.lhsReg];
+                    const RtValue& b = locals[(size_t)instr.rhsReg];
+                    RtValue r;
+                    if (a.kind == VirValueKind::Int && b.kind == VirValueKind::Int) {
+                        if (b.i < 0) {
+                            out.kind = ErrorKind::RuntimeError;
+                            out.message = "interp: negative integer exponent not supported";
+                            return out;
+                        }
+                        long long base = a.i, exp = b.i, acc = 1;
+                        while (exp > 0) {
+                            if (exp & 1) acc = (long long)((unsigned long long)acc * (unsigned long long)base);
+                            base = (long long)((unsigned long long)base * (unsigned long long)base);
+                            exp >>= 1;
+                        }
+                        r.kind = VirValueKind::Int;
+                        r.i = acc;
+                    }
+                    else if ((a.kind == VirValueKind::Int || a.kind == VirValueKind::Float) &&
+                             (b.kind == VirValueKind::Int || b.kind == VirValueKind::Float)) {
+                        double x = (a.kind == VirValueKind::Int) ? (double)a.i : a.f;
+                        double y = (b.kind == VirValueKind::Int) ? (double)b.i : b.f;
+                        r.kind = VirValueKind::Float;
+                        r.f = std::pow(x, y);
+                    }
+                    else {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: ** on non-numeric operands";
+                        return out;
+                    }
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+
+                case VirOpcode::LogAnd: {
+                    RtValue r;
+                    r.kind = VirValueKind::Bool;
+                    r.b = truthy(locals[(size_t)instr.lhsReg]) &&
+                          truthy(locals[(size_t)instr.rhsReg]);
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+                case VirOpcode::LogOr: {
+                    RtValue r;
+                    r.kind = VirValueKind::Bool;
+                    r.b = truthy(locals[(size_t)instr.lhsReg]) ||
+                          truthy(locals[(size_t)instr.rhsReg]);
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+                case VirOpcode::LogNot: {
+                    RtValue r;
+                    r.kind = VirValueKind::Bool;
+                    r.b = !truthy(locals[(size_t)instr.operandReg]);
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+                case VirOpcode::StrRepeat: {
+                    const RtValue& a = locals[(size_t)instr.lhsReg];
+                    const RtValue& b = locals[(size_t)instr.rhsReg];
+                    std::string s;
+                    long long n = 0;
+                    if (a.kind == VirValueKind::Str && b.kind == VirValueKind::Int) {
+                        s = a.s; n = b.i;
+                    } else if (a.kind == VirValueKind::Int && b.kind == VirValueKind::Str) {
+                        s = b.s; n = a.i;
+                    } else {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: string * requires str and int";
+                        return out;
+                    }
+                    if (n < 0) n = 0;
+                    if (n > 1000000) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: string repeat count too large";
+                        return out;
+                    }
+                    std::string outS;
+                    outS.reserve((size_t)n * s.size());
+                    for (long long i = 0; i < n; ++i) outS += s;
+                    RtValue r;
+                    r.kind = VirValueKind::Str;
+                    r.s = std::move(outS);
+                    locals[(size_t)instr.destReg] = std::move(r);
                     break;
                 }
 

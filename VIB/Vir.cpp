@@ -84,9 +84,24 @@ namespace vib {
             case VirOpcode::Mod:
                 return "r" + std::to_string(i.destReg) + " = Mod(r" +
                     std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::Pow:
+                return "r" + std::to_string(i.destReg) + " = Pow(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
             case VirOpcode::Neg:
                 return "r" + std::to_string(i.destReg) + " = Neg(r" +
                     std::to_string(i.operandReg) + ")";
+            case VirOpcode::LogAnd:
+                return "r" + std::to_string(i.destReg) + " = LogAnd(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::LogOr:
+                return "r" + std::to_string(i.destReg) + " = LogOr(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::LogNot:
+                return "r" + std::to_string(i.destReg) + " = LogNot(r" +
+                    std::to_string(i.operandReg) + ")";
+            case VirOpcode::StrRepeat:
+                return "r" + std::to_string(i.destReg) + " = StrRepeat(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
             case VirOpcode::CmpEq:
                 return "r" + std::to_string(i.destReg) + " = CmpEq(r" +
                     std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
@@ -511,13 +526,139 @@ namespace vib {
                 return 0;
             }
 
-            // Phase 6.1: for — not yet (iterator protocol); reject clearly.
+            // Phase 6.1: for x in range(N)  — only the range(N) form.
             if (s->kind == SK::For) {
-                result.plannedPhase = 6;
-                result.failedFeatureName = "ControlFlow";
-                result.message = "lowering for 'for' loops is not implemented yet "
-                    "(planned Phase 6; while/if/break/continue are supported)";
-                return 6;
+                const auto* fs = static_cast<const vayu::ForStmt*>(s);
+                // Require: iterable is Call range(single_arg)
+                if (!fs->iterable || fs->iterable->kind != vayu::ExprKind::Call) {
+                    result.plannedPhase = 6;
+                    result.failedFeatureName = "ControlFlow";
+                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
+                    return 6;
+                }
+                const auto* call = static_cast<const vayu::CallExpr*>(fs->iterable.get());
+                if (!call->callee || call->callee->kind != vayu::ExprKind::NameRef) {
+                    result.plannedPhase = 6;
+                    result.failedFeatureName = "ControlFlow";
+                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
+                    return 6;
+                }
+                const auto* calleen = static_cast<const vayu::NameRefExpr*>(call->callee.get());
+                if (calleen->name != "range" || call->args.size() != 1) {
+                    result.plannedPhase = 6;
+                    result.failedFeatureName = "ControlFlow";
+                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
+                    return 6;
+                }
+
+                int limitReg = lowerExpr(call->args[0].value.get());
+                if (limitReg < 0) return result.plannedPhase;
+
+                // i = 0
+                int zeroIdx = addIntConst(0);
+                int zeroReg = emitConst(zeroIdx, fs->loc);
+                int localIdx;
+                auto it = localsByName.find(fs->targetName);
+                if (it == localsByName.end()) {
+                    localIdx = nextLocal++;
+                    localsByName[fs->targetName] = localIdx;
+                    if (localIdx >= nextReg) nextReg = localIdx + 1;
+                } else {
+                    localIdx = it->second;
+                }
+                {
+                    VirInstruction store;
+                    store.opcode = VirOpcode::StoreLocal;
+                    store.operandReg = zeroReg;
+                    store.localIndex = localIdx;
+                    store.sourceLoc = fs->loc;
+                    entry.instructions.push_back(store);
+                }
+                varTypes[fs->targetName] = VirTypeKind::Int;
+
+                int header = (int)entry.instructions.size();
+                loopStack.push_back(LoopFrame{});
+                loopStack.back().continueTarget = header;
+
+                // cond: i < limit
+                int iLoad = allocReg();
+                {
+                    VirInstruction ld;
+                    ld.opcode = VirOpcode::LoadLocal;
+                    ld.destReg = iLoad;
+                    ld.localIndex = localIdx;
+                    ld.sourceLoc = fs->loc;
+                    entry.instructions.push_back(ld);
+                    bumpLocalTo(iLoad);
+                }
+                int cmpReg = allocReg();
+                {
+                    VirInstruction cmp;
+                    cmp.opcode = VirOpcode::CmpLt;
+                    cmp.destReg = cmpReg;
+                    cmp.lhsReg = iLoad;
+                    cmp.rhsReg = limitReg;
+                    cmp.sourceLoc = fs->loc;
+                    entry.instructions.push_back(cmp);
+                    bumpLocalTo(cmpReg);
+                }
+                VirInstruction jfalse;
+                jfalse.opcode = VirOpcode::JumpIfFalse;
+                jfalse.operandReg = cmpReg;
+                jfalse.targetBlock = -1;
+                jfalse.sourceLoc = fs->loc;
+                int jfalseIdx = (int)entry.instructions.size();
+                entry.instructions.push_back(jfalse);
+
+                if (!lowerBlock(fs->body)) { loopStack.pop_back(); return result.plannedPhase; }
+
+                // i = i + 1  (continue target = here for for-loops)
+                int contPc = (int)entry.instructions.size();
+                loopStack.back().continueTarget = contPc;
+                {
+                    int oneIdx = addIntConst(1);
+                    int oneReg = emitConst(oneIdx, fs->loc);
+                    int i2 = allocReg();
+                    VirInstruction ld;
+                    ld.opcode = VirOpcode::LoadLocal;
+                    ld.destReg = i2;
+                    ld.localIndex = localIdx;
+                    ld.sourceLoc = fs->loc;
+                    entry.instructions.push_back(ld);
+                    bumpLocalTo(i2);
+                    int sum = allocReg();
+                    VirInstruction add;
+                    add.opcode = VirOpcode::Add;
+                    add.destReg = sum;
+                    add.lhsReg = i2;
+                    add.rhsReg = oneReg;
+                    add.sourceLoc = fs->loc;
+                    entry.instructions.push_back(add);
+                    bumpLocalTo(sum);
+                    VirInstruction st;
+                    st.opcode = VirOpcode::StoreLocal;
+                    st.operandReg = sum;
+                    st.localIndex = localIdx;
+                    st.sourceLoc = fs->loc;
+                    entry.instructions.push_back(st);
+                }
+
+                VirInstruction jback;
+                jback.opcode = VirOpcode::Jump;
+                jback.targetBlock = header;
+                jback.sourceLoc = fs->loc;
+                entry.instructions.push_back(jback);
+
+                int exitPc = (int)entry.instructions.size();
+                entry.instructions[(size_t)jfalseIdx].targetBlock = exitPc;
+
+                LoopFrame frame = std::move(loopStack.back());
+                loopStack.pop_back();
+                for (int idx : frame.breakJumps)
+                    entry.instructions[(size_t)idx].targetBlock = exitPc;
+                for (int idx : frame.continueJumps)
+                    entry.instructions[(size_t)idx].targetBlock = contPc;
+                return 0;
             }
 
             BlockerInfo b = blockerFor(s);
@@ -573,6 +714,19 @@ namespace vib {
                 if (n->op == vayu::UnOp::Pos) {
                     return lowerExpr(n->operand.get());
                 }
+                if (n->op == vayu::UnOp::Not) {
+                    int src = lowerExpr(n->operand.get());
+                    if (src < 0) return -1;
+                    int dest = allocReg();
+                    VirInstruction i;
+                    i.opcode = VirOpcode::LogNot;
+                    i.destReg = dest;
+                    i.operandReg = src;
+                    i.sourceLoc = e->loc;
+                    entry.instructions.push_back(i);
+                    bumpLocalTo(dest);
+                    return dest;
+                }
                 if (n->op != vayu::UnOp::Neg) {
                     result.plannedPhase = 3;
                     result.failedFeatureName = "BasicArithmetic";
@@ -604,6 +758,9 @@ namespace vib {
                 case vayu::BinOp::Div:      op = VirOpcode::Div; break;
                 case vayu::BinOp::FloorDiv: op = VirOpcode::Div; break; // int floor div via same opcode
                 case vayu::BinOp::Mod:      op = VirOpcode::Mod; break;
+                case vayu::BinOp::Pow:      op = VirOpcode::Pow; break;
+                case vayu::BinOp::And:      op = VirOpcode::LogAnd; break;
+                case vayu::BinOp::Or:       op = VirOpcode::LogOr; break;
                 case vayu::BinOp::Eq:     op = VirOpcode::CmpEq; needsStringOp = true; break;
                 case vayu::BinOp::NotEq:  op = VirOpcode::CmpNe; needsStringOp = true; break;
                 case vayu::BinOp::Lt:     op = VirOpcode::CmpLt; needsStringOp = true; break;
@@ -630,6 +787,9 @@ namespace vib {
                 if (lhsIsStr || rhsIsStr || lt == VirTypeKind::Str || rt == VirTypeKind::Str) {
                     if (n->op == vayu::BinOp::Add) {
                         op = VirOpcode::StrConcat;
+                    }
+                    else if (n->op == vayu::BinOp::Mul) {
+                        op = VirOpcode::StrRepeat;
                     }
                     else if (n->op == vayu::BinOp::Eq) {
                         op = VirOpcode::StrEq;
