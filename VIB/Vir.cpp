@@ -161,6 +161,20 @@ namespace vib {
             case VirOpcode::JumpIfFalse:
                 return "JumpIfFalse(r" + std::to_string(i.operandReg) +
                     ", @" + std::to_string(i.targetBlock) + ")";
+            case VirOpcode::ListNew:
+                return "r" + std::to_string(i.destReg) + " = ListNew";
+            case VirOpcode::ListPush:
+                return "ListPush(r" + std::to_string(i.lhsReg) + ", r" +
+                    std::to_string(i.operandReg) + ")";
+            case VirOpcode::ListGet:
+                return "r" + std::to_string(i.destReg) + " = ListGet(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::ListSet:
+                return "ListSet(r" + std::to_string(i.lhsReg) + ", r" +
+                    std::to_string(i.rhsReg) + ", r" + std::to_string(i.operandReg) + ")";
+            case VirOpcode::ListLen:
+                return "r" + std::to_string(i.destReg) + " = ListLen(r" +
+                    std::to_string(i.operandReg) + ")";
             }
             return "?";
         }
@@ -371,6 +385,23 @@ namespace vib {
 
             if (s->kind == SK::Assign) {
                 const auto* as = static_cast<const vayu::AssignStmt*>(s);
+                if (as->target->kind == vayu::ExprKind::Index) {
+                    const auto* ix = static_cast<const vayu::IndexExpr*>(as->target.get());
+                    int base = lowerExpr(ix->target.get());
+                    if (base < 0) return result.plannedPhase;
+                    int idx = lowerExpr(ix->index.get());
+                    if (idx < 0) return result.plannedPhase;
+                    int valueReg = lowerExpr(as->value.get());
+                    if (valueReg < 0) return result.plannedPhase;
+                    VirInstruction st;
+                    st.opcode = VirOpcode::ListSet;
+                    st.lhsReg = base;
+                    st.rhsReg = idx;
+                    st.operandReg = valueReg;
+                    st.sourceLoc = as->loc;
+                    entry.instructions.push_back(st);
+                    return 0;
+                }
                 if (as->target->kind != vayu::ExprKind::NameRef) {
                     BlockerInfo b = blockerFor(s);
                     result.plannedPhase = b.phase;
@@ -821,6 +852,44 @@ namespace vib {
                 bumpLocalTo(dest);
                 return dest;
             }
+            case EK::ListLit: {
+                const auto* n = static_cast<const vayu::ListLitExpr*>(e);
+                int dest = allocReg();
+                VirInstruction mk;
+                mk.opcode = VirOpcode::ListNew;
+                mk.destReg = dest;
+                mk.sourceLoc = e->loc;
+                entry.instructions.push_back(mk);
+                bumpLocalTo(dest);
+                for (const auto& el : n->elements) {
+                    int er = lowerExpr(el.get());
+                    if (er < 0) return -1;
+                    VirInstruction push;
+                    push.opcode = VirOpcode::ListPush;
+                    push.lhsReg = dest;
+                    push.operandReg = er;
+                    push.sourceLoc = e->loc;
+                    entry.instructions.push_back(push);
+                }
+                return dest;
+            }
+            case EK::Index: {
+                const auto* n = static_cast<const vayu::IndexExpr*>(e);
+                int base = lowerExpr(n->target.get());
+                if (base < 0) return -1;
+                int idx = lowerExpr(n->index.get());
+                if (idx < 0) return -1;
+                int dest = allocReg();
+                VirInstruction g;
+                g.opcode = VirOpcode::ListGet;
+                g.destReg = dest;
+                g.lhsReg = base;
+                g.rhsReg = idx;
+                g.sourceLoc = e->loc;
+                entry.instructions.push_back(g);
+                bumpLocalTo(dest);
+                return dest;
+            }
             case EK::Call:
                 return lowerCall(static_cast<const vayu::CallExpr*>(e));
             default:
@@ -968,7 +1037,7 @@ namespace vib {
             const auto* callee = static_cast<const vayu::NameRefExpr*>(c->callee.get());
             const std::string& name = callee->name;
 
-            VirBuiltin builtinOp;
+            VirBuiltin builtinOp = VirBuiltin::Print;
             bool isBuiltin = true;
             if (name == "print") builtinOp = VirBuiltin::Print;
             else if (name == "str")   builtinOp = VirBuiltin::ToStr;
@@ -986,14 +1055,7 @@ namespace vib {
                         result.message = "len() requires exactly 1 argument";
                         return -1;
                     }
-                    VirTypeKind at = inferType(c->args[0].value.get());
-                    if (at != VirTypeKind::Str) {
-                        result.plannedPhase = 7;
-                        result.failedFeatureName = "Collections";
-                        result.message = "lowering for len() on non-str value is not "
-                            "implemented yet (planned Phase 7)";
-                        return -1;
-                    }
+                    // Phase 7.1: len works on str and list (resolved at runtime).
                 }
 
                 std::vector<int> argRegs;
@@ -1122,6 +1184,23 @@ namespace vib {
                                 " out of localCount " +
                                 std::to_string(fn.localCount) +
                                 " in function \"" + fn.name + "\"";
+                            return r;
+                        }
+                    }
+                    // Phase 6.2: branch-target verification (instruction indices).
+                    if (instr.opcode == VirOpcode::Jump ||
+                        instr.opcode == VirOpcode::JumpIfFalse) {
+                        if (instr.targetBlock < 0 ||
+                            instr.targetBlock > (int)block.instructions.size()) {
+                            r.message = "verifier: jump target " +
+                                std::to_string(instr.targetBlock) +
+                                " out of range in function \"" + fn.name + "\"";
+                            return r;
+                        }
+                        if (instr.opcode == VirOpcode::JumpIfFalse &&
+                            !regOK(instr.operandReg)) {
+                            r.message = "verifier: JumpIfFalse operandReg out of range in function \"" +
+                                fn.name + "\"";
                             return r;
                         }
                     }

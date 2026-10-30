@@ -16,7 +16,7 @@ namespace vib {
                 { Feature::Strings,          "Strings",          SupportLevel::Supported,    SupportLevel::Deferred,  4, "Phase 4: literals, concat, comparisons, methods, len()." },
                 { Feature::Functions,        "Functions",        SupportLevel::Supported,    SupportLevel::Deferred,  5, "Phase 5: user functions, calls, recursion, ret plumbing, print, conversions." },
                 { Feature::ControlFlow,      "ControlFlow",      SupportLevel::Supported,    SupportLevel::Deferred,  6, "Phase 6.1: if/elif/else, while, for-range, break, continue; ** // and or not str*." },
-                { Feature::Collections,      "Collections",      SupportLevel::NotSupported, SupportLevel::Deferred,  7, "Interpreter and VM support this today; Integrator lowering pending." },
+                { Feature::Collections,      "Collections",      SupportLevel::Supported,    SupportLevel::Deferred,  7, "Phase 7.1: list literals, index get/set, len(list); map/tuple/set later." },
                 { Feature::Modules,          "Modules",          SupportLevel::NotSupported, SupportLevel::Deferred,  8, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Exceptions,       "Exceptions",       SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Classes,          "Classes",          SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },

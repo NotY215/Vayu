@@ -7,10 +7,10 @@
 
 namespace vib {
 
-    enum class VirTypeKind { None, Bool, Int, Float, Str, Any };
+    enum class VirTypeKind { None, Bool, Int, Float, Str, List, Any };
     struct VirType { VirTypeKind kind = VirTypeKind::None; };
 
-    enum class VirValueKind { None, Bool, Int, Float, Str };
+    enum class VirValueKind { None, Bool, Int, Float, Str, List };
     struct VirValue {
         VirValueKind kind = VirValueKind::None;
         bool         boolValue = false;
@@ -55,6 +55,12 @@ namespace vib {
         // Phase 6.1: control flow.
         Jump,          // unconditional jump to targetBlock
         JumpIfFalse,   // if !truthy(operandReg) jump to targetBlock
+        // Phase 7.1: lists
+        ListNew,       // <destReg> = []
+        ListPush,      // push <operandReg> onto list in <lhsReg>
+        ListGet,       // <destReg> = list[<rhsReg>] from <lhsReg>
+        ListSet,       // list[<rhsReg>] in <lhsReg> = <operandReg>
+        ListLen,       // <destReg> = len(list in <operandReg>)
     };
 
     // Phase 5.1: builtin functions the VIR interpreter can dispatch.
@@ -67,6 +73,7 @@ namespace vib {
         ToFloat,        // float(x)     1 arg
         ToBool,         // bool(x)      1 arg
         LenStr,         // len(s)       1 arg, str only
+        LenAny,         // len(s|list)  1 arg
         // Phase 4.3: string methods, dispatched as builtins with the receiver
         // as argRegs[0].
         StrUpper, StrLower, StrStrip,

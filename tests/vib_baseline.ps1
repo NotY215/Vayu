@@ -278,7 +278,7 @@ if ($status.rc -ne 0) {
         "Strings\s+Supported\s+Deferred\s+4\b",
         "Functions\s+Supported\s+Deferred\s+5\b",
         "ControlFlow\s+Supported\s+Deferred\s+6\b",
-        "Collections\s+NotSupported\s+Deferred\s+7\b",
+        "Collections\s+Supported\s+Deferred\s+7\b",
         "Modules\s+NotSupported\s+Deferred\s+8\b",
         "Exceptions\s+NotSupported\s+Deferred\s+10\b",
         "Classes\s+NotSupported\s+Deferred\s+10\b",

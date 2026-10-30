@@ -17,6 +17,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <iostream>
 #include <vector>
 
 #ifdef _WIN32
@@ -51,7 +52,7 @@ static void usage() {
         "  --dump-ast           print the parsed AST\n"
         "  --dump-bytecode      compile to bytecode and print disassembly\n"
         "  --dump-ir            print VIB IR (when implemented)\n"
-        "  --emit-vye <path>    write a .vye package to <path>\n"
+        "  --emit-vye <path>    write a .vye package to <path>\n  --output <path>      alias for --emit-vye (Vayu Executable)\n"
         "  --run-vye <path>     execute a .vye package\n"
         "\n"
         "Flags:\n"
@@ -117,12 +118,89 @@ namespace {
     }
 }
 
+
+static void printBanner() {
+    std::printf(
+        "Vayu Programming Language\n"
+        "Copyright (c) Vayu Community and NotY215. All rights reserved.\n"
+        "Type --help for commands. Syntax: https://github.com/NotY215/Vayu/blob/master/docs/syntax.md\n"
+        "Website syntax: https://vayu.gt.tc\n\n");
+}
+
+static void printHelp() {
+    printBanner();
+    std::printf(
+        "Commands / flags:\n"
+        "  <file.vyu>              run with tree-walking interpreter (default)\n"
+        "  <file.vyu> --vm         run on the bytecode VM\n"
+        "  <file.vyu> --native     run via VIB Integrator (supported subset)\n"
+        "  <file.vyu> --check      type-check only\n"
+        "  --emit-vye <path>       write a .vye Vayu Executable package\n"
+        "  --output <path>         same as --emit-vye (creates .vye)\n"
+        "  --run-vye <path>        execute a .vye package\n"
+        "  --dump-ir               print VIR\n"
+        "  --dump-ast / --dump-tokens / --dump-bytecode\n"
+        "  --dispatch=integrator   route through Integrator\n"
+        "  --enable-cache [--cache-dir <dir>]\n"
+        "  --vib-status            feature capability matrix\n"
+        "  --help                  this message\n"
+        "  (no args)               interactive one-line REPL\n"
+        "\n"
+        "Syntax reference:\n"
+        "  https://github.com/NotY215/Vayu/blob/master/docs/syntax.md\n"
+        "  https://vayu.gt.tc\n");
+}
+
+static int runRepl() {
+    printBanner();
+    std::printf("vayu> ");
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line.empty()) { std::printf("vayu> "); continue; }
+        if (line == "exit" || line == "quit") break;
+        if (line == "--help" || line == "help") { printHelp(); std::printf("vayu> "); continue; }
+        // Wrap expression-like lines in print if needed; otherwise treat as program body.
+        std::string src = line + "\n";
+        vayu::Lexer lexer(std::move(src));
+        auto tokens = lexer.tokenize();
+        vayu::Block program;
+        try {
+            vayu::Parser parser(std::move(tokens));
+            program = parser.parseProgram();
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "parse error: %s\n", e.what());
+            std::printf("vayu> ");
+            continue;
+        }
+        if (!program.stmts.empty()) {
+            // Prefer Integrator for one-liners when possible; fall back to interpreter.
+            vayu::NativeCompiler nc;
+            int rc = nc.compileAndRun(program, "");
+            if (rc != 0) {
+                try {
+                    vayu::Interpreter interp;
+                    interp.run(program);
+                } catch (const std::exception& e) {
+                    std::fprintf(stderr, "error: %s\n", e.what());
+                }
+            }
+        }
+        std::printf("vayu> ");
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    if (argc < 2) { usage(); return 1; }
+    if (argc < 2) { return runRepl(); }
+
+    if (!std::strcmp(argv[1], "--help") || !std::strcmp(argv[1], "-h")) {
+        printHelp();
+        return 0;
+    }
 
     if (std::strcmp(argv[1], "--emit-runtime") == 0) {
         if (argc < 3) {
@@ -224,9 +302,9 @@ int main(int argc, char** argv) {
                 if (end && *end == '\0' && v > 0) { benchRuns = (int)v; ++i; }
             }
         }
-        else if (!std::strcmp(a, "--emit-vye")) {
+        else if (!std::strcmp(a, "--emit-vye") || !std::strcmp(a, "--output")) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "vayuc: --emit-vye requires a path\n");
+                std::fprintf(stderr, "vayuc: %s requires a path\n", a);
                 return 1;
             }
             emitVyePath = argv[++i];

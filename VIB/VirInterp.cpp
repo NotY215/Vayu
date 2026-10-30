@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <sstream>
 
 namespace vib {
@@ -15,6 +16,8 @@ namespace vib {
             long long    i = 0;
             double       f = 0.0;
             std::string  s;
+            // Phase 7.1: shared list payload (identity for mutation).
+            std::shared_ptr<std::vector<RtValue>> list;
         };
 
         RtValue fromVir(const VirValue& v) {
@@ -34,6 +37,7 @@ namespace vib {
             case VirValueKind::Int:   return v.i != 0;
             case VirValueKind::Float: return v.f != 0.0;
             case VirValueKind::Str:   return !v.s.empty();
+            case VirValueKind::List:  return v.list && !v.list->empty();
             }
             return false;
         }
@@ -55,6 +59,17 @@ namespace vib {
                 return s;
             }
             case VirValueKind::Str:   return v.s;
+            case VirValueKind::List: {
+                std::string o = "[";
+                if (v.list) {
+                    for (size_t i = 0; i < v.list->size(); ++i) {
+                        if (i) o += ", ";
+                        o += rtToString((*v.list)[i]);
+                    }
+                }
+                o += "]";
+                return o;
+            }
             }
             return "?";
         }
@@ -307,6 +322,84 @@ namespace vib {
                     break;
                 }
 
+
+                case VirOpcode::ListNew: {
+                    RtValue r;
+                    r.kind = VirValueKind::List;
+                    r.list = std::make_shared<std::vector<RtValue>>();
+                    locals[(size_t)instr.destReg] = std::move(r);
+                    break;
+                }
+                case VirOpcode::ListPush: {
+                    RtValue& lst = locals[(size_t)instr.lhsReg];
+                    if (lst.kind != VirValueKind::List || !lst.list) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: ListPush on non-list";
+                        return out;
+                    }
+                    lst.list->push_back(locals[(size_t)instr.operandReg]);
+                    break;
+                }
+                case VirOpcode::ListGet: {
+                    const RtValue& lst = locals[(size_t)instr.lhsReg];
+                    const RtValue& ix = locals[(size_t)instr.rhsReg];
+                    if (lst.kind != VirValueKind::List || !lst.list) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: index on non-list";
+                        return out;
+                    }
+                    if (ix.kind != VirValueKind::Int) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: list index must be int";
+                        return out;
+                    }
+                    long long i = ix.i;
+                    if (i < 0) i += (long long)lst.list->size();
+                    if (i < 0 || i >= (long long)lst.list->size()) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: list index out of range";
+                        return out;
+                    }
+                    locals[(size_t)instr.destReg] = (*lst.list)[(size_t)i];
+                    break;
+                }
+                case VirOpcode::ListSet: {
+                    RtValue& lst = locals[(size_t)instr.lhsReg];
+                    const RtValue& ix = locals[(size_t)instr.rhsReg];
+                    if (lst.kind != VirValueKind::List || !lst.list) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: list set on non-list";
+                        return out;
+                    }
+                    if (ix.kind != VirValueKind::Int) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: list index must be int";
+                        return out;
+                    }
+                    long long i = ix.i;
+                    if (i < 0) i += (long long)lst.list->size();
+                    if (i < 0 || i >= (long long)lst.list->size()) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: list index out of range";
+                        return out;
+                    }
+                    (*lst.list)[(size_t)i] = locals[(size_t)instr.operandReg];
+                    break;
+                }
+                case VirOpcode::ListLen: {
+                    const RtValue& lst = locals[(size_t)instr.operandReg];
+                    if (lst.kind != VirValueKind::List || !lst.list) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: ListLen on non-list";
+                        return out;
+                    }
+                    RtValue r;
+                    r.kind = VirValueKind::Int;
+                    r.i = (long long)lst.list->size();
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+
                 case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                 case VirOpcode::CmpLt: case VirOpcode::CmpLe:
                 case VirOpcode::CmpGt: case VirOpcode::CmpGe: {
@@ -483,11 +576,14 @@ namespace vib {
                         break;
                     }
                     case VirBuiltin::LenStr: {
-                        if (args[0].kind != VirValueKind::Str) {
-                            out.kind = ErrorKind::RuntimeError; out.message = "interp: len() on non-str in Phase 5"; return out;
-                        }
                         r.kind = VirValueKind::Int;
-                        r.i = (long long)args[0].s.size();
+                        if (args[0].kind == VirValueKind::Str) {
+                            r.i = (long long)args[0].s.size();
+                        } else if (args[0].kind == VirValueKind::List && args[0].list) {
+                            r.i = (long long)args[0].list->size();
+                        } else {
+                            out.kind = ErrorKind::RuntimeError; out.message = "interp: len() expects str or list"; return out;
+                        }
                         break;
                     }
                     case VirBuiltin::StrUpper:
