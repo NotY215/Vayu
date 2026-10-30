@@ -3,208 +3,174 @@
 **Language:** Vayu (`.vyu`)  
 **Integrated compiler/runtime:** VIB (Vayu Integration Backend)  
 **Architecture:** Integrator  
-**Primary deliverable:** Vayu Executable package (`.vye`)
+**Current internal representation:** Vayu Intermediate Representation (VIR)  
+**Primary direction:** A progressively complete, verified compiler and native execution pipeline
 
-This is the forward-looking implementation plan. A phase is complete only when implementation, tests, and acceptance evidence exist. The first priority is a small, correct Integrator. Expand it in small steps rather than trying to support all of Vayu's existing language coverage at once.
+This roadmap records the current implementation state and the intended sequence of work. A phase is complete only when its implementation, tests, and acceptance evidence exist. Statuses below reflect the supplied project baseline and must not be upgraded merely because a design, placeholder, or example exists.
 
 ## 1. Product contract
 
-- Vayu remains the only source language; source files use `.vyu`.
-- VIB is the integrated compiler/runtime system inside this repository. Integrator is the architecture VIB implements, not a separate product or required `vib.exe`.
-- The existing Vayu compiler/driver remains the user-facing entry point.
-- Integrator first supports a deliberately small subset: basic values, variables, arithmetic, strings, functions, and simple control flow.
-- Integrator compiles supported programs into `.vye` files, meaning **Vayu Executable** packages.
-- A `.vye` is not a native Windows `.exe`. It is an executable package that requires a compatible Vayu/Integrator runtime, similar in broad deployment concept to a Java archive requiring a Java runtime.
-- Vayu itself and the Integrator runtime must share the `.vye` specification. No separate Integrator executable is required.
-- Existing interpreter/VM coverage is reference material, not proof that every feature works in Integrator.
-- Do not require a bundled foreign-language runtime, DLL directory, LLD executable, platform import library, or external compiler backend.
-- ONNX support is deferred. Later, Vayu will have its own ONNX reader/runtime and native test fixtures, without a Python ONNX generator or Python package dependency.
+- Vayu remains the source language and the existing `vayu.exe` remains the user-facing entry point.
+- VIB is the integrated compiler/runtime system inside the Vayu repository. Integrator is the architecture implemented by VIB, not a separate product or required executable.
+- The current priority is to expand the Integrator and VIR into a correct execution pipeline, then progress toward native machine-code generation and the later roadmap milestones.
+- The Integrator must not silently claim support for language features that are only available in the interpreter or VM.
+- VIR must be structurally verified before interpretation or any later backend consumes it.
+- The `.vye` executable-package track (design, writer, reader/runtime, dispatch adoption, and cache) is explicitly deferred under Phase 2A–2C. Do not treat it as the active prerequisite for the current VIR work.
+- Existing interpreter/VM behaviour is useful reference material, but failures in those paths must be distinguished from Integrator/VIR failures.
+- Do not reintroduce the removed external-backend design, bundled foreign-language runtimes, DLL directories, LLD executables, or platform import-library dependencies.
+- ONNX remains a later Vayu-owned track. Do not add a Python ONNX generator or Python package dependency.
 
-## 2. Starting point
+## 2. Current architecture
 
-Vayu already has substantial frontend, language, interpreter/VM, tooling, and example coverage. Integrator is a new, intentionally smaller execution path. Its first job is correctness and completeness for a narrow subset, not feature parity or optimization.
-
-The native compiler path and .vye format must not be called complete until code, tests, and acceptance gates pass. Do not claim a planned feature is implemented because documentation, an example, or a placeholder exists.
-
-## 3. Target pipeline
+The active Integrator path is being built around this sequence:
 
 ```text
 .vyu source
     |
     v
-Vayu lexer / parser / semantic analysis
+Vayu frontend (lexer / parser / semantic analysis)
     |
     v
-Integrator lowering for the supported subset
+Integrator lowering
     |
     v
-Verified Integrator representation
+VIR
     |
     v
-.vye package writer -> strict format validation
+VIR verifier
     |
     v
-Vayu / Integrator runtime
+VIR interpreter / execution
     |
     v
 Program output and exit status
+
+Later roadmap work:
+verified VIR -> native code generation -> native executable
 ```
 
-Keep the first internal representation small. Add abstraction only when needed by implemented semantics.
+The VIR interpreter is the current execution route for the implemented VIR subset. Native machine-code generation is a later milestone and must not be described as complete until it has real code generation and end-to-end tests.
 
-## 4. .vye format requirements
+## 3. Status definitions
 
-The format specification must define:
-- magic bytes and format version;
-- bounded section table, offsets, lengths, and entry point;
-- function metadata, constant pool, string encoding, and typed instructions or verified IR;
-- optional debug/source metadata;
-- deterministic serialization;
-- integrity checks and explicit runtime compatibility policy;
-- behavior for unknown required features and unsupported versions.
+| Status | Meaning |
+| --- | --- |
+| **Complete** | Implementation and the required tests/acceptance evidence are delivered. |
+| **Next** | The next authorized implementation target. |
+| **Recommended (needs authorization)** | A recommended task that changes a protected or separately owned subsystem; do not begin until explicitly authorized. |
+| **Planned** | Accepted future work that is not yet the next active task. |
+| **Deferred** | Intentionally postponed by project decision. |
 
-The reader must validate offsets, lengths, overflow, section overlap, constant/function indices, opcodes, types, branch targets, signatures, and entry point before execution. Never execute malformed or partially validated packages. Do not serialize raw pointers, process addresses, or host-specific object layouts.
+## 4. Phase roadmap
 
-A `.vye` is a Vayu/Integrator executable package, not a native executable or a promise of universal cross-version compatibility. Compatible Vayu/Integrator runtime installation is required.
+| **Phase** | **Status** | **Goals** | **Output** |
+| :--- | :--- | :--- | :--- |
+| **0.1–0.4** | Complete | Baseline, feature matrix, curated fixtures. | Capability API + fixture list. |
+| **1.1–1.4** | Complete | Integrator API expansion, adapter thinning, `--vib-status`, harness. | All delivered. |
+| **2.1–2.6** | Complete | VIR structures, printer, verifier (structural), minimal lowering, integration. | `VIR Supported`, `Verifier Supported`. |
+| **0.5** | **Recommended (needs authorization)** | **Fix pre-existing baseline failures:** `classes.vyu`, `collections.vyu` (interpreter), `exceptions.vyu`, `generators.vyu` (VM crash `0xC0000409`). Requires changes under `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes. |
+| **3.1** | Complete | Arithmetic semantics contract in code. | `Vir.hpp` comment block. |
+| **3.2** | Complete | VIR extended: `Add/Sub/Mul/Div/Mod/Neg/Cmp*/StoreLocal/LoadLocal`. | Extended opcode set. |
+| **3.3** | Complete | Lowering: literals, arithmetic, unary, comparisons, simple `name = expr`. | Lowering context in `Vir.cpp`. |
+| **3.4** | Complete | Verifier extended for new opcodes. | `regOK` + per-opcode range checks. |
+| **3.5** | Complete | `printInstruction` extended. | Every opcode human-readable. |
+| **3.6** | Complete | In-memory VIR interpreter. | `VIB/VirInterp.{hpp,cpp}`. |
+| **3.7** | Complete | `Integrator::compile` = lower → verify → execute in-memory. | `--native` = Integrator-mediated execution. |
+| **3.8** | Complete | `VirInterp.cpp` in `compiler/CMakeLists.txt`. | Build includes new file. |
+| **3.9** | Complete | `vib_baseline.ps1` extended for Phase 3. | New assertions. |
+| **4.1** | Next | UTF-8 policy, string semantics, index bounds. | `Feature::Strings = Supported` (pending). |
+| **4.2** | Next | Lowering for string constants and operations. | String fixtures green. |
+| **5.1** | Next | Functions, parameters, returns, scopes, calls, arity checks. | `Feature::Functions = Supported`; `--native` handles `print(...)` and user functions. |
+| **5.2** | Planned | Recursion (stack-frame safety). | Recursion fixtures green. |
+| **6.1–6.2** | Planned | Branches, loops, return/break/continue, verifier extension. | `ControlFlow = Supported`. |
+| **7.1–7.2** | Planned | Collections (list → map/tuple/set). | `Collections = Supported`. |
+| **8.1–8.2** | Planned | Modules and multi-file. | `Modules = Supported`. |
+| **9.1–9.2** | Planned | Malformed-VIR suite + runtime-compat reporting. | Hardened verifier. |
+| **10.1–10.2** | Planned | Exceptions, classes, closures, generators, pointers, standard library. | Each feature flips individually. |
+| **2A–2C** | Deferred | `.vye` design → writer → reader/runtime; dispatch adoption; cache. | Deferred per project decision. |
+| **11–14** | Planned | Measurement, native codegen, ONNX, release/self-host. | Unchanged from prior roadmap. |
 
-## 5. Phased roadmap
+### Phase 0.5 authorization boundary
 
-### Phase 0 — Baseline and feature boundary
-- Record clean build/run commands and current driver behavior.
-- Inventory the frontend, type checker, interpreter, VM, runtime, and tests.
-- Create a feature matrix distinguishing existing Vayu support from Integrator support.
-- Capture reference output, errors, and exit codes for initial programs.
-
-**Exit:** reproducible baseline, feature matrix, and reference fixtures.
-
-### Phase 1 — Minimal Integrator skeleton
-- Integrate a small pipeline into the existing driver.
-- Define diagnostics, result types, and explicit unsupported-feature errors.
-- Add a dedicated Integrator test harness.
-- Avoid premature optimizer, cache, linker, and adaptive-compilation work.
-
-**Exit:** Integrator builds with Vayu; unsupported constructs fail clearly; current interpreter/VM routes remain intact.
-
-### Phase 2 — Versioned .vye container
-- Specify and implement a deterministic writer and strict reader.
-- Add version checks, bounds validation, and malformed/truncated file rejection.
-- Add a compile-to-`.vye` path and a run-`.vye` path in the existing driver.
-- Running a package must not silently recompile source or invoke a foreign runtime.
-
-**Exit:** hello-world package works; round-trip and corruption tests pass.
-
-### Phase 3 — Basic values and arithmetic
-- Start with a small documented set such as integers and booleans; add floats only with explicit semantics.
-- Implement constants, local variables, assignment, arithmetic, comparisons, and type checks.
-- Define evaluation order, overflow, conversions, and division-by-zero behavior.
-
-**Exit:** positive/negative tests, stable diagnostics, verified instructions, and deterministic output.
+Phase 0.5 is not part of the currently authorized VIR implementation sequence. It addresses failures that predate the Integrator work and may require edits to `compiler/interp/**` and/or `compiler/vm/**`. Keep it marked **Recommended (needs authorization)** until explicit approval is given. Do not modify those subsystems as an assumed part of Phases 4 onward.
 
 ### Phase 4 — Strings
-- Define UTF-8 policy, representation, equality, concatenation, length/index semantics, and conversions.
-- Add string constants to the package constant pool.
-- Implement safe lifetime, allocation, bounds checks, and runtime errors.
 
-**Exit:** empty, ASCII, multibyte UTF-8, concatenation, equality, boundary, and invalid-operation tests pass.
+Define string behaviour before implementing it: UTF-8 validity and encoding policy, representation, equality, concatenation, length, indexing, bounds behaviour, and error semantics. Add string constants and operations to VIR lowering, verification, printing, and interpretation. Keep behaviour consistent across all Integrator execution paths.
+
+**Acceptance:** string fixtures cover empty strings, ASCII, multibyte UTF-8, concatenation, equality, length, valid indexing, out-of-range indexing, and invalid operations. Only then mark `Feature::Strings` supported.
 
 ### Phase 5 — Functions and calls
-- Add functions, parameters, return values, local scopes, and direct calls.
-- Validate function indices, argument counts/types, return types, and call-stack limits.
-- Add recursion only after stack-frame safety is implemented.
 
-**Exit:** nested calls, parameter/return tests, and malformed-call rejection pass.
+Implement function declarations, parameters, return values, local scopes, direct calls, and argument-count/type validation. The first subphase is 5.1. Recursion is deliberately separated into 5.2 because it requires safe call-frame and stack handling.
+
+**Acceptance:** nested calls, parameter passing, return values, scope isolation, wrong-arity rejection, and call-stack safety have dedicated tests. Recursion remains unsupported until Phase 5.2 passes.
 
 ### Phase 6 — Control flow
-- Add conditional branches, loops, and explicit return behavior.
-- Validate branch targets and reachable control flow.
-- Add documented resource limits where needed.
 
-**Exit:** branch/loop fixtures pass; invalid targets are rejected.
+Add conditional branches and loops, then return, break, and continue semantics. Extend VIR verification to validate branch targets, register/local usage, and structurally valid control-flow edges.
 
-### Phase 7 — Core runtime and small collections
-- Add only required runtime operations and first collection types, each with explicit representation and ownership rules.
-- Specify indexing, mutation, length, iteration, and error behavior.
-- Verify every runtime operation before execution.
+**Acceptance:** branch and loop fixtures pass, invalid targets are rejected, and control-flow support is backed by verifier and execution tests.
 
-**Exit:** collection and resource-safety tests pass.
+### Phase 7 — Collections
+
+Expand collection support incrementally, beginning with lists and then maps, tuples, and sets. Specify representation, ownership/lifetime, indexing, mutation, equality, iteration, and error behaviour for each supported type.
+
+**Acceptance:** each collection type has independent lowering, verifier, interpreter, and fixture coverage before the aggregate feature is marked supported.
 
 ### Phase 8 — Modules and multi-file programs
-- Define module identity, import resolution, and package dependency behavior.
-- Detect missing modules, duplicate symbols, and incompatible dependencies.
-- Keep builds reproducible from declared inputs.
 
-**Exit:** a small multi-file program builds and runs from `.vye`.
+Define module identity, import resolution, symbol visibility, duplicate handling, and deterministic multi-file compilation. Keep dependency behaviour explicit and testable.
 
-### Phase 9 — Format hardening and compatibility
-- Fuzz/property-test the reader and verifier.
-- Test huge counts, overflow, invalid indices/opcodes, truncated sections, bad strings, and stack exhaustion.
-- Document runtime requirements and compatibility policy.
-- Add clean-checkout CI coverage.
+**Acceptance:** a multi-file Vayu program resolves imports, rejects missing or duplicate symbols, and executes with deterministic results.
 
-**Exit:** malformed packages are safely rejected; all supported-subset tests pass.
+### Phase 9 — Verifier hardening and runtime compatibility
 
-### Phase 10 — Incrementally expand Vayu coverage
-Only after the earlier phases pass, add features in small groups: richer numeric operations, tuples/lists/maps/sets, exceptions, classes/objects, closures, higher-order functions, and system APIs. Concurrency comes only after a clear memory and scheduling model exists.
+Build malformed-VIR tests covering invalid opcodes, out-of-range registers/locals, invalid branch targets, malformed operands, invalid type/feature combinations, and runtime compatibility mismatches. Report unsupported features clearly and safely.
 
-Each feature requires a design, implementation, tests, documentation, and parity evidence. Existing Vayu support must never be treated as automatic Integrator support.
+**Acceptance:** malformed VIR is rejected before execution, with stable diagnostics and regression coverage.
 
-**Exit:** every advertised Integrator feature has dedicated conformance tests.
+### Phase 10 — Broader language coverage
 
-### Phase 11 — Performance, cache, and incremental builds
-- Measure build time, startup, execution, memory, and `.vye` size before optimizing.
-- Add caching only after artifact identity and invalidation are specified.
-- Add incremental compilation only after it matches clean-build output.
-- Keep adaptive/profiling-guided execution as later optional research.
+Expand support feature by feature: exceptions, classes, closures, generators, pointers, and standard-library operations. Each feature must be independently designed, implemented, tested, and reflected in the capability matrix. Existing interpreter/VM support is not proof of Integrator support.
 
-**Exit:** reproducible measurements, cache recovery tests, and clean/incremental equivalence.
+**Acceptance:** every advertised feature has focused positive and negative tests and an explicit support-level transition.
 
-### Phase 12 — Native compilation research
-Native machine-code generation is a later track, not a prerequisite for the first working Integrator or `.vye` runtime.
-- Reuse the verified representation where appropriate.
-- Keep target/ABI rules in Vayu-owned code.
-- Do not require bundled LLD, external backend executables, DLL folders, or bundled import libraries.
-- Advertise native support only for targets and features with end-to-end tests.
-- Keep `.vye` execution as the portable baseline.
+### Phases 11–14 — Later milestones
 
-**Exit:** native artifacts pass conformance on each explicitly supported target.
+These milestones remain planned and retain their prior scope:
 
-### Phase 13 — Vayu-native ONNX and AI/ML
-ONNX is deferred until Integrator and `.vye` are stable.
-- Design a Vayu-owned ONNX parser/reader and internal model representation.
-- Validate format structure, tensor shapes/types, operator support, and resource limits.
-- Implement a small operator subset first, expanding through tests.
-- Build native fixtures without a Python ONNX generator.
-- Add numerical correctness tests before performance or GPU work.
+- **Phase 11 — Measurement:** establish reproducible measurements for compilation, execution, startup, memory, and generated artifact size. Use measurements to guide optimization rather than assumptions.
+- **Phase 12 — Native code generation:** generate native machine code from verified VIR, define target/ABI rules, and prove correctness with end-to-end tests for each supported target. Do not label native code generation complete while `--native` is only Integrator-mediated in-memory execution.
+- **Phase 13 — Vayu-native ONNX and AI/ML:** implement a Vayu-owned ONNX reader/runtime, validate model structure and tensor metadata, and expand operator coverage through numerical correctness tests. No Python generator or Python runtime dependency.
+- **Phase 14 — Release and self-host:** publish an accurate support matrix, test clean builds and installs, document compatibility and diagnostics, and consider self-hosting only when the compiler subset is stable.
 
-**Exit:** native reader/runtime passes valid and malformed-model tests; compiler/runtime has no Python, NumPy, or ONNX package dependency.
+## 5. Validation and completion rules
 
-### Phase 14 — Release and long-term expansion
-- Publish the supported feature/runtime-version matrix.
-- Test clean installs and `.vye` execution on each claimed platform.
-- Document debugging, deterministic builds, security, compatibility, and diagnostics.
-- Consider self-hosting only after the Integrator subset is stable.
-- Tie performance claims to reproducible workload measurements.
+Every phase requires the relevant combination of:
+- focused unit and integration tests;
+- positive fixtures for supported behaviour;
+- negative fixtures for unsupported or invalid behaviour;
+- verifier and malformed-input tests where applicable;
+- deterministic expected output and exit status;
+- reproducible build/test commands;
+- updated capability reporting and documentation.
 
-**Exit:** clean build/install, full supported-subset conformance, and reproducible CI evidence.
+A roadmap row, placeholder, sample program, or successful compilation alone is not implementation evidence. Do not mark a feature supported until the required tests demonstrate its semantics.
 
-## 6. Required validation for every phase
+## 6. Performance policy
 
-Each phase needs unit tests, supported-behavior tests, negative tests, malformed-input tests where applicable, comparison against reference semantics, reproducible commands, and updated support documentation. A placeholder, roadmap entry, or example alone is not implementation evidence.
+Performance claims must be based on reproducible measurements. Track compilation time, execution time, startup overhead, memory use, and generated artifact size separately. Comparisons with interpreters, JITs, or native compilers must use equivalent workloads and documented test conditions. Correctness and semantic coverage take priority over optimization.
 
-## 7. Performance policy
+## 7. Immediate implementation order
 
-Measure compile time, runtime startup, steady-state execution, memory, and `.vye` size separately. Do not promise that Integrator outperforms JITs or native compilers without repeatable workload-specific evidence. Correctness and a complete small subset come first.
+1. Continue with **Phase 4.1**: define and document the UTF-8/string/indexing contract.
+2. Complete **Phase 4.2**: implement string constants and operations through lowering, verification, printing, and VIR interpretation.
+3. Proceed to **Phase 5.1**: functions, parameters, returns, scopes, calls, and arity validation.
+4. Keep **Phase 0.5** untouched unless separately authorized.
+5. Keep **Phase 2A–2C** deferred.
+6. Preserve the planned status of Phases 5.2–14 until their implementation work is actually undertaken and validated.
 
-## 8. First major milestone definition
+---
 
-The first major Integrator milestone is complete when:
-- a small, documented Vayu subset lowers into a verified representation;
-- the compiler writes a valid, versioned `.vye` package;
-- the Vayu/Integrator runtime executes it without recompiling source;
-- malformed packages are safely rejected;
-- strings, functions, and control flow work according to documented semantics;
-- deterministic output, failure cases, and runtime compatibility are tested;
-- no Python runtime, ONNX generator, DLL bundle, LLD executable, or external backend is required;
-- existing interpreter/VM workflows remain intact.
-
-**Rule:** Integrator support is established by implementation and tests, not by Vayu's broader historical feature coverage.
+**Roadmap rule:** VIB support is established by implementation, verifier behaviour, and tests. Never infer Integrator capability from the broader historical feature set of the Vayu interpreter or VM.
