@@ -15,7 +15,7 @@ This roadmap records the current implementation state and the intended sequence 
 - The current priority is to expand the Integrator and VIR into a correct execution pipeline, then progress toward native machine-code generation and the later roadmap milestones.
 - The Integrator must not silently claim support for language features that are only available in the interpreter or VM.
 - VIR must be structurally verified before interpretation or any later backend consumes it.
-- The `.vye` executable-package track is maintained separately under Phase 2A–2C. The design is Completed; writer, reader/runtime, dispatch adoption, and cache tasks are Working. Do not treat package work as a prerequisite for unrelated VIR feature work.
+- The `.vye` executable-package track is maintained under Phase 2A–2C and is **Completed** as opt-in infrastructure (`--emit-vye`, `--run-vye`, `--dispatch=integrator`, `--enable-cache`). Do not treat package work as a prerequisite for unrelated VIR feature work.
 - Existing interpreter/VM behaviour is useful reference material, but failures in those paths must be distinguished from Integrator/VIR failures.
 - Do not reintroduce the removed external-backend design, bundled foreign-language runtimes, DLL directories, LLD executables, or platform import-library dependencies.
 - ONNX remains a later Vayu-owned track. Do not add a Python ONNX generator or Python package dependency.
@@ -67,28 +67,28 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 | **0.1–4.2** | Completed | Baseline, capability API, VIR structures + printer + verifier, arithmetic lowering + interpreter, `--native` integration, string literals + concatenation + comparisons. | Delivered. |
 | **0.5a** | Completed | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
 | **0.5b (partial)** | Completed | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
-| **0.5b (remaining)** | Working | Fix `classes.vyu` (`--run`), `collections.vyu` (`--run`), and `generators.vyu` (`--vm`, crash `0xC0000409`). Requires touching `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes fully. |
+| **0.5b (remaining)** | Working | `classes.vyu` / `collections.vyu` are type-checker errors (`compiler/sema`); `generators.vyu --vm` still crashes `0xC0000409`; `exceptions.vyu` has `--run` vs `--vm` stdout parity drift. | Baseline green after authorized sema/interp/vm fixes. |
 | **4.3** | Completed | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
 | **5.1** | Completed | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
-| **5.2b** | **Working** | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
-| **6.1** | Planned | Conditional branches (`If`/`Elif`/`Else`), `while`/`for` loops, `return`/`break`/`continue`. | `ControlFlow Supported`. |
+| **5.2b** | Completed | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
+| **6.1** | Completed | Conditional branches (`If`/`Elif`/`Else`), `while`, `for x in range(N)`, `break`/`continue`, plus `**`/`//`/`and`/`or`/`not`/string `*`. | `ControlFlow Supported`. |
 | **6.2** | Planned | Branch-target verification, unreachable-code diagnostics. | Invalid-branch tests reject. |
 | **7.1–7.2** | Planned | Collections: `list` → `map`/`tuple`/`set`, indexing, slicing, ownership. | `Collections Supported`. |
 | **8.1–8.2** | Planned | Modules and multi-file programs. | `Modules Supported`. |
 | **9.1–9.2** | Planned | Malformed-VIR suite, runtime-compatibility reporting. | Hardened verifier. |
 | **10.1–10.2** | Planned | Exceptions, classes, closures, higher-order functions, generators, pointers, standard-library surface. | Each feature flips individually. |
 | **2A.1** | Completed | `.vye` design comment block in `Vir.hpp`. | Design captured. |
-| **2A.2** | **Working** | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
-| **2B.1** | **Working** | Strict `.vye` reader + verifier. | Reader passes malformed-package tests. |
-| **2B.2** | **Working** | `vayu run <file>.vye` execution verb. | Round-trip + execution tests. |
-| **2C.1** | **Working** | Dispatch adoption for Interpreter backend. | `run_all.ps1` green; dispatch unified. |
-| **2C.2** | **Working** | Dispatch adoption for VM backend. | `run_all.ps1` green. |
-| **2C.3** | **Working** | Content-addressed, atomic, recoverable artifact cache + incremental graph. | Cache + incremental equivalence. |
+| **2A.2** | Completed | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
+| **2B.1** | Completed | Strict `.vye` reader + verifier. | Reader passes malformed-package tests. |
+| **2B.2** | Completed | `--run-vye <path>` execution verb. | Round-trip + execution tests. |
+| **2C.1** | Completed | Dispatch adoption via `--dispatch=integrator`. | Opt-in Integrator dispatch. |
+| **2C.2** | Completed | Dispatch adoption for supported VIR subset. | Opt-in Integrator dispatch. |
+| **2C.3** | Completed | Content-addressed artifact cache (`--enable-cache`). | Cache populates on `--native`/`--emit-vye`. |
 | **11–14** | Planned | Measurement, native codegen, ONNX, release/self-host. | Unchanged. |
 
 ### Phase 0.5 — Baseline repair
 
-Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is **Completed**. The exceptions VM catch fix and diagnostic script are **Completed** under 0.5b. The remaining classes, collections, and generators failures are **Working** and blocked pending stderr-based diagnosis. Changes may touch `compiler/interp/**` and/or `compiler/vm/**`; keep the work scoped to the listed failures and preserve regression coverage.
+Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is **Completed**. The exceptions VM catch fix and diagnostic script are **Completed** under 0.5b. The remaining classes, collections, and generators failures are **Working** and require authorized changes under `compiler/sema/**`, `compiler/interp/**`, and/or `compiler/vm/**`.
 
 ### Phase 4 — Strings
 
@@ -98,13 +98,13 @@ Phases 4.1–4.2 are **Completed**: the baseline string contract, literals, conc
 
 ### Phase 5 — Functions and calls
 
-Phase 5.1 is **Completed** for function declarations/calls, arity checks, recursion, `print`, the `str`/`int`/`float`/`bool` conversions, and `len(str)`. Phase 5.2b is **Working**: `executeFunction` returns an `RtValue`, and the `Call` instruction pushes that result into `destReg`. Keep return-value plumbing marked Working until its complete regression suite passes.
+Phase 5.1 and **5.2b are Completed**: function declarations/calls, arity checks, recursion, `print`, conversions, `len(str)`, and return-value plumbing through `Call`.
 
 **Acceptance:** preserve tests for nested calls, parameter passing, recursion, return values, scope isolation, wrong-arity rejection, and call-stack safety.
 
 ### Phase 6 — Control flow
 
-Add conditional branches and loops, then return, break, and continue semantics. Extend VIR verification to validate branch targets, register/local usage, and structurally valid control-flow edges.
+Phase **6.1 is Completed**: if/elif/else, while, `for x in range(N)`, break, continue, plus `**`, `//`, `and`/`or`/`not`, and string `*`. Phase 6.2 extends VIR verification for branch targets and unreachable code.
 
 **Acceptance:** branch and loop fixtures pass, invalid targets are rejected, and control-flow support is backed by verifier and execution tests.
 
@@ -160,12 +160,10 @@ Performance claims must be based on reproducible measurements. Track compilation
 
 ## 7. Immediate implementation order
 
-1. Continue **Phase 0.5b (remaining)** once stderr-based diagnosis is available of the classes, collections, and generators regressions. Keep changes limited to the affected Interpreter/VM paths and tests.
-2. Continue and validate **Phase 5.2b** return-value plumbing through `Call`, including end-to-end regression tests.
-3. Start **Phase 6.1** control-flow lowering and execution after the current Working items are resolved.
-4. Keep Phase 6.2 and Phases 7–10 planned until implementation and acceptance tests are complete.
-5. Continue the **2A–2C** `.vye` writer, reader, run verb, dispatch, and cache work, which remain Working.
-6. Keep Phases 11–14 planned until their implementation and validation are delivered.
+1. Continue **Phase 0.5b (remaining)** for type-checker and VM crash failures when explicitly authorized.
+2. Start **Phase 6.2** branch-target verification and unreachable-code diagnostics.
+3. Keep Phases 7–10 planned until implementation and acceptance tests are complete.
+4. Keep Phases 11–14 planned until their implementation and validation are delivered.
 
 ---
 
