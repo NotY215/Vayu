@@ -77,6 +77,8 @@ namespace vib {
     // a case in the verifier's arity check.
     enum class VirBuiltin {
         Print,          // variadic
+        Input,          // input([prompt]) -> str
+        ReadInt,        // read_int() -> int
         ToStr,          // str(x)       1 arg
         ToInt,          // int(x)       1 arg
         ToFloat,        // float(x)     1 arg

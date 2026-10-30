@@ -41,6 +41,8 @@ namespace vib {
         const char* builtinName(VirBuiltin b) {
             switch (b) {
             case VirBuiltin::Print:         return "Print";
+            case VirBuiltin::Input:         return "Input";
+            case VirBuiltin::ReadInt:       return "ReadInt";
             case VirBuiltin::ToStr:         return "ToStr";
             case VirBuiltin::ToInt:         return "ToInt";
             case VirBuiltin::ToFloat:       return "ToFloat";
@@ -561,67 +563,87 @@ namespace vib {
                 return 0;
             }
 
-            // Phase 6.1: for x in range(N)  — only the range(N) form.
+            // Phase 6.1/7: for x in range(N)  or  for x in <list>
             if (s->kind == SK::For) {
                 const auto* fs = static_cast<const vayu::ForStmt*>(s);
-                // Require: iterable is Call range(single_arg)
-                if (!fs->iterable || fs->iterable->kind != vayu::ExprKind::Call) {
-                    result.plannedPhase = 6;
-                    result.failedFeatureName = "ControlFlow";
-                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
-                    return 6;
+                bool isRange = false;
+                int limitReg = -1;
+                int listReg = -1;
+                if (fs->iterable && fs->iterable->kind == vayu::ExprKind::Call) {
+                    const auto* call = static_cast<const vayu::CallExpr*>(fs->iterable.get());
+                    if (call->callee && call->callee->kind == vayu::ExprKind::NameRef) {
+                        const auto* calleen =
+                            static_cast<const vayu::NameRefExpr*>(call->callee.get());
+                        if (calleen->name == "range" && call->args.size() == 1) {
+                            isRange = true;
+                            limitReg = lowerExpr(call->args[0].value.get());
+                            if (limitReg < 0) return result.plannedPhase;
+                        }
+                    }
                 }
-                const auto* call = static_cast<const vayu::CallExpr*>(fs->iterable.get());
-                if (!call->callee || call->callee->kind != vayu::ExprKind::NameRef) {
-                    result.plannedPhase = 6;
-                    result.failedFeatureName = "ControlFlow";
-                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
-                    return 6;
-                }
-                const auto* calleen = static_cast<const vayu::NameRefExpr*>(call->callee.get());
-                if (calleen->name != "range" || call->args.size() != 1) {
-                    result.plannedPhase = 6;
-                    result.failedFeatureName = "ControlFlow";
-                    result.message = "for: only 'for x in range(N)' is supported in Phase 6.1";
-                    return 6;
+                if (!isRange) {
+                    if (!fs->iterable) {
+                        result.plannedPhase = 6;
+                        result.failedFeatureName = "ControlFlow";
+                        result.message = "for: missing iterable (planned Phase 6)";
+                        return 6;
+                    }
+                    listReg = lowerExpr(fs->iterable.get());
+                    if (listReg < 0) return result.plannedPhase;
+                    limitReg = allocReg();
+                    {
+                        VirInstruction lenI;
+                        lenI.opcode = VirOpcode::ListLen;
+                        lenI.destReg = limitReg;
+                        lenI.operandReg = listReg;
+                        lenI.sourceLoc = fs->loc;
+                        entry.instructions.push_back(lenI);
+                        bumpLocalTo(limitReg);
+                    }
                 }
 
-                int limitReg = lowerExpr(call->args[0].value.get());
-                if (limitReg < 0) return result.plannedPhase;
-
-                // i = 0
+                // idx = 0  (always use a dedicated index local)
                 int zeroIdx = addIntConst(0);
                 int zeroReg = emitConst(zeroIdx, fs->loc);
-                int localIdx;
-                auto it = localsByName.find(fs->targetName);
-                if (it == localsByName.end()) {
-                    localIdx = nextLocal++;
-                    localsByName[fs->targetName] = localIdx;
-                    if (localIdx >= nextReg) nextReg = localIdx + 1;
-                } else {
-                    localIdx = it->second;
-                }
+                int idxLocal = nextLocal++;
+                if (idxLocal >= nextReg) nextReg = idxLocal + 1;
                 {
                     VirInstruction store;
                     store.opcode = VirOpcode::StoreLocal;
                     store.operandReg = zeroReg;
-                    store.localIndex = localIdx;
+                    store.localIndex = idxLocal;
                     store.sourceLoc = fs->loc;
                     entry.instructions.push_back(store);
                 }
-                varTypes[fs->targetName] = VirTypeKind::Int;
+
+                // loop variable slot for targetName
+                int targetLocal;
+                {
+                    auto it = localsByName.find(fs->targetName);
+                    if (it == localsByName.end()) {
+                        targetLocal = nextLocal++;
+                        localsByName[fs->targetName] = targetLocal;
+                        if (targetLocal >= nextReg) nextReg = targetLocal + 1;
+                    } else {
+                        targetLocal = it->second;
+                    }
+                }
+                if (isRange)
+                    varTypes[fs->targetName] = VirTypeKind::Int;
+                else
+                    varTypes[fs->targetName] = VirTypeKind::Any;
 
                 int header = (int)entry.instructions.size();
                 loopStack.push_back(LoopFrame{});
                 loopStack.back().continueTarget = header;
 
-                // cond: i < limit
+                // cond: idx < limit
                 int iLoad = allocReg();
                 {
                     VirInstruction ld;
                     ld.opcode = VirOpcode::LoadLocal;
                     ld.destReg = iLoad;
-                    ld.localIndex = localIdx;
+                    ld.localIndex = idxLocal;
                     ld.sourceLoc = fs->loc;
                     entry.instructions.push_back(ld);
                     bumpLocalTo(iLoad);
@@ -645,9 +667,52 @@ namespace vib {
                 int jfalseIdx = (int)entry.instructions.size();
                 entry.instructions.push_back(jfalse);
 
+                // bind loop variable
+                if (isRange) {
+                    // target = idx
+                    int i2 = allocReg();
+                    VirInstruction ld;
+                    ld.opcode = VirOpcode::LoadLocal;
+                    ld.destReg = i2;
+                    ld.localIndex = idxLocal;
+                    ld.sourceLoc = fs->loc;
+                    entry.instructions.push_back(ld);
+                    bumpLocalTo(i2);
+                    VirInstruction st;
+                    st.opcode = VirOpcode::StoreLocal;
+                    st.operandReg = i2;
+                    st.localIndex = targetLocal;
+                    st.sourceLoc = fs->loc;
+                    entry.instructions.push_back(st);
+                } else {
+                    // target = list[idx]
+                    int i2 = allocReg();
+                    VirInstruction ld;
+                    ld.opcode = VirOpcode::LoadLocal;
+                    ld.destReg = i2;
+                    ld.localIndex = idxLocal;
+                    ld.sourceLoc = fs->loc;
+                    entry.instructions.push_back(ld);
+                    bumpLocalTo(i2);
+                    int elem = allocReg();
+                    VirInstruction get;
+                    get.opcode = VirOpcode::ListGet;
+                    get.destReg = elem;
+                    get.lhsReg = listReg;
+                    get.rhsReg = i2;
+                    get.sourceLoc = fs->loc;
+                    entry.instructions.push_back(get);
+                    bumpLocalTo(elem);
+                    VirInstruction st;
+                    st.opcode = VirOpcode::StoreLocal;
+                    st.operandReg = elem;
+                    st.localIndex = targetLocal;
+                    st.sourceLoc = fs->loc;
+                    entry.instructions.push_back(st);
+                }
+
                 if (!lowerBlock(fs->body)) { loopStack.pop_back(); return result.plannedPhase; }
 
-                // i = i + 1  (continue target = here for for-loops)
                 int contPc = (int)entry.instructions.size();
                 loopStack.back().continueTarget = contPc;
                 {
@@ -657,7 +722,7 @@ namespace vib {
                     VirInstruction ld;
                     ld.opcode = VirOpcode::LoadLocal;
                     ld.destReg = i2;
-                    ld.localIndex = localIdx;
+                    ld.localIndex = idxLocal;
                     ld.sourceLoc = fs->loc;
                     entry.instructions.push_back(ld);
                     bumpLocalTo(i2);
@@ -673,7 +738,7 @@ namespace vib {
                     VirInstruction st;
                     st.opcode = VirOpcode::StoreLocal;
                     st.operandReg = sum;
-                    st.localIndex = localIdx;
+                    st.localIndex = idxLocal;
                     st.sourceLoc = fs->loc;
                     entry.instructions.push_back(st);
                 }
@@ -1110,7 +1175,11 @@ namespace vib {
 
             VirBuiltin builtinOp = VirBuiltin::Print;
             bool isBuiltin = true;
-            if (name == "print") builtinOp = VirBuiltin::Print;
+            if (name == "input") {
+                    builtinOp = VirBuiltin::Input;
+                } else if (name == "read_int") {
+                    builtinOp = VirBuiltin::ReadInt;
+                } else if (name == "print") builtinOp = VirBuiltin::Print;
             else if (name == "str")   builtinOp = VirBuiltin::ToStr;
             else if (name == "int")   builtinOp = VirBuiltin::ToInt;
             else if (name == "float") builtinOp = VirBuiltin::ToFloat;
@@ -1442,6 +1511,8 @@ namespace vib {
                         bool arityOK = true;
                         switch (instr.builtin) {
                         case VirBuiltin::Print:         arityOK = true; break;
+                        case VirBuiltin::Input:         arityOK = (n <= 1); break;
+                        case VirBuiltin::ReadInt:       arityOK = (n == 0); break;
                         case VirBuiltin::ToStr:
                         case VirBuiltin::ToInt:
                         case VirBuiltin::ToFloat:

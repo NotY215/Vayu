@@ -124,6 +124,7 @@ struct RunCtx {
 
 static unsigned __stdcall RunThread(void* p) {
     std::unique_ptr<RunCtx> ctx(static_cast<RunCtx*>(p));
+    (void)ctx->hwnd;
     SECURITY_ATTRIBUTES sa{ sizeof(sa), nullptr, TRUE };
     HANDLE rd = nullptr, wr = nullptr;
     if (!CreatePipe(&rd, &wr, &sa, 0)) {
@@ -221,6 +222,98 @@ static void Layout(HWND hwnd, int w, int h) {
     MoveWindow(gStatus, 0, h - statusH, w, statusH, TRUE);
 }
 
+
+static HWND gCompl;
+
+static const wchar_t* kKeywords[] = {
+    L"def", L"return", L"if", L"elif", L"else", L"while", L"for", L"in",
+    L"break", L"continue", L"pass", L"class", L"import", L"from", L"as",
+    L"try", L"except", L"finally", L"raise", L"true", L"false", L"None",
+    L"print", L"input", L"read_int", L"len", L"str", L"int", L"float", L"bool",
+    L"and", L"or", L"not", L"self", L"static", L"super", nullptr
+};
+
+static std::wstring WordBeforeCaret() {
+    int start = 0, end = 0;
+    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+    std::wstring all = GetEditText(gEdit);
+    if (start > (int)all.size()) start = (int)all.size();
+    int i = start;
+    while (i > 0) {
+        wchar_t c = all[i - 1];
+        if (!((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
+              (c >= L'0' && c <= L'9') || c == L'_'))
+            break;
+        --i;
+    }
+    return all.substr(i, start - i);
+}
+
+static void ShowIntelliSense(HWND hwnd) {
+    std::wstring prefix = WordBeforeCaret();
+    // Collect completions: keywords + identifiers in buffer
+    std::vector<std::wstring> items;
+    for (int k = 0; kKeywords[k]; ++k) {
+        if (prefix.empty() || wcsncmp(kKeywords[k], prefix.c_str(), prefix.size()) == 0)
+            items.push_back(kKeywords[k]);
+    }
+    std::wstring body = GetEditText(gEdit);
+    std::wstring cur;
+    for (size_t i = 0; i <= body.size(); ++i) {
+        wchar_t c = (i < body.size()) ? body[i] : L' ';
+        if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
+            (c >= L'0' && c <= L'9') || c == L'_') {
+            cur.push_back(c);
+        } else {
+            if (cur.size() >= 2) {
+                if (prefix.empty() || cur.compare(0, prefix.size(), prefix) == 0) {
+                    bool seen = false;
+                    for (auto& x : items) if (x == cur) { seen = true; break; }
+                    if (!seen) items.push_back(cur);
+                }
+            }
+            cur.clear();
+        }
+    }
+    if (items.empty()) { SetStatus(L"IntelliSense: no matches"); return; }
+
+    if (!gCompl) {
+        gCompl = CreateWindowExW(WS_EX_TOPMOST, L"LISTBOX", L"",
+            WS_POPUP | WS_BORDER | WS_VSCROLL | LBS_NOTIFY,
+            0, 0, 240, 180, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+        SendMessageW(gCompl, WM_SETFONT, (WPARAM)gFont, TRUE);
+    }
+    SendMessageW(gCompl, LB_RESETCONTENT, 0, 0);
+    for (auto& it : items)
+        SendMessageW(gCompl, LB_ADDSTRING, 0, (LPARAM)it.c_str());
+    SendMessageW(gCompl, LB_SETCURSEL, 0, 0);
+
+    // Position near caret roughly at bottom of edit
+    RECT rc; GetWindowRect(gEdit, &rc);
+    SetWindowPos(gCompl, HWND_TOP, rc.left + 40, rc.top + 80, 260, 200, SWP_SHOWWINDOW);
+    SetFocus(gCompl);
+    SetStatus(L"IntelliSense — Enter to insert, Esc to cancel");
+}
+
+static void AcceptCompletion() {
+    if (!gCompl || !IsWindowVisible(gCompl)) return;
+    int sel = (int)SendMessageW(gCompl, LB_GETCURSEL, 0, 0);
+    if (sel < 0) { ShowWindow(gCompl, SW_HIDE); return; }
+    wchar_t buf[256];
+    SendMessageW(gCompl, LB_GETTEXT, sel, (LPARAM)buf);
+    std::wstring prefix = WordBeforeCaret();
+    // Delete prefix then insert
+    int start = 0, end = 0;
+    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+    int p0 = start - (int)prefix.size();
+    if (p0 < 0) p0 = 0;
+    SendMessageW(gEdit, EM_SETSEL, p0, start);
+    SendMessageW(gEdit, EM_REPLACESEL, TRUE, (LPARAM)buf);
+    ShowWindow(gCompl, SW_HIDE);
+    SetFocus(gEdit);
+    SetStatus(L"Ready");
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
@@ -292,6 +385,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_COMMAND: {
+        if (HIWORD(wp) == LBN_DBLCLK && (HWND)lp == gCompl) {
+            AcceptCompletion();
+            return 0;
+        }
         switch (LOWORD(wp)) {
         case 1: OpenFile(hwnd); break;
         case 2: Save(hwnd); break;
@@ -301,6 +398,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case 6: SendMessageW(gEdit, EM_UNDO, 0, 0); break;
         case 7: PostMessageW(hwnd, WM_CLOSE, 0, 0); break;
         case 8: ClearOut(); break;
+        case 9: ShowIntelliSense(hwnd); break;
         }
         if (HIWORD(wp) == EN_CHANGE && (HWND)lp == gEdit) gDirty = true;
         return 0;
@@ -340,6 +438,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
     AppendMenuW(file, MF_STRING, 7, L"E&xit");
     HMENU edit = CreatePopupMenu();
     AppendMenuW(edit, MF_STRING, 6, L"&Undo\tCtrl+Z");
+    AppendMenuW(edit, MF_STRING, 9, L"&IntelliSense\tCtrl+Space");
     HMENU run = CreatePopupMenu();
     AppendMenuW(run, MF_STRING, 4, L"&Run\tF5");
     AppendMenuW(run, MF_STRING, 5, L"&Compile to .vye\tF7");
@@ -359,8 +458,9 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
         { FVIRTKEY | FCONTROL, 'Z', 6 },
         { FVIRTKEY, VK_F5, 4 },
         { FVIRTKEY, VK_F7, 5 },
+        { FVIRTKEY | FCONTROL, VK_SPACE, 9 },
     };
-    HACCEL hAcc = CreateAcceleratorTableW(acc, 5);
+    HACCEL hAcc = CreateAcceleratorTableW(acc, 6);
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         if (!TranslateAcceleratorW(hwnd, hAcc, &msg)) {

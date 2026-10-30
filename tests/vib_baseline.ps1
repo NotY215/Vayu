@@ -114,14 +114,17 @@ foreach ($name in $fixtures) {
 Write-Host ""
 Write-Host "[2/7] Native-path flags" -ForegroundColor Cyan
 
-$probe   = "examples\generics.vyu"
+# Probe that must still reject on Integrator (classes = Phase 10).
+$rejectProbe = [System.IO.Path]::GetTempPath() + "vayu_reject_phase10.vyu"
+[System.IO.File]::WriteAllText($rejectProbe, "class C:`n    x: int`n    def __init__(self) -> None:`n        self.x = 1`nprint(C().x)`n", (New-Object System.Text.UTF8Encoding($false)))
+$probe   = $rejectProbe
 $tmpExe  = [System.IO.Path]::GetTempFileName() + ".exe"
 
 $mustFail = @(
     @{ label = "--native";       args = @($probe, "--native");
-       expect = "planned Phase|NativeCodegen" },
+       expect = "planned Phase|NativeCodegen|Classes|Phase 10" },
     @{ label = "--native-out";   args = @($probe, "--native-out", $tmpExe);
-       expect = "planned Phase|NativeCodegen" },
+       expect = "planned Phase|NativeCodegen|Classes|Phase 10" },
     @{ label = "--emit-runtime"; args = @("--emit-runtime", $tmpExe);
        expect = "RuntimeEmission" }
 )
@@ -279,7 +282,7 @@ if ($status.rc -ne 0) {
         "Functions\s+Supported\s+Deferred\s+5\b",
         "ControlFlow\s+Supported\s+Deferred\s+6\b",
         "Collections\s+Supported\s+Deferred\s+7\b",
-        "Modules\s+NotSupported\s+Deferred\s+8\b",
+        "Modules\s+Supported\s+Deferred\s+8\b",
         "Exceptions\s+NotSupported\s+Deferred\s+10\b",
         "Classes\s+NotSupported\s+Deferred\s+10\b",
         "Generics\s+NotSupported\s+Deferred\s+10\b",

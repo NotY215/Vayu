@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <iostream>
 #include <sstream>
 
 namespace vib {
@@ -685,7 +686,27 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                         r.kind = VirValueKind::None;
                         break;
                     }
-                    case VirBuiltin::ToStr: {
+                    
+                    case VirBuiltin::Input: {
+                        if (!callArgs.empty() && callArgs[0].kind == VirValueKind::Str)
+                            std::fputs(callArgs[0].s.c_str(), stdout);
+                        std::string line;
+                        if (!std::getline(std::cin, line)) line.clear();
+                        // strip \r
+                        if (!line.empty() && line.back() == '\r') line.pop_back();
+                        r.kind = VirValueKind::Str;
+                        r.s = std::move(line);
+                        break;
+                    }
+                    case VirBuiltin::ReadInt: {
+                        std::string line;
+                        if (!std::getline(std::cin, line)) line.clear();
+                        r.kind = VirValueKind::Int;
+                        try { r.i = std::stoll(line); }
+                        catch (...) { r.i = 0; }
+                        break;
+                    }
+case VirBuiltin::ToStr: {
                         r.kind = VirValueKind::Str;
                         r.s = rtToString(callArgs[0]);
                         break;
