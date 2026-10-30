@@ -531,7 +531,7 @@ The goal is to make Vayu useful for small programs, applications, games, AI syst
 
 # 📊 Current Status
 
-Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The compiler/runtime is transitioning to **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository. The first priority is a small, verified subset and the planned `.vye` Vayu Executable package, which requires a compatible Vayu/Integrator runtime.
+Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The compiler/runtime uses **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository. The current Integrator subset is being expanded through VIR, verification, execution, and the `.vye` Vayu Executable package track. A `.vye` package requires a compatible Vayu/Integrator runtime.
 
 The Integrator foundation through Phase 4.2 is completed, with string methods and the Phase 5.1 function subset also completed. Phase 5.2b return-value plumbing remains Working. The `.vye` design is completed, while package writing, reading, execution, dispatch adoption, and caching remain Working. Native machine-code generation is still Planned. Use the currently supported interpreter/VM paths where the relevant tests pass.
 
