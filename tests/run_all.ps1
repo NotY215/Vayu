@@ -56,7 +56,23 @@ $native_only = @(
     "cuda_matmul.vyu",
     "dml_matmul.vyu",
     "nva_registry_test.vyu",
-    "nva_git_test.vyu"
+    "nva_git_test.vyu",
+
+    # Native compiler/backend examples remain excluded from interpreter + VM
+    # comparison until their corresponding VIB/native routes are implemented.
+    "native_arith.vyu",
+    "native_backend_collections.vyu",
+    "native_backend_floats.vyu",
+    "native_backend_strings.vyu",
+    "native_classes.vyu",
+    "native_fib.vyu",
+    "native_floats.vyu",
+    "native_flow.vyu",
+    "native_inherit.vyu",
+    "native_inspect.vyu",
+    "native_math.vyu",
+    "native_reflect.vyu",
+    "native_strings.vyu"
 )
 
 $sort_compare = @( "generators.vyu" )
