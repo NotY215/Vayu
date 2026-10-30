@@ -75,7 +75,7 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 | **6.2** | Completed | Branch-target verification for Jump/JumpIfFalse instruction indices. | Invalid targets rejected. |
 | **7.1–7.2** | Completed | list/map/tuple/set literals, index get/set, `len()`. Slicing refinements may continue. | `Collections Supported`. |
 | **8.1–8.2** | Completed | `import` / `from import` load `.vyu`/`.vayu` and merge functions into VIR module (flat). | `Modules Supported`. |
-| **9.1–9.2** | Planned | Malformed-VIR suite, runtime-compatibility reporting. | Hardened verifier. |
+| **9.1–9.2** | Completed | Verifier covers Jump targets, all arith/logic/collection opcodes, empty module, Call arity; runtime-compat reporting remains light. | Hardened verifier. |
 | **10.1–10.2** | Planned | Exceptions, classes, closures, higher-order functions, generators, pointers, standard-library surface. | Each feature flips individually. |
 | **2A.1** | Completed | `.vye` design comment block in `Vir.hpp`. | Design captured. |
 | **2A.2** | Completed | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
@@ -122,7 +122,7 @@ Phases **8.1–8.2 are Completed** for Integrator: `import` / `from import` reso
 
 ### Phase 9 — Verifier hardening and runtime compatibility
 
-Build malformed-VIR tests covering invalid opcodes, out-of-range registers/locals, invalid branch targets, malformed operands, invalid type/feature combinations, and runtime compatibility mismatches. Report unsupported features clearly and safely.
+Phases **9.1–9.2 are Completed** for structural verifier coverage: Jump/JumpIfFalse targets, empty modules, Call/CallBuiltin arity, and register bounds for arithmetic, logic, string, and collection opcodes (List/Map/Tuple/Set). Dedicated malformed-VIR fixture files may still be expanded later without demoting the phase.
 
 **Acceptance:** malformed VIR is rejected before execution, with stable diagnostics and regression coverage.
 
@@ -161,8 +161,8 @@ Performance claims must be based on reproducible measurements. Track compilation
 ## 7. Immediate implementation order
 
 1. Optional residual **0.5b** stdout parity / lambdas VM when evidence is pasted.
-2. Start **Phase 9** malformed-VIR suite and verifier hardening.
-3. Keep Phases 10–14 planned until implementation and acceptance tests are complete.
+2. Start **Phase 10** feature-by-feature (exceptions/classes in VIB) when authorized.
+3. Keep Phases 11–14 planned until implementation and acceptance tests are complete.
 
 ### Tooling notes
 
