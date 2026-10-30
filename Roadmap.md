@@ -65,46 +65,43 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 
 | **Phase** | **Status** | **Goals** | **Output** |
 | :--- | :--- | :--- | :--- |
-| **0.1–0.4** | Complete | Baseline, feature matrix, curated fixtures. | Capability API + fixture list. |
-| **1.1–1.4** | Complete | Integrator API expansion, adapter thinning, `--vib-status`, harness. | All delivered. |
-| **2.1–2.6** | Complete | VIR structures, printer, verifier (structural), minimal lowering, integration. | `VIR Supported`, `Verifier Supported`. |
-| **0.5** | **Recommended (needs authorization)** | **Fix pre-existing baseline failures:** `classes.vyu`, `collections.vyu` (interpreter), `exceptions.vyu`, `generators.vyu` (VM crash `0xC0000409`). Requires changes under `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes. |
-| **3.1** | Complete | Arithmetic semantics contract in code. | `Vir.hpp` comment block. |
-| **3.2** | Complete | VIR extended: `Add/Sub/Mul/Div/Mod/Neg/Cmp*/StoreLocal/LoadLocal`. | Extended opcode set. |
-| **3.3** | Complete | Lowering: literals, arithmetic, unary, comparisons, simple `name = expr`. | Lowering context in `Vir.cpp`. |
-| **3.4** | Complete | Verifier extended for new opcodes. | `regOK` + per-opcode range checks. |
-| **3.5** | Complete | `printInstruction` extended. | Every opcode human-readable. |
-| **3.6** | Complete | In-memory VIR interpreter. | `VIB/VirInterp.{hpp,cpp}`. |
-| **3.7** | Complete | `Integrator::compile` = lower → verify → execute in-memory. | `--native` = Integrator-mediated execution. |
-| **3.8** | Complete | `VirInterp.cpp` in `compiler/CMakeLists.txt`. | Build includes new file. |
-| **3.9** | Complete | `vib_baseline.ps1` extended for Phase 3. | New assertions. |
-| **4.1** | Next | UTF-8 policy, string semantics, index bounds. | `Feature::Strings = Supported` (pending). |
-| **4.2** | Next | Lowering for string constants and operations. | String fixtures green. |
-| **5.1** | Next | Functions, parameters, returns, scopes, calls, arity checks. | `Feature::Functions = Supported`; `--native` handles `print(...)` and user functions. |
-| **5.2** | Planned | Recursion (stack-frame safety). | Recursion fixtures green. |
-| **6.1–6.2** | Planned | Branches, loops, return/break/continue, verifier extension. | `ControlFlow = Supported`. |
-| **7.1–7.2** | Planned | Collections (list → map/tuple/set). | `Collections = Supported`. |
-| **8.1–8.2** | Planned | Modules and multi-file. | `Modules = Supported`. |
-| **9.1–9.2** | Planned | Malformed-VIR suite + runtime-compat reporting. | Hardened verifier. |
-| **10.1–10.2** | Planned | Exceptions, classes, closures, generators, pointers, standard library. | Each feature flips individually. |
-| **2A–2C** | Deferred | `.vye` design → writer → reader/runtime; dispatch adoption; cache. | Deferred per project decision. |
-| **11–14** | Planned | Measurement, native codegen, ONNX, release/self-host. | Unchanged from prior roadmap. |
+| **0.1–4.2** | Complete | Baseline, capability API, VIR structures + printer + verifier, arithmetic lowering + interpreter, `--native` integration, string literals + concatenation + comparisons. | Delivered. |
+| **0.5a** | Complete | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
+| **0.5b (partial)** | Complete (this pass) | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
+| **0.5b (remaining)** | **Working — needs stderr** | Fix `classes.vyu` (`--run`), `collections.vyu` (`--run`), and `generators.vyu` (`--vm`, crash `0xC0000409`). Requires touching `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes fully. |
+| **4.3** | Complete (this pass) | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
+| **5.1** | Complete (this pass) | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
+| **5.2b** | **Working** | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
+| **6.1** | Planned | Conditional branches (`If`/`Elif`/`Else`), `while`/`for` loops, `return`/`break`/`continue`. | `ControlFlow Supported`. |
+| **6.2** | Planned | Branch-target verification, unreachable-code diagnostics. | Invalid-branch tests reject. |
+| **7.1–7.2** | Planned | Collections: `list` → `map`/`tuple`/`set`, indexing, slicing, ownership. | `Collections Supported`. |
+| **8.1–8.2** | Planned | Modules and multi-file programs. | `Modules Supported`. |
+| **9.1–9.2** | Planned | Malformed-VIR suite, runtime-compatibility reporting. | Hardened verifier. |
+| **10.1–10.2** | Planned | Exceptions, classes, closures, higher-order functions, generators, pointers, standard-library surface. | Each feature flips individually. |
+| **2A.1** | Complete (this pass) | `.vye` design comment block in `Vir.hpp`. | Design captured. |
+| **2A.2** | **Working** | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
+| **2B.1** | **Working** | Strict `.vye` reader + verifier. | Reader passes malformed-package tests. |
+| **2B.2** | **Working** | `vayu run <file>.vye` execution verb. | Round-trip + execution tests. |
+| **2C.1** | **Working** | Dispatch adoption for Interpreter backend. | `run_all.ps1` green; dispatch unified. |
+| **2C.2** | **Working** | Dispatch adoption for VM backend. | `run_all.ps1` green. |
+| **2C.3** | **Working** | Content-addressed, atomic, recoverable artifact cache + incremental graph. | Cache + incremental equivalence. |
+| **11–14** | Planned | Measurement, native codegen, ONNX, release/self-host. | Unchanged. |
 
-### Phase 0.5 authorization boundary
+### Phase 0.5 — Baseline repair
 
-Phase 0.5 is not part of the currently authorized VIR implementation sequence. It addresses failures that predate the Integrator work and may require edits to `compiler/interp/**` and/or `compiler/vm/**`. Keep it marked **Recommended (needs authorization)** until explicit approval is given. Do not modify those subsystems as an assumed part of Phases 4 onward.
+Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is complete. The exceptions VM catch fix and diagnostic script are complete under 0.5b. The remaining classes, collections, and generators failures are still **Working** and require stderr-based diagnosis. Changes may touch `compiler/interp/**` and/or `compiler/vm/**`; keep the work scoped to the listed failures and preserve regression coverage.
 
 ### Phase 4 — Strings
 
-Define string behaviour before implementing it: UTF-8 validity and encoding policy, representation, equality, concatenation, length, indexing, bounds behaviour, and error semantics. Add string constants and operations to VIR lowering, verification, printing, and interpretation. Keep behaviour consistent across all Integrator execution paths.
+Phases 4.1–4.2 are complete: the baseline string contract, literals, concatenation, and comparisons are implemented. Phase 4.3 is also complete: type-tracked string method calls cover `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, and `to_int`. These methods dispatch through `CallBuiltin`.
 
-**Acceptance:** string fixtures cover empty strings, ASCII, multibyte UTF-8, concatenation, equality, length, valid indexing, out-of-range indexing, and invalid operations. Only then mark `Feature::Strings` supported.
+**Acceptance:** preserve tests for string literals, comparisons, method dispatch, empty strings, ASCII and multibyte text, and invalid operations.
 
 ### Phase 5 — Functions and calls
 
-Implement function declarations, parameters, return values, local scopes, direct calls, and argument-count/type validation. The first subphase is 5.1. Recursion is deliberately separated into 5.2 because it requires safe call-frame and stack handling.
+Phase 5.1 is complete for function declarations/calls, arity checks, recursion, `print`, the `str`/`int`/`float`/`bool` conversions, and `len(str)`. Phase 5.2b is working: `executeFunction` returns an `RtValue`, and the `Call` instruction pushes that result into `destReg`. Keep return-value plumbing marked Working until its complete regression suite passes.
 
-**Acceptance:** nested calls, parameter passing, return values, scope isolation, wrong-arity rejection, and call-stack safety have dedicated tests. Recursion remains unsupported until Phase 5.2 passes.
+**Acceptance:** preserve tests for nested calls, parameter passing, recursion, return values, scope isolation, wrong-arity rejection, and call-stack safety.
 
 ### Phase 6 — Control flow
 
@@ -164,13 +161,20 @@ Performance claims must be based on reproducible measurements. Track compilation
 
 ## 7. Immediate implementation order
 
-1. Continue with **Phase 4.1**: define and document the UTF-8/string/indexing contract.
-2. Complete **Phase 4.2**: implement string constants and operations through lowering, verification, printing, and VIR interpretation.
-3. Proceed to **Phase 5.1**: functions, parameters, returns, scopes, calls, and arity validation.
-4. Keep **Phase 0.5** untouched unless separately authorized.
-5. Keep **Phase 2A–2C** deferred.
-6. Preserve the planned status of Phases 5.2–14 until their implementation work is actually undertaken and validated.
+1. Continue **Phase 0.5b (remaining)** with stderr-based diagnosis of the classes, collections, and generators regressions. Keep changes limited to the affected Interpreter/VM paths and tests.
+2. Finish and validate **Phase 5.2b** return-value plumbing through `Call`, including end-to-end regression tests.
+3. After those active items, proceed to **Phase 6.1** control-flow lowering and execution.
+4. Keep Phase 6.2 and Phases 7–10 planned until implementation and acceptance tests are complete.
+5. Continue the **2A–2C** `.vye` writer, reader, run verb, dispatch, and cache work according to their individual Working statuses.
+6. Keep Phases 11–14 planned until their implementation and validation are delivered.
 
 ---
 
 **Roadmap rule:** VIB support is established by implementation, verifier behaviour, and tests. Never infer Integrator capability from the broader historical feature set of the Vayu interpreter or VM.
+
+
+## 8. Repository licensing
+
+Vayu uses the **Vayu Proprietary License (All Rights Reserved)** in the repository's `LICENSE` file. It does not grant a general license to copy, modify, redistribute, or incorporate Vayu code into other projects. Separate written permission from the rights holder(s) is required, except for rights that apply under mandatory law or GitHub's platform terms.
+
+A public GitHub repository is still publicly viewable, and GitHub's Terms of Service may permit platform-level viewing and forking. A proprietary license cannot technically prevent copying or make enforcement automatic. If the goal is to keep the source inaccessible to the public, the repository must also be made private. Third-party files may remain subject to their own licenses.
