@@ -67,7 +67,7 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 | **0.1–4.2** | Completed | Baseline, capability API, VIR structures + printer + verifier, arithmetic lowering + interpreter, `--native` integration, string literals + concatenation + comparisons. | Delivered. |
 | **0.5a** | Completed | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
 | **0.5b (partial)** | Completed | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
-| **0.5b (remaining)** | **Working — needs stderr** | Fix `classes.vyu` (`--run`), `collections.vyu` (`--run`), and `generators.vyu` (`--vm`, crash `0xC0000409`). Requires touching `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes fully. |
+| **0.5b (remaining)** | Working | Fix `classes.vyu` (`--run`), `collections.vyu` (`--run`), and `generators.vyu` (`--vm`, crash `0xC0000409`). Requires touching `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes fully. |
 | **4.3** | Completed | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
 | **5.1** | Completed | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
 | **5.2b** | **Working** | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
