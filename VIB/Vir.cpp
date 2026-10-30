@@ -606,6 +606,10 @@ namespace vib {
                     }
                 }
 
+                // Temps (listReg, limitReg, …) occupy the shared locals[] slots.
+                // Bump nextLocal past them so idx/target locals never clobber the list.
+                if (nextLocal < nextReg) nextLocal = nextReg;
+
                 // idx = 0  (always use a dedicated index local)
                 int zeroIdx = addIntConst(0);
                 int zeroReg = emitConst(zeroIdx, fs->loc);
