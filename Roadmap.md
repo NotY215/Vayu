@@ -55,22 +55,21 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 
 | Status | Meaning |
 | --- | --- |
-| **Complete** | Implementation and the required tests/acceptance evidence are delivered. |
-| **Next** | The next authorized implementation target. |
-| **Recommended (needs authorization)** | A recommended task that changes a protected or separately owned subsystem; do not begin until explicitly authorized. |
-| **Planned** | Accepted future work that is not yet the next active task. |
-| **Deferred** | Intentionally postponed by project decision. |
+| **Completed** | Implementation and the required tests/acceptance evidence are delivered. |
+| **Working** | Actively being implemented or investigated. A blocked dependency remains Working when work is still active. |
+| **Planned** | Accepted future work that has not started. |
+| **Vacation** | Temporarily paused by project decision. |
 
 ## 4. Phase roadmap
 
 | **Phase** | **Status** | **Goals** | **Output** |
 | :--- | :--- | :--- | :--- |
-| **0.1–4.2** | Complete | Baseline, capability API, VIR structures + printer + verifier, arithmetic lowering + interpreter, `--native` integration, string literals + concatenation + comparisons. | Delivered. |
-| **0.5a** | Complete | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
-| **0.5b (partial)** | Complete (this pass) | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
+| **0.1–4.2** | Completed | Baseline, capability API, VIR structures + printer + verifier, arithmetic lowering + interpreter, `--native` integration, string literals + concatenation + comparisons. | Delivered. |
+| **0.5a** | Completed | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
+| **0.5b (partial)** | Completed | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
 | **0.5b (remaining)** | **Working — needs stderr** | Fix `classes.vyu` (`--run`), `collections.vyu` (`--run`), and `generators.vyu` (`--vm`, crash `0xC0000409`). Requires touching `compiler/interp/**` and/or `compiler/vm/**`. | Baseline green; `run_all.ps1 -NoFixpoint` passes fully. |
-| **4.3** | Complete (this pass) | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
-| **5.1** | Complete (this pass) | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
+| **4.3** | Completed | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
+| **5.1** | Completed | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
 | **5.2b** | **Working** | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
 | **6.1** | Planned | Conditional branches (`If`/`Elif`/`Else`), `while`/`for` loops, `return`/`break`/`continue`. | `ControlFlow Supported`. |
 | **6.2** | Planned | Branch-target verification, unreachable-code diagnostics. | Invalid-branch tests reject. |
@@ -78,7 +77,7 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 | **8.1–8.2** | Planned | Modules and multi-file programs. | `Modules Supported`. |
 | **9.1–9.2** | Planned | Malformed-VIR suite, runtime-compatibility reporting. | Hardened verifier. |
 | **10.1–10.2** | Planned | Exceptions, classes, closures, higher-order functions, generators, pointers, standard-library surface. | Each feature flips individually. |
-| **2A.1** | Complete (this pass) | `.vye` design comment block in `Vir.hpp`. | Design captured. |
+| **2A.1** | Completed | `.vye` design comment block in `Vir.hpp`. | Design captured. |
 | **2A.2** | **Working** | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
 | **2B.1** | **Working** | Strict `.vye` reader + verifier. | Reader passes malformed-package tests. |
 | **2B.2** | **Working** | `vayu run <file>.vye` execution verb. | Round-trip + execution tests. |
@@ -89,17 +88,17 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 
 ### Phase 0.5 — Baseline repair
 
-Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is complete. The exceptions VM catch fix and diagnostic script are complete under 0.5b. The remaining classes, collections, and generators failures are still **Working** and require stderr-based diagnosis. Changes may touch `compiler/interp/**` and/or `compiler/vm/**`; keep the work scoped to the listed failures and preserve regression coverage.
+Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is **Completed**. The exceptions VM catch fix and diagnostic script are **Completed** under 0.5b. The remaining classes, collections, and generators failures are **Working** and blocked pending stderr-based diagnosis. Changes may touch `compiler/interp/**` and/or `compiler/vm/**`; keep the work scoped to the listed failures and preserve regression coverage.
 
 ### Phase 4 — Strings
 
-Phases 4.1–4.2 are complete: the baseline string contract, literals, concatenation, and comparisons are implemented. Phase 4.3 is also complete: type-tracked string method calls cover `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, and `to_int`. These methods dispatch through `CallBuiltin`.
+Phases 4.1–4.2 are **Completed**: the baseline string contract, literals, concatenation, and comparisons are implemented. Phase 4.3 is also **Completed**: type-tracked string method calls cover `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, and `to_int`. These methods dispatch through `CallBuiltin`.
 
 **Acceptance:** preserve tests for string literals, comparisons, method dispatch, empty strings, ASCII and multibyte text, and invalid operations.
 
 ### Phase 5 — Functions and calls
 
-Phase 5.1 is complete for function declarations/calls, arity checks, recursion, `print`, the `str`/`int`/`float`/`bool` conversions, and `len(str)`. Phase 5.2b is working: `executeFunction` returns an `RtValue`, and the `Call` instruction pushes that result into `destReg`. Keep return-value plumbing marked Working until its complete regression suite passes.
+Phase 5.1 is **Completed** for function declarations/calls, arity checks, recursion, `print`, the `str`/`int`/`float`/`bool` conversions, and `len(str)`. Phase 5.2b is **Working**: `executeFunction` returns an `RtValue`, and the `Call` instruction pushes that result into `destReg`. Keep return-value plumbing marked Working until its complete regression suite passes.
 
 **Acceptance:** preserve tests for nested calls, parameter passing, recursion, return values, scope isolation, wrong-arity rejection, and call-stack safety.
 
@@ -161,11 +160,11 @@ Performance claims must be based on reproducible measurements. Track compilation
 
 ## 7. Immediate implementation order
 
-1. Continue **Phase 0.5b (remaining)** with stderr-based diagnosis of the classes, collections, and generators regressions. Keep changes limited to the affected Interpreter/VM paths and tests.
-2. Finish and validate **Phase 5.2b** return-value plumbing through `Call`, including end-to-end regression tests.
-3. After those active items, proceed to **Phase 6.1** control-flow lowering and execution.
+1. Continue **Phase 0.5b (remaining)** once stderr-based diagnosis is available of the classes, collections, and generators regressions. Keep changes limited to the affected Interpreter/VM paths and tests.
+2. Continue and validate **Phase 5.2b** return-value plumbing through `Call`, including end-to-end regression tests.
+3. Start **Phase 6.1** control-flow lowering and execution after the current Working items are resolved.
 4. Keep Phase 6.2 and Phases 7–10 planned until implementation and acceptance tests are complete.
-5. Continue the **2A–2C** `.vye` writer, reader, run verb, dispatch, and cache work according to their individual Working statuses.
+5. Continue the **2A–2C** `.vye` writer, reader, run verb, dispatch, and cache work, which remain Working.
 6. Keep Phases 11–14 planned until their implementation and validation are delivered.
 
 ---
