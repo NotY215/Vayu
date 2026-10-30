@@ -85,6 +85,18 @@ namespace vib {
             case VirOpcode::LoadLocal:
                 return "r" + std::to_string(i.destReg) + " = local[" +
                     std::to_string(i.localIndex) + "]";
+            case VirOpcode::StrConcat:
+                return "r" + std::to_string(i.destReg) + " = StrConcat(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::StrEq:
+                return "r" + std::to_string(i.destReg) + " = StrEq(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::StrNe:
+                return "r" + std::to_string(i.destReg) + " = StrNe(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::StrCmpLt:
+                return "r" + std::to_string(i.destReg) + " = StrCmpLt(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
             }
             return "?";
         }
@@ -194,6 +206,15 @@ namespace vib {
                 return idx;
             }
 
+            int addStrConst(const std::string& value) {
+                VirValue v;
+                v.kind = VirValueKind::Str;
+                v.strValue = value;
+                int idx = (int)module.constants.size();
+                module.constants.push_back(v);
+                return idx;
+            }
+
             // Emits `dest = const [index]` and returns dest reg.
             int emitConst(int constIdx, vayu::SourceLocation loc) {
                 int dest = allocReg();
@@ -291,6 +312,10 @@ namespace vib {
                 const auto* n = static_cast<const vayu::IntLitExpr*>(e);
                 return emitConst(addIntConst(n->value), e->loc);
             }
+            case EK::StringLit: {
+                const auto* n = static_cast<const vayu::StringLitExpr*>(e);
+                return emitConst(addStrConst(n->value), e->loc);
+            }
             case EK::BoolLit: {
                 const auto* n = static_cast<const vayu::BoolLitExpr*>(e);
                 return emitConst(addBoolConst(n->value), e->loc);
@@ -346,19 +371,24 @@ namespace vib {
             }
             case EK::Binary: {
                 const auto* n = static_cast<const vayu::BinaryExpr*>(e);
+        // Non-string opcodes are chosen here; the string-typed ops
+        // (StrConcat / StrEq / StrCmpLt) get selected below after
+        // lowering operands, because we only know at that point whether
+        // either side is a string literal.
                 VirOpcode op;
+                bool needsStringOp = false;
                 switch (n->op) {
                 case vayu::BinOp::Add:    op = VirOpcode::Add;   break;
                 case vayu::BinOp::Sub:    op = VirOpcode::Sub;   break;
                 case vayu::BinOp::Mul:    op = VirOpcode::Mul;   break;
                 case vayu::BinOp::Div:    op = VirOpcode::Div;   break;
                 case vayu::BinOp::Mod:    op = VirOpcode::Mod;   break;
-                case vayu::BinOp::Eq:     op = VirOpcode::CmpEq; break;
-                case vayu::BinOp::NotEq:  op = VirOpcode::CmpNe; break;
-                case vayu::BinOp::Lt:     op = VirOpcode::CmpLt; break;
-                case vayu::BinOp::LtEq:   op = VirOpcode::CmpLe; break;
-                case vayu::BinOp::Gt:     op = VirOpcode::CmpGt; break;
-                case vayu::BinOp::GtEq:   op = VirOpcode::CmpGe; break;
+                case vayu::BinOp::Eq:     op = VirOpcode::CmpEq; needsStringOp = true; break;
+                case vayu::BinOp::NotEq:  op = VirOpcode::CmpNe; needsStringOp = true; break;
+                case vayu::BinOp::Lt:     op = VirOpcode::CmpLt; needsStringOp = true; break;
+                case vayu::BinOp::LtEq:   op = VirOpcode::CmpLe; needsStringOp = true; break;
+                case vayu::BinOp::Gt:     op = VirOpcode::CmpGt; needsStringOp = true; break;
+                case vayu::BinOp::GtEq:   op = VirOpcode::CmpGe; needsStringOp = true; break;
                 default:
                     result.plannedPhase = 3;
                     result.failedFeatureName = "BasicArithmetic";
@@ -371,6 +401,34 @@ namespace vib {
                 if (lhs < 0) return -1;
                 int rhs = lowerExpr(n->rhs.get());
                 if (rhs < 0) return -1;
+
+                // Phase 4.2: if either side is a string literal, route through
+                // string opcodes.
+                bool lhsIsStr = (n->lhs->kind == vayu::ExprKind::StringLit);
+                bool rhsIsStr = (n->rhs->kind == vayu::ExprKind::StringLit);
+                if (lhsIsStr || rhsIsStr) {
+                    if (n->op == vayu::BinOp::Add) {
+                        op = VirOpcode::StrConcat;
+                    }
+                    else if (n->op == vayu::BinOp::Eq) {
+                        op = VirOpcode::StrEq;
+                    }
+                    else if (n->op == vayu::BinOp::NotEq) {
+                        op = VirOpcode::StrNe;
+                    }
+                    else if (n->op == vayu::BinOp::Lt) {
+                        op = VirOpcode::StrCmpLt;
+                    }
+                    else if (needsStringOp) {
+                        result.plannedPhase = 4;
+                        result.failedFeatureName = "Strings";
+                        result.message = std::string("lowering for string operator '") +
+                            vayu::binOpName(n->op) +
+                            "' is not implemented yet (planned Phase 4)";
+                        return -1;
+                    }
+                }
+
                 int dest = allocReg();
                 VirInstruction i;
                 i.opcode = op;
@@ -503,7 +561,11 @@ namespace vib {
                         instr.opcode == VirOpcode::CmpLt ||
                         instr.opcode == VirOpcode::CmpLe ||
                         instr.opcode == VirOpcode::CmpGt ||
-                        instr.opcode == VirOpcode::CmpGe) {
+                        instr.opcode == VirOpcode::CmpGe ||
+                        instr.opcode == VirOpcode::StrConcat ||
+                        instr.opcode == VirOpcode::StrEq ||
+                        instr.opcode == VirOpcode::StrNe ||
+                        instr.opcode == VirOpcode::StrCmpLt) {
                         if (!regOK(instr.destReg) ||
                             !regOK(instr.lhsReg) ||
                             !regOK(instr.rhsReg)) {

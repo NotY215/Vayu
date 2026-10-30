@@ -220,6 +220,41 @@ namespace vib {
                 break;
             }
 
+            case VirOpcode::StrConcat: {
+                const RtValue& a = locals[(size_t)instr.lhsReg];
+                const RtValue& b = locals[(size_t)instr.rhsReg];
+                if (a.kind != VirValueKind::Str || b.kind != VirValueKind::Str) {
+                    return fail(0, nullptr, "interp: StrConcat requires two string operands");
+                }
+                RtValue r;
+                r.kind = VirValueKind::Str;
+                r.s = a.s + b.s;
+                locals[(size_t)instr.destReg] = std::move(r);
+                break;
+            }
+
+            case VirOpcode::StrEq:
+            case VirOpcode::StrNe:
+            case VirOpcode::StrCmpLt: {
+                const RtValue& a = locals[(size_t)instr.lhsReg];
+                const RtValue& b = locals[(size_t)instr.rhsReg];
+                if (a.kind != VirValueKind::Str || b.kind != VirValueKind::Str) {
+                    return fail(0, nullptr, "interp: string comparison requires two string operands");
+                }
+                bool res = false;
+                switch (instr.opcode) {
+                case VirOpcode::StrEq:    res = (a.s == b.s); break;
+                case VirOpcode::StrNe:    res = (a.s != b.s); break;
+                case VirOpcode::StrCmpLt: res = (a.s < b.s); break;
+                default: break;
+                }
+                RtValue r;
+                r.kind = VirValueKind::Bool;
+                r.b = res;
+                locals[(size_t)instr.destReg] = r;
+                break;
+            }
+
             case VirOpcode::Ret: {
                 out.success = true;
                 out.kind = ErrorKind::None;

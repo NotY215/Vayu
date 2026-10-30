@@ -116,10 +116,18 @@ Write-Host "[2/4] Native-path flags" -ForegroundColor Cyan
 $probe   = "examples\generics.vyu"
 $tmpExe  = [System.IO.Path]::GetTempFileName() + ".exe"
 
+# Native-path flags. Because Integrator::compile now lowers through VIR,
+# `--native` and `--native-out` fail at the *lowering* layer when the
+# program uses a construct not yet in the supported subset. That produces
+# a "planned Phase N" message rather than the old `NativeCodegen`
+# scaffolded message. Both are honest failures; the test accepts either.
 $mustFail = @(
-    @{ label = "--native";       args = @($probe, "--native");              expect = "NativeCodegen" },
-    @{ label = "--native-out";   args = @($probe, "--native-out", $tmpExe); expect = "NativeCodegen" },
-    @{ label = "--emit-runtime"; args = @("--emit-runtime", $tmpExe);       expect = "RuntimeEmission" }
+    @{ label = "--native";       args = @($probe, "--native");
+       expect = "planned Phase|NativeCodegen" },
+    @{ label = "--native-out";   args = @($probe, "--native-out", $tmpExe);
+       expect = "planned Phase|NativeCodegen" },
+    @{ label = "--emit-runtime"; args = @("--emit-runtime", $tmpExe);
+       expect = "RuntimeEmission" }
 )
 foreach ($c in $mustFail) {
     $r = Invoke-Cap $c.args
@@ -202,6 +210,32 @@ if ($r.rc -ne 0) {
     $passes++
 }
 Remove-Item -Force $arithFile -ErrorAction SilentlyContinue
+# --native must execute a Phase-4 string subset program through VIR.
+$strFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase4_str.vyu")
+[System.IO.File]::WriteAllText($strFile,
+    "s = `"a`" + `"b`"`nt = s == `"ab`"`n", (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($strFile, "--native")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --native on string-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --native executes string-only program via VIR" -ForegroundColor Green
+    $passes++
+}
+
+# --dump-ir must show StrConcat and StrEq for the same program.
+$r = Invoke-Cap @($strFile, "--dump-ir")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --dump-ir on string-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "StrConcat" -or $r.out -notmatch "StrEq") {
+    Write-Host "  [FAIL] --dump-ir on string-only missing StrConcat/StrEq" -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --dump-ir on string-only prints VIR with StrConcat/StrEq" -ForegroundColor Green
+    $passes++
+}
+Remove-Item -Force $strFile -ErrorAction SilentlyContinue
 
 # ---- 3/4 --vib-status shape -----------------------------------------------
 Write-Host ""
@@ -214,7 +248,7 @@ if ($status.rc -ne 0) {
 } else {
     $expectedRows = @(
         "BasicArithmetic\s+Supported\s+Deferred\s+3\b",
-        "Strings\s+NotSupported\s+Deferred\s+4\b",
+        "Strings\s+Supported\s+Deferred\s+4\b",
         "Functions\s+NotSupported\s+Deferred\s+5\b",
         "ControlFlow\s+NotSupported\s+Deferred\s+6\b",
         "Collections\s+NotSupported\s+Deferred\s+7\b",

@@ -87,29 +87,42 @@ $expected_exit = @{
 # Returns @{ rc; out; err }.  Captures stdout and stderr into separate
 # temp files so the comparison is against the child program's stdout
 # only, not against native compiler diagnostics or vayuc's diagnostics.
-# Bounded-timeout backend invocation. The child process (vayuc.exe) can
-# crash hard under 0xC0000409 (stack buffer overrun) when a generator
-# worker thread misbehaves. Without a timeout the parent PowerShell can
-# hang waiting on file handles / job control. Timeout converts the hang
-# into a clean per-file failure so the loop can continue.
+# Bounded-timeout backend invocation.
+#
+# Notes:
+#   - $vayuc must be resolved to an absolute path because Start-Job runs
+#     in a fresh PowerShell process whose CWD is the user profile, not the
+#     repo root. A relative path would fail to launch and every test would
+#     report -998.
+#   - Start-Job is given the repo root as -WorkingDirectory so relative
+#     paths in $file still resolve (e.g. "examples\hello.vyu").
+#   - The child process is killed if it exceeds $TimeoutSeconds. This
+#     contains a genuine crash (e.g. 0xC0000409 from a generator thread)
+#     without wedging the outer harness.
 function Invoke-Backend {
     param($file, $mode, [int]$TimeoutSeconds = 60)
+
     $outTmp = [System.IO.Path]::GetTempFileName()
     $errTmp = [System.IO.Path]::GetTempFileName()
     $argList = @($file)
     if ($mode) { $argList += $mode }
 
+    $exeAbs = (Resolve-Path -LiteralPath $vayuc).Path
+    $rootAbs = (Resolve-Path -LiteralPath ".").Path
+
     $rc = -999
     try {
         $job = Start-Job -ScriptBlock {
-            param($exe, $argsArr, $outP, $errP)
+            param($exe, $argsArr, $outP, $errP, $wd)
+            Set-Location -LiteralPath $wd
             try {
                 & $exe @argsArr 1> $outP 2> $errP
+                if ($null -eq $LASTEXITCODE) { return 0 }
                 return $LASTEXITCODE
             } catch {
                 return -998
             }
-        } -ArgumentList $vayuc, $argList, $outTmp, $errTmp
+        } -ArgumentList $exeAbs, $argList, $outTmp, $errTmp, $rootAbs
 
         $done = Wait-Job $job -Timeout $TimeoutSeconds
         if ($null -eq $done) {

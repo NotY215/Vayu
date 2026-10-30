@@ -38,6 +38,11 @@ namespace vib {
         // Phase 3.2: local variable storage.
         StoreLocal, // <localIndex> = <operandReg>
         LoadLocal,  // <destReg> = <localIndex>
+        // Phase 4.2: string operations.
+        StrConcat,  // <destReg> = <lhsReg> + <rhsReg>  (both must be Str)
+        StrEq,      // <destReg> = <lhsReg> == <rhsReg>  (bool; both Str)
+        StrNe,      // <destReg> = <lhsReg> != <rhsReg>  (bool; both Str)
+        StrCmpLt,   // <destReg> = <lhsReg> <  <rhsReg>  (bool; both Str)
     };
 
     struct VirInstruction {
@@ -80,6 +85,14 @@ namespace vib {
     //   - Any operator used on mismatched kinds raises a VIR runtime error;
     //     the verifier also rejects obvious static mismatches.
     //   - Unary negation wraps at INT64_MIN (two's complement).
+    //
+    // String semantics (Phase 4 contract):
+    //   - Strings are UTF-8 byte sequences, represented as std::string.
+    //   - Concatenation ('+') produces a new string by byte concatenation.
+    //   - Equality and ordering are byte-wise (std::string operators).
+    //   - Length / indexing / slicing are NOT part of Phase 4 lowering; they
+    //     depend on call expressions (Phase 5) and index expressions (Phase 7).
+    //   - Method calls (upper / lower / split / ...) are Phase 5 territory.
 
     struct VirPrinter {
         std::string print(const VirModule& module) const;

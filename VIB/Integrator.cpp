@@ -10,7 +10,7 @@ namespace vib {
         const std::vector<CapabilityInfo>& table() {
             static const std::vector<CapabilityInfo> t = {
                 { Feature::BasicArithmetic,  "BasicArithmetic",  SupportLevel::Supported,    SupportLevel::Deferred,  3, "Phase 3: integer/bool literals, arithmetic, comparisons, simple assignment." },
-                { Feature::Strings,          "Strings",          SupportLevel::NotSupported, SupportLevel::Deferred,  4, "Interpreter and VM support this today; Integrator lowering pending." },
+                { Feature::Strings,          "Strings",          SupportLevel::Supported,    SupportLevel::Deferred,  4, "Phase 4: string literals, concat, ==/!=/< comparisons (byte-wise)." },
                 { Feature::Functions,        "Functions",        SupportLevel::NotSupported, SupportLevel::Deferred,  5, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::ControlFlow,      "ControlFlow",      SupportLevel::NotSupported, SupportLevel::Deferred,  6, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Collections,      "Collections",      SupportLevel::NotSupported, SupportLevel::Deferred,  7, "Interpreter and VM support this today; Integrator lowering pending." },
