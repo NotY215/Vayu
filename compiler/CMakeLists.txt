@@ -15,6 +15,7 @@ add_library(vayu_compiler STATIC
     native/NativeCompiler.cpp
     ../VIB/Integrator.cpp
     ../VIB/Vir.cpp
+    ../VIB/VirInterp.cpp
 )
 target_include_directories(vayu_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 add_executable(vayuc driver/main.cpp)

@@ -19,16 +19,35 @@ namespace vib {
     };
 
     enum class VirOpcode {
-        Const,   // <destReg> = const <constIndex>
+        Const,      // <destReg> = const <constIndex>
         Nop,
-        Ret,     // return <operandReg>
+        Ret,        // return <operandReg>
+        // Phase 3.2: arithmetic and comparison.
+        Add,        // <destReg> = <lhsReg> + <rhsReg>
+        Sub,
+        Mul,
+        Div,
+        Mod,
+        Neg,        // <destReg> = -<operandReg>
+        CmpEq,      // <destReg> = <lhsReg> == <rhsReg>   (bool)
+        CmpNe,
+        CmpLt,
+        CmpLe,
+        CmpGt,
+        CmpGe,
+        // Phase 3.2: local variable storage.
+        StoreLocal, // <localIndex> = <operandReg>
+        LoadLocal,  // <destReg> = <localIndex>
     };
 
     struct VirInstruction {
         VirOpcode            opcode = VirOpcode::Nop;
         int                  destReg = -1;
-        int                  operandReg = -1;
-        int                  constIndex = -1;
+        int                  operandReg = -1;   // Ret / Neg / StoreLocal / LoadLocal source
+        int                  lhsReg = -1;       // binary ops
+        int                  rhsReg = -1;       // binary ops
+        int                  constIndex = -1;   // Const
+        int                  localIndex = -1;   // StoreLocal / LoadLocal
         vayu::SourceLocation sourceLoc;
     };
 
@@ -53,6 +72,14 @@ namespace vib {
         std::vector<VirFunction>  functions;
         int                       entryFunction = 0;
     };
+
+    // Arithmetic semantics (Phase 3.1 contract):
+    //   - int is 64-bit signed two's complement. Overflow wraps (no UB).
+    //   - Division by zero raises a VIR runtime error.
+    //   - Comparisons return bool.
+    //   - Any operator used on mismatched kinds raises a VIR runtime error;
+    //     the verifier also rejects obvious static mismatches.
+    //   - Unary negation wraps at INT64_MIN (two's complement).
 
     struct VirPrinter {
         std::string print(const VirModule& module) const;

@@ -1,5 +1,7 @@
 #include "Integrator.hpp"
 #include "Vir.hpp"
+#include "VirInterp.hpp"
+#include <cstdio>
 
 namespace vib {
 
@@ -7,7 +9,7 @@ namespace vib {
 
         const std::vector<CapabilityInfo>& table() {
             static const std::vector<CapabilityInfo> t = {
-                { Feature::BasicArithmetic,  "BasicArithmetic",  SupportLevel::NotSupported, SupportLevel::Deferred,  3, "Interpreter and VM support this today; Integrator lowering pending." },
+                { Feature::BasicArithmetic,  "BasicArithmetic",  SupportLevel::Supported,    SupportLevel::Deferred,  3, "Phase 3: integer/bool literals, arithmetic, comparisons, simple assignment." },
                 { Feature::Strings,          "Strings",          SupportLevel::NotSupported, SupportLevel::Deferred,  4, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Functions,        "Functions",        SupportLevel::NotSupported, SupportLevel::Deferred,  5, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::ControlFlow,      "ControlFlow",      SupportLevel::NotSupported, SupportLevel::Deferred,  6, "Interpreter and VM support this today; Integrator lowering pending." },
@@ -92,10 +94,58 @@ namespace vib {
         return "?";
     }
 
-    CompileResult Integrator::compile(const vayu::Block&, const std::string&,
-        const std::string&) const {
-        return unsupported(Feature::NativeCodegen,
-            "Use --run or --vm for execution. See Roadmap.md.");
+    CompileResult Integrator::compile(const vayu::Block& program,
+        const std::string& sourceDir,
+        const std::string& outputPath) const {
+        (void)sourceDir;
+        (void)outputPath;
+
+        // Phase 3.7: Integrator-mediated execution. Lower to VIR, verify, and
+        // execute in-memory. This is NOT native code generation — it proves
+        // the VIR pipeline works end-to-end. Feature::NativeCodegen stays
+        // Scaffolded until Phase 12.
+        VirLowering lowering;
+        LoweringResult lr = lowering.lower(program);
+        if (!lr.success) {
+            CompileResult r;
+            r.success = false;
+            r.kind = ErrorKind::CompilationError;
+            r.feature = featureFromName(lr.failedFeatureName);
+            r.plannedPhase = lr.plannedPhase;
+            r.message = lr.message;
+            return r;
+        }
+        VirVerifier verifier;
+        VerifierResult vr = verifier.verify(lr.module);
+        if (!vr.success) {
+            CompileResult r;
+            r.success = false;
+            r.kind = ErrorKind::VerifierError;
+            r.feature = Feature::Verifier;
+            r.plannedPhase = 2;
+            r.message = vr.message;
+            return r;
+        }
+
+        VirInterpreter interp;
+        VirExecResult er = interp.execute(lr.module);
+        for (const auto& line : er.stdoutLines) {
+            std::fputs(line.c_str(), stdout);
+            std::fputc('\n', stdout);
+        }
+        if (!er.success) {
+            CompileResult r;
+            r.success = false;
+            r.kind = er.kind;
+            r.feature = Feature::NativeCodegen;
+            r.plannedPhase = 12;
+            r.message = er.message;
+            return r;
+        }
+        CompileResult r;
+        r.success = true;
+        r.kind = ErrorKind::None;
+        return r;
     }
 
     DumpIRResult Integrator::dumpIR(const vayu::Block& program,

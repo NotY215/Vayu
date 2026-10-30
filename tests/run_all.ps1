@@ -87,18 +87,49 @@ $expected_exit = @{
 # Returns @{ rc; out; err }.  Captures stdout and stderr into separate
 # temp files so the comparison is against the child program's stdout
 # only, not against native compiler diagnostics or vayuc's diagnostics.
+# Bounded-timeout backend invocation. The child process (vayuc.exe) can
+# crash hard under 0xC0000409 (stack buffer overrun) when a generator
+# worker thread misbehaves. Without a timeout the parent PowerShell can
+# hang waiting on file handles / job control. Timeout converts the hang
+# into a clean per-file failure so the loop can continue.
 function Invoke-Backend {
-    param($file, $mode)
+    param($file, $mode, [int]$TimeoutSeconds = 60)
     $outTmp = [System.IO.Path]::GetTempFileName()
     $errTmp = [System.IO.Path]::GetTempFileName()
     $argList = @($file)
     if ($mode) { $argList += $mode }
-    & $vayuc @argList 1> $outTmp 2> $errTmp
-    $rc = $LASTEXITCODE
-    $out = Get-Content $outTmp -Raw -ErrorAction SilentlyContinue
-    $err = Get-Content $errTmp -Raw -ErrorAction SilentlyContinue
-    Remove-Item -Force $outTmp -ErrorAction SilentlyContinue
-    Remove-Item -Force $errTmp -ErrorAction SilentlyContinue
+
+    $rc = -999
+    try {
+        $job = Start-Job -ScriptBlock {
+            param($exe, $argsArr, $outP, $errP)
+            try {
+                & $exe @argsArr 1> $outP 2> $errP
+                return $LASTEXITCODE
+            } catch {
+                return -998
+            }
+        } -ArgumentList $vayuc, $argList, $outTmp, $errTmp
+
+        $done = Wait-Job $job -Timeout $TimeoutSeconds
+        if ($null -eq $done) {
+            Stop-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            $rc = -1000   # timeout sentinel
+        } else {
+            $result = Receive-Job $job -ErrorAction SilentlyContinue
+            if ($result -is [int]) { $rc = $result } else { $rc = 0 }
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        $rc = -999
+    }
+
+    $out = ""
+    $err = ""
+    try { if (Test-Path $outTmp) { $out = Get-Content $outTmp -Raw -ErrorAction SilentlyContinue } } catch {}
+    try { if (Test-Path $errTmp) { $err = Get-Content $errTmp -Raw -ErrorAction SilentlyContinue } } catch {}
+    Remove-Item -Force $outTmp, $errTmp -ErrorAction SilentlyContinue
     if ($null -eq $out) { $out = "" }
     if ($null -eq $err) { $err = "" }
     return @{ rc = $rc; out = $out; err = $err }
@@ -139,11 +170,19 @@ function Test-OneFile([string]$rel, [string]$name) {
         return $true
     }
     $tw = Invoke-Backend $rel ""
+    if ($tw.rc -eq -1000) {
+        Write-Host ("[FAIL]  {0}  (tree-walk timed out)" -f $name) -ForegroundColor Red
+        return $false
+    }
     if (-not (ExitCodeOK $name $tw.rc)) {
         Write-Host ("[FAIL]  {0}  (tree-walk rc={1})" -f $name, $tw.rc) -ForegroundColor Red
         return $false
     }
     $vm = Invoke-Backend $rel "--vm"
+    if ($vm.rc -eq -1000) {
+        Write-Host ("[FAIL]  {0}  (VM timed out)" -f $name) -ForegroundColor Red
+        return $false
+    }
     if (-not (ExitCodeOK $name $vm.rc)) {
         Write-Host ("[FAIL]  {0}  (VM rc={1})" -f $name, $vm.rc) -ForegroundColor Red
         return $false
