@@ -7,6 +7,7 @@
 #include "bytecode/Optimizer.hpp"
 #include "vm/VM.hpp"
 #include "native/NativeCompiler.hpp"
+#include "VIB/Integrator.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -59,7 +60,8 @@ static void usage() {
         "  --link=embedded      reserved compatibility option; VIB owns link policy\n"
         "\n"
         "Utility:\n"
-        "  --emit-runtime <path>  unavailable until VIB runtime emission is implemented\n");
+        "  --emit-runtime <path>  unavailable until VIB runtime emission is implemented\n"
+        "  --vib-status           print VIB Integrator capability matrix\n");
 }
 
 namespace {
@@ -85,6 +87,31 @@ namespace {
     }
 }
 
+static void printVibStatus() {
+    using namespace vib;
+    std::printf("VIB Integrator status\n");
+    std::printf("=====================\n\n");
+    std::printf("Execution routes:\n");
+    std::printf("  Interpreter   --run       working (external to Integrator)\n");
+    std::printf("  VM            --vm        working (external to Integrator)\n");
+    std::printf("  Native        --native    Scaffolded (Phase 12)\n");
+    std::printf("  Vye           (deferred)  Deferred (after Phase 10)\n\n");
+    std::printf("Feature capabilities:\n");
+    std::printf("  %-26s %-13s %-11s %-5s %s\n",
+        "Feature", "Native", "Vye", "Phase", "Note");
+    std::printf("  %-26s %-13s %-11s %-5s %s\n",
+        "--------------------------", "-------------",
+        "-----------", "-----", "----");
+    for (const auto& c : Integrator::capabilities()) {
+        std::printf("  %-26s %-13s %-11s %-5d %s\n",
+            c.name,
+            Integrator::supportLevelName(c.nativeLevel),
+            Integrator::supportLevelName(c.vyeLevel),
+            c.plannedPhase,
+            c.note);
+    }
+}
+
 int main(int argc, char** argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -92,7 +119,7 @@ int main(int argc, char** argv) {
 
     if (argc < 2) { usage(); return 1; }
 
-    // --emit-runtime <path>  (handled before any other arg parsing)
+    // --emit-runtime <path>
     if (std::strcmp(argv[1], "--emit-runtime") == 0) {
         if (argc < 3) {
             std::fprintf(stderr, "vayuc: --emit-runtime requires a path\n");
@@ -100,9 +127,15 @@ int main(int argc, char** argv) {
         }
         vayu::NativeCompiler nc;
         if (!nc.writeRuntimeC(argv[2])) {
-            std::fprintf(stderr, "vayuc: cannot write runtime to '%s'\n", argv[2]);
+            std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
             return 1;
         }
+        return 0;
+    }
+
+    // --vib-status  (no file needed; handled before file loading)
+    if (std::strcmp(argv[1], "--vib-status") == 0) {
+        printVibStatus();
         return 0;
     }
 
@@ -250,7 +283,11 @@ int main(int argc, char** argv) {
     if (mode == Mode::DumpIR) {
         vayu::NativeCompiler nc;
         nc.dumpIR(program, srcDir);
-        return nc.lastError().empty() ? 0 : 1;
+        if (!nc.lastError().empty()) {
+            std::fprintf(stderr, "%s: %s\n", file.c_str(), nc.lastError().c_str());
+            return 1;
+        }
+        return 0;
     }
 
     // ---------- native ----------
@@ -261,8 +298,7 @@ int main(int argc, char** argv) {
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
             if (rc != 0) {
-                std::fprintf(stderr, "%s: native error: %s\n",
-                    file.c_str(), nc.lastError().c_str());
+                std::fprintf(stderr, "%s: %s\n", file.c_str(), nc.lastError().c_str());
             }
             return rc;
         }
@@ -272,8 +308,8 @@ int main(int argc, char** argv) {
                 vayu::NativeCompiler nc;
                 nc.setLinkMode(linkMode);
                 if (nc.compileAndRun(program, srcDir) != 0) {
-                    std::fprintf(stderr, "native: %s\n",
-                        nc.lastError().c_str());
+                    std::fprintf(stderr, "%s: %s\n",
+                        file.c_str(), nc.lastError().c_str());
                     std::exit(2);
                 }
                 });
@@ -282,7 +318,11 @@ int main(int argc, char** argv) {
 
         vayu::NativeCompiler nc;
         nc.setLinkMode(linkMode);
-        return nc.compileAndRun(program, srcDir);
+        int rc = nc.compileAndRun(program, srcDir);
+        if (rc != 0) {
+            std::fprintf(stderr, "%s: %s\n", file.c_str(), nc.lastError().c_str());
+        }
+        return rc;
     }
 
     // ---------- vm ----------

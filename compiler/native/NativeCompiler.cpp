@@ -1,19 +1,35 @@
 #include "NativeCompiler.hpp"
 #include "VIB/Integrator.hpp"
-#include <cstdio>
+
 namespace vayu {
-NativeCompiler::NativeCompiler() = default;
-int NativeCompiler::compileAndRun(const Block& program, const std::string& sourceDir) {
-    lastError_.clear();
-    vib::Integrator integrator;
-    const auto result = integrator.compile(program, sourceDir, outputExe_);
-    lastError_ = result.message;
-    if (!result.success) { std::fprintf(stderr, "VIB: %s\n", lastError_.c_str()); return 1; }
-    return 0;
-}
-void NativeCompiler::dumpIR(const Block&, const std::string&) {
-    lastError_ = "VIR dumping is not available yet. See Roadmap.md, Phase 3.";
-    std::fprintf(stderr, "VIB: %s\n", lastError_.c_str());
-}
-bool NativeCompiler::writeRuntimeC(const std::string&) const { return false; }
+
+    NativeCompiler::NativeCompiler() = default;
+
+    int NativeCompiler::compileAndRun(const Block& program,
+        const std::string& sourceDir) {
+        lastError_.clear();
+        vib::Integrator integrator;
+        const vib::CompileResult r = integrator.compile(program, sourceDir, outputExe_);
+        lastError_ = r.message;
+        return r.success ? 0 : 1;
+    }
+
+    void NativeCompiler::dumpIR(const Block& program, const std::string& sourceDir) {
+        lastError_.clear();
+        vib::Integrator integrator;
+        const vib::CompileResult r = integrator.dumpIR(program, sourceDir);
+        if (!r.success) lastError_ = r.message;
+    }
+
+    bool NativeCompiler::writeRuntimeC(const std::string& path) {
+        lastError_.clear();
+        vib::Integrator integrator;
+        const vib::CompileResult r = integrator.emitRuntime(path);
+        if (!r.success) {
+            lastError_ = r.message;
+            return false;
+        }
+        return true;
+    }
+
 } // namespace vayu
