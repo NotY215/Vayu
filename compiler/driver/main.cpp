@@ -282,11 +282,12 @@ int main(int argc, char** argv) {
     // ---------- dump-ir ----------
     if (mode == Mode::DumpIR) {
         vayu::NativeCompiler nc;
-        nc.dumpIR(program, srcDir);
+        std::string ir = nc.dumpIR(program, srcDir);
         if (!nc.lastError().empty()) {
             std::fprintf(stderr, "%s: %s\n", file.c_str(), nc.lastError().c_str());
             return 1;
         }
+        std::fputs(ir.c_str(), stdout);
         return 0;
     }
 

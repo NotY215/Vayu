@@ -1,6 +1,5 @@
 #include "NativeCompiler.hpp"
 #include "VIB/Integrator.hpp"
-
 namespace vayu {
 
     NativeCompiler::NativeCompiler() = default;
@@ -14,11 +13,16 @@ namespace vayu {
         return r.success ? 0 : 1;
     }
 
-    void NativeCompiler::dumpIR(const Block& program, const std::string& sourceDir) {
+    std::string NativeCompiler::dumpIR(const Block& program,
+        const std::string& sourceDir) {
         lastError_.clear();
         vib::Integrator integrator;
-        const vib::CompileResult r = integrator.dumpIR(program, sourceDir);
-        if (!r.success) lastError_ = r.message;
+        const vib::DumpIRResult r = integrator.dumpIR(program, sourceDir);
+        if (!r.success) {
+            lastError_ = r.message;
+            return {};
+        }
+        return r.irText;
     }
 
     bool NativeCompiler::writeRuntimeC(const std::string& path) {

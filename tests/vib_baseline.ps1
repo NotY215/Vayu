@@ -99,20 +99,19 @@ foreach ($name in $fixtures) {
     $passes++
 }
 
-# ---- 2/4 Native-path flags fail cleanly -----------------------------------
+# ---- 2/4 Native-path flags -----------------------------------------------
 Write-Host ""
-Write-Host "[2/4] Native-path flags rejected with capability-derived messages" -ForegroundColor Cyan
+Write-Host "[2/4] Native-path flags" -ForegroundColor Cyan
 
 $probe   = "examples\vm_arith.vyu"
 $tmpExe  = [System.IO.Path]::GetTempFileName() + ".exe"
-$checks  = @(
-    @{ label = "--native";       args = @($probe, "--native");                expect = "NativeCodegen" },
-    @{ label = "--native-out";   args = @($probe, "--native-out", $tmpExe);   expect = "NativeCodegen" },
-    @{ label = "--dump-ir";      args = @($probe, "--dump-ir");               expect = "VIR" },
-    @{ label = "--emit-runtime"; args = @("--emit-runtime", $tmpExe);         expect = "RuntimeEmission" }
-)
 
-foreach ($c in $checks) {
+$mustFail = @(
+    @{ label = "--native";       args = @($probe, "--native");              expect = "NativeCodegen" },
+    @{ label = "--native-out";   args = @($probe, "--native-out", $tmpExe); expect = "NativeCodegen" },
+    @{ label = "--emit-runtime"; args = @("--emit-runtime", $tmpExe);       expect = "RuntimeEmission" }
+)
+foreach ($c in $mustFail) {
     $r = Invoke-Cap $c.args
     if ($r.rc -eq 0) {
         Write-Host ("  [FAIL] {0} unexpectedly succeeded" -f $c.label) -ForegroundColor Red
@@ -126,6 +125,41 @@ foreach ($c in $checks) {
     $passes++
 }
 if (Test-Path $tmpExe) { Remove-Item -Force $tmpExe }
+
+# --dump-ir must fail on a non-trivial program with the expected phase
+$r = Invoke-Cap @($probe, "--dump-ir")
+if ($r.rc -eq 0) {
+    Write-Host "  [FAIL] --dump-ir unexpectedly succeeded on $probe" -ForegroundColor Red
+    $failures++
+} elseif ($r.err -notmatch "planned Phase") {
+    Write-Host ("  [FAIL] --dump-ir stderr missing 'planned Phase' (stderr: {0})" -f $r.err) -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --dump-ir rejects non-trivial program with planned-phase diagnostic" -ForegroundColor Green
+    $passes++
+}
+
+# --dump-ir must succeed on a pass-only program
+$passFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase2_pass.vyu")
+Set-Content -Path $passFile -Value "pass`n" -Encoding utf8 -NoNewline
+$r = Invoke-Cap @($passFile, "--dump-ir")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --dump-ir on pass-only exited {0}" -f $r.rc) -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "module") {
+    Write-Host "  [FAIL] --dump-ir on pass-only missing 'module'" -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "Const") {
+    Write-Host "  [FAIL] --dump-ir on pass-only missing 'Const'" -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "Ret") {
+    Write-Host "  [FAIL] --dump-ir on pass-only missing 'Ret'" -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --dump-ir on pass-only prints valid VIR module" -ForegroundColor Green
+    $passes++
+}
+Remove-Item -Force $passFile -ErrorAction SilentlyContinue
 
 # ---- 3/4 --vib-status shape -----------------------------------------------
 Write-Host ""
@@ -149,6 +183,8 @@ if ($status.rc -ne 0) {
         "Generators\s+NotSupported\s+Deferred\s+10\b",
         "Pointers\s+NotSupported\s+Deferred\s+10\b",
         "VIR\s+Scaffolded\s+Deferred\s+2\b",
+        "VIR\s+Supported\s+Deferred\s+2\b",
+        "Verifier\s+Supported\s+Deferred\s+2\b",
         "Verifier\s+Scaffolded\s+Deferred\s+2\b",
         "RuntimeEmission\s+Scaffolded\s+Deferred\s+12\b",
         "NativeCodegen\s+Scaffolded\s+Deferred\s+12\b",

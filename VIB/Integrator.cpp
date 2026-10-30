@@ -1,16 +1,12 @@
 #include "Integrator.hpp"
+#include "Vir.hpp"
 
 namespace vib {
 
     namespace {
 
-        // The single authoritative capability table. Every level and phase below
-        // reflects the current project decision. Flipping a cell from Scaffolded
-        // or Deferred to Supported requires implementation and tests; the table
-        // is not a wish list.
         const std::vector<CapabilityInfo>& table() {
             static const std::vector<CapabilityInfo> t = {
-                // Integrator language subset.
                 { Feature::BasicArithmetic,  "BasicArithmetic",  SupportLevel::NotSupported, SupportLevel::Deferred,  3, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Strings,          "Strings",          SupportLevel::NotSupported, SupportLevel::Deferred,  4, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Functions,        "Functions",        SupportLevel::NotSupported, SupportLevel::Deferred,  5, "Interpreter and VM support this today; Integrator lowering pending." },
@@ -22,12 +18,10 @@ namespace vib {
                 { Feature::Generics,         "Generics",         SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Generators,       "Generators",       SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Pointers,         "Pointers",         SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
-                // Integrator internals.
-                { Feature::VIR,              "VIR",              SupportLevel::Scaffolded,   SupportLevel::Deferred,  2, "API stub present; lowering and verifier pending." },
-                { Feature::Verifier,         "Verifier",         SupportLevel::Scaffolded,   SupportLevel::Deferred,  2, "Reserved slot; verifier lands with VIR." },
+                { Feature::VIR,              "VIR",              SupportLevel::Supported,    SupportLevel::Deferred,  2, "Phase 2: structures, verifier, printer, minimal lowering (PassStmt)." },
+                { Feature::Verifier,         "Verifier",         SupportLevel::Supported,    SupportLevel::Deferred,  2, "Phase 2: structural checks; expands as VIR subset grows." },
                 { Feature::RuntimeEmission,  "RuntimeEmission",  SupportLevel::Scaffolded,   SupportLevel::Deferred, 12, "API stub present; runtime emitter pending." },
                 { Feature::NativeCodegen,    "NativeCodegen",    SupportLevel::Scaffolded,   SupportLevel::Deferred, 12, "API stub present; native codegen pending." },
-                // Deferred capabilities.
                 { Feature::VyePackaging,     "VyePackaging",     SupportLevel::Deferred,     SupportLevel::Deferred,  2, "Deferred per project decision until after Phase 10." },
                 { Feature::ArtifactCache,    "ArtifactCache",    SupportLevel::Deferred,     SupportLevel::Deferred, 11, "Deferred until artifact identity is defined." },
                 { Feature::IncrementalBuild, "IncrementalBuild", SupportLevel::Deferred,     SupportLevel::Deferred, 11, "Deferred until clean/incremental equivalence is proven." },
@@ -43,32 +37,29 @@ namespace vib {
             r.kind = ErrorKind::Unsupported;
             r.feature = f;
             r.plannedPhase = info.plannedPhase;
-            r.message = std::string(info.name)
-                + " is not implemented (planned Phase "
-                + std::to_string(info.plannedPhase) + "). "
-                + extra;
+            r.message = std::string(info.name) + " is not implemented (planned Phase " +
+                std::to_string(info.plannedPhase) + "). " + extra;
             return r;
+        }
+
+        Feature featureFromName(const std::string& name) {
+            for (const auto& c : table()) {
+                if (name == c.name) return c.feature;
+            }
+            return Feature::VIR;
         }
 
     } // namespace
 
-    const std::vector<CapabilityInfo>& Integrator::capabilities() {
-        return table();
-    }
+    const std::vector<CapabilityInfo>& Integrator::capabilities() { return table(); }
 
     CapabilityInfo Integrator::capability(Feature f) {
-        for (const auto& c : table()) {
-            if (c.feature == f) return c;
-        }
-        // Unreachable for any declared Feature; keeps the API total.
+        for (const auto& c : table()) if (c.feature == f) return c;
         return CapabilityInfo{ f, "Unknown", SupportLevel::NotSupported,
                                SupportLevel::NotSupported, 0, "" };
     }
 
-    const char* Integrator::featureName(Feature f) {
-        return capability(f).name;
-    }
-
+    const char* Integrator::featureName(Feature f) { return capability(f).name; }
     const char* Integrator::supportLevelName(SupportLevel s) {
         switch (s) {
         case SupportLevel::NotSupported: return "NotSupported";
@@ -78,7 +69,6 @@ namespace vib {
         }
         return "?";
     }
-
     const char* Integrator::backendName(Backend b) {
         switch (b) {
         case Backend::Interpreter: return "Interpreter";
@@ -88,7 +78,6 @@ namespace vib {
         }
         return "?";
     }
-
     const char* Integrator::errorKindName(ErrorKind k) {
         switch (k) {
         case ErrorKind::None:             return "None";
@@ -103,17 +92,43 @@ namespace vib {
         return "?";
     }
 
-    CompileResult Integrator::compile(const vayu::Block&,
-        const std::string&,
+    CompileResult Integrator::compile(const vayu::Block&, const std::string&,
         const std::string&) const {
         return unsupported(Feature::NativeCodegen,
             "Use --run or --vm for execution. See Roadmap.md.");
     }
 
-    CompileResult Integrator::dumpIR(const vayu::Block&,
+    DumpIRResult Integrator::dumpIR(const vayu::Block& program,
         const std::string&) const {
-        return unsupported(Feature::VIR,
-            "VIR lowering and verifier are pending. See Roadmap.md.");
+        VirLowering lowering;
+        LoweringResult lr = lowering.lower(program);
+        if (!lr.success) {
+            DumpIRResult r;
+            r.success = false;
+            r.kind = ErrorKind::CompilationError;
+            r.feature = featureFromName(lr.failedFeatureName);
+            r.plannedPhase = lr.plannedPhase;
+            r.message = lr.message;
+            return r;
+        }
+        VirVerifier verifier;
+        VerifierResult vr = verifier.verify(lr.module);
+        if (!vr.success) {
+            DumpIRResult r;
+            r.success = false;
+            r.kind = ErrorKind::VerifierError;
+            r.feature = Feature::Verifier;
+            r.plannedPhase = 2;
+            r.message = vr.message;
+            return r;
+        }
+        VirPrinter printer;
+        DumpIRResult r;
+        r.success = true;
+        r.kind = ErrorKind::None;
+        r.feature = Feature::VIR;
+        r.irText = printer.print(lr.module);
+        return r;
     }
 
     CompileResult Integrator::emitRuntime(const std::string&) const {

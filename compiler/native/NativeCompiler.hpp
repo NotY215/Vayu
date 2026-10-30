@@ -6,11 +6,11 @@ namespace vayu {
     public:
         enum class LinkMode { External, Embedded };
         NativeCompiler();
-        int  compileAndRun(const Block& program, const std::string& sourceDir = "");
-        void dumpIR(const Block& program, const std::string& sourceDir = "");
-        void setOutputExe(const std::string& path) { outputExe_ = path; }
-        void setLinkMode(LinkMode mode) { linkMode_ = mode; }
-        bool writeRuntimeC(const std::string& path);          // was: const
+        int         compileAndRun(const Block& program, const std::string& sourceDir = "");
+        std::string dumpIR(const Block& program, const std::string& sourceDir = "");
+        void        setOutputExe(const std::string& path) { outputExe_ = path; }
+        void        setLinkMode(LinkMode mode) { linkMode_ = mode; }
+        bool        writeRuntimeC(const std::string& path);
         const std::string& lastError() const { return lastError_; }
     private:
         std::string lastError_;
