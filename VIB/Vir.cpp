@@ -1,5 +1,6 @@
 #include "Vir.hpp"
 #include <sstream>
+#include <string>
 #include <unordered_map>
 
 namespace vib {
@@ -30,6 +31,31 @@ namespace vib {
                 return oss.str();
             }
             case VirValueKind::Str:   return "\"" + v.strValue + "\"";
+            }
+            return "?";
+        }
+
+        const char* builtinName(VirBuiltin b) {
+            switch (b) {
+            case VirBuiltin::Print:         return "Print";
+            case VirBuiltin::ToStr:         return "ToStr";
+            case VirBuiltin::ToInt:         return "ToInt";
+            case VirBuiltin::ToFloat:       return "ToFloat";
+            case VirBuiltin::ToBool:        return "ToBool";
+            case VirBuiltin::LenStr:        return "LenStr";
+            case VirBuiltin::StrUpper:      return "StrUpper";
+            case VirBuiltin::StrLower:      return "StrLower";
+            case VirBuiltin::StrStrip:      return "StrStrip";
+            case VirBuiltin::StrContains:   return "StrContains";
+            case VirBuiltin::StrFind:       return "StrFind";
+            case VirBuiltin::StrStartsWith: return "StrStartsWith";
+            case VirBuiltin::StrEndsWith:   return "StrEndsWith";
+            case VirBuiltin::StrIsDigit:    return "StrIsDigit";
+            case VirBuiltin::StrIsAlpha:    return "StrIsAlpha";
+            case VirBuiltin::StrIsSpace:    return "StrIsSpace";
+            case VirBuiltin::StrReplace:    return "StrReplace";
+            case VirBuiltin::StrCharAt:     return "StrCharAt";
+            case VirBuiltin::StrToInt:      return "StrToInt";
             }
             return "?";
         }
@@ -97,6 +123,24 @@ namespace vib {
             case VirOpcode::StrCmpLt:
                 return "r" + std::to_string(i.destReg) + " = StrCmpLt(r" +
                     std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::Call: {
+                std::string s = "r" + std::to_string(i.destReg) +
+                    " = Call(fn[" + std::to_string(i.funcIndex) + "]";
+                for (int r : i.argRegs) {
+                    s += ", r" + std::to_string(r);
+                }
+                s += ")";
+                return s;
+            }
+            case VirOpcode::CallBuiltin: {
+                std::string s = "r" + std::to_string(i.destReg) +
+                    " = CallBuiltin(" + builtinName(i.builtin);
+                for (int r : i.argRegs) {
+                    s += ", r" + std::to_string(r);
+                }
+                s += ")";
+                return s;
+            }
             }
             return "?";
         }
@@ -105,8 +149,6 @@ namespace vib {
             return op == VirOpcode::Ret;
         }
 
-        // Map a StmtKind to the feature that will eventually lower it, and the
-        // roadmap phase that will land it. Pass / Block are handled inline.
         struct BlockerInfo {
             const char* featureName;
             int         phase;
@@ -143,23 +185,8 @@ namespace vib {
         }
 
         // ------------------------------------------------------------------------
-// Phase 3 lowering context.
-//
-// Tracks per-function state needed to translate a supported AST subset
-// into VIR:
-//   - localsByName   : source name -> local slot index
-//   - nextLocal      : next free local slot
-//   - nextReg        : next free "register" (maps 1:1 to local slots for
-//                      now; no register allocation yet)
-//   - module         : the VirModule being built (needed for constants)
-//   - fn             : the VirFunction being built
-//   - entry          : the entry VirBlock being appended to
-//   - result         : failure info
-//
-// Supported in Phase 3: integers, booleans, None, unary +/-, binary
-// + - * / % == != < <= > >=, assignment of the form `name = expr` where
-// `name` is a simple name. Everything else keeps its blocker.
-// ------------------------------------------------------------------------
+        // Phase 3/4/5 lowering context.
+        // ------------------------------------------------------------------------
         struct LoweringContext {
             VirModule& module;
             VirFunction& fn;
@@ -170,15 +197,15 @@ namespace vib {
             int nextLocal = 0;
             int nextReg = 0;
 
+            std::unordered_map<std::string, VirTypeKind> varTypes;
+            std::unordered_map<std::string, int> topLevelFunctions;
+
             LoweringContext(VirModule& m, VirFunction& f, VirBlock& e, LoweringResult& r)
                 : module(m), fn(f), entry(e), result(r) {
             }
 
             int allocReg() { return nextReg++; }
-
-            void bumpLocalTo(int r) {
-                if (r >= nextLocal) nextLocal = r + 1;
-            }
+            void bumpLocalTo(int r) { if (r >= nextLocal) nextLocal = r + 1; }
 
             int addIntConst(long long value) {
                 VirValue v;
@@ -188,7 +215,6 @@ namespace vib {
                 module.constants.push_back(v);
                 return idx;
             }
-
             int addBoolConst(bool value) {
                 VirValue v;
                 v.kind = VirValueKind::Bool;
@@ -197,7 +223,6 @@ namespace vib {
                 module.constants.push_back(v);
                 return idx;
             }
-
             int addNoneConst() {
                 VirValue v;
                 v.kind = VirValueKind::None;
@@ -205,7 +230,6 @@ namespace vib {
                 module.constants.push_back(v);
                 return idx;
             }
-
             int addStrConst(const std::string& value) {
                 VirValue v;
                 v.kind = VirValueKind::Str;
@@ -215,7 +239,6 @@ namespace vib {
                 return idx;
             }
 
-            // Emits `dest = const [index]` and returns dest reg.
             int emitConst(int constIdx, vayu::SourceLocation loc) {
                 int dest = allocReg();
                 VirInstruction i;
@@ -228,14 +251,11 @@ namespace vib {
                 return dest;
             }
 
-            // Returns true on success; on failure, fills result and returns false.
             bool lowerBlock(const vayu::Block& block);
-
-            // Returns -1 on success, otherwise a blocker phase > 0.
-            int lowerStmt(const vayu::Stmt* s);
-
-            // Returns a reg id containing the value, or -1 on blocker (result set).
-            int lowerExpr(const vayu::Expr* e);
+            int  lowerStmt(const vayu::Stmt* s);
+            int  lowerExpr(const vayu::Expr* e);
+            int  lowerCall(const vayu::CallExpr* c);
+            VirTypeKind inferType(const vayu::Expr* e) const;
         };
 
         bool LoweringContext::lowerBlock(const vayu::Block& block) {
@@ -250,6 +270,25 @@ namespace vib {
             using SK = vayu::StmtKind;
             if (s->kind == SK::Pass) return 0;
 
+            if (s->kind == SK::Return) {
+                const auto* rs = static_cast<const vayu::ReturnStmt*>(s);
+                int reg;
+                if (rs->value) {
+                    reg = lowerExpr(rs->value.get());
+                    if (reg < 0) return result.plannedPhase;
+                }
+                else {
+                    int noneIdx = addNoneConst();
+                    reg = emitConst(noneIdx, rs->loc);
+                }
+                VirInstruction ret;
+                ret.opcode = VirOpcode::Ret;
+                ret.operandReg = reg;
+                ret.sourceLoc = rs->loc;
+                entry.instructions.push_back(ret);
+                return 0;
+            }
+
             if (s->kind == SK::Block) {
                 const auto* bs = static_cast<const vayu::BlockStmt*>(s);
                 if (!lowerBlock(bs->body)) return result.plannedPhase;
@@ -260,6 +299,45 @@ namespace vib {
                 const auto* es = static_cast<const vayu::ExprStmt*>(s);
                 int r = lowerExpr(es->expr.get());
                 if (r < 0) return result.plannedPhase;
+                return 0;
+            }
+
+            if (s->kind == SK::AnnotAssign) {
+                const auto* aa = static_cast<const vayu::AnnotAssignStmt*>(s);
+                int valueReg;
+                if (aa->value) {
+                    valueReg = lowerExpr(aa->value.get());
+                    if (valueReg < 0) return result.plannedPhase;
+                }
+                else {
+                    int noneIdx = addNoneConst();
+                    valueReg = emitConst(noneIdx, aa->loc);
+                }
+                int localIdx;
+                auto it = localsByName.find(aa->name);
+                if (it == localsByName.end()) {
+                    localIdx = nextLocal++;
+                    localsByName[aa->name] = localIdx;
+                }
+                else {
+                    localIdx = it->second;
+                }
+                VirInstruction store;
+                store.opcode = VirOpcode::StoreLocal;
+                store.operandReg = valueReg;
+                store.localIndex = localIdx;
+                store.sourceLoc = aa->loc;
+                entry.instructions.push_back(store);
+                VirTypeKind tk = VirTypeKind::Any;
+                if (aa->type && aa->type->kind == vayu::ExprKind::NameRef) {
+                    const std::string& tn =
+                        static_cast<const vayu::NameRefExpr*>(aa->type.get())->name;
+                    if (tn == "int")        tk = VirTypeKind::Int;
+                    else if (tn == "float") tk = VirTypeKind::Float;
+                    else if (tn == "bool")  tk = VirTypeKind::Bool;
+                    else if (tn == "str")   tk = VirTypeKind::Str;
+                }
+                varTypes[aa->name] = tk;
                 return 0;
             }
 
@@ -293,6 +371,7 @@ namespace vib {
                 store.localIndex = localIdx;
                 store.sourceLoc = as->loc;
                 entry.instructions.push_back(store);
+                varTypes[nr->name] = inferType(as->value.get());
                 return 0;
             }
 
@@ -371,10 +450,6 @@ namespace vib {
             }
             case EK::Binary: {
                 const auto* n = static_cast<const vayu::BinaryExpr*>(e);
-        // Non-string opcodes are chosen here; the string-typed ops
-        // (StrConcat / StrEq / StrCmpLt) get selected below after
-        // lowering operands, because we only know at that point whether
-        // either side is a string literal.
                 VirOpcode op;
                 bool needsStringOp = false;
                 switch (n->op) {
@@ -402,11 +477,11 @@ namespace vib {
                 int rhs = lowerExpr(n->rhs.get());
                 if (rhs < 0) return -1;
 
-                // Phase 4.2: if either side is a string literal, route through
-                // string opcodes.
                 bool lhsIsStr = (n->lhs->kind == vayu::ExprKind::StringLit);
                 bool rhsIsStr = (n->rhs->kind == vayu::ExprKind::StringLit);
-                if (lhsIsStr || rhsIsStr) {
+                VirTypeKind lt = inferType(n->lhs.get());
+                VirTypeKind rt = inferType(n->rhs.get());
+                if (lhsIsStr || rhsIsStr || lt == VirTypeKind::Str || rt == VirTypeKind::Str) {
                     if (n->op == vayu::BinOp::Add) {
                         op = VirOpcode::StrConcat;
                     }
@@ -440,6 +515,8 @@ namespace vib {
                 bumpLocalTo(dest);
                 return dest;
             }
+            case EK::Call:
+                return lowerCall(static_cast<const vayu::CallExpr*>(e));
             default:
                 result.plannedPhase = 3;
                 result.failedFeatureName = "BasicArithmetic";
@@ -449,11 +526,216 @@ namespace vib {
             }
         }
 
-    } // namespace
+        VirTypeKind LoweringContext::inferType(const vayu::Expr* e) const {
+            using EK = vayu::ExprKind;
+            if (!e) return VirTypeKind::None;
+            switch (e->kind) {
+            case EK::IntLit:    return VirTypeKind::Int;
+            case EK::FloatLit:  return VirTypeKind::Float;
+            case EK::BoolLit:   return VirTypeKind::Bool;
+            case EK::StringLit: return VirTypeKind::Str;
+            case EK::NoneLit:   return VirTypeKind::None;
+            case EK::NameRef: {
+                const auto* n = static_cast<const vayu::NameRefExpr*>(e);
+                auto it = varTypes.find(n->name);
+                return it == varTypes.end() ? VirTypeKind::Any : it->second;
+            }
+            case EK::Grouping:
+                return inferType(static_cast<const vayu::GroupingExpr*>(e)->inner.get());
+            case EK::Binary: {
+                const auto* n = static_cast<const vayu::BinaryExpr*>(e);
+                VirTypeKind l = inferType(n->lhs.get());
+                VirTypeKind r = inferType(n->rhs.get());
+                if (n->op == vayu::BinOp::Add) {
+                    if (l == VirTypeKind::Str || r == VirTypeKind::Str) return VirTypeKind::Str;
+                    if (l == VirTypeKind::Int && r == VirTypeKind::Int) return VirTypeKind::Int;
+                    if (l == VirTypeKind::Float || r == VirTypeKind::Float) return VirTypeKind::Float;
+                    return VirTypeKind::Any;
+                }
+                if (n->op == vayu::BinOp::Eq || n->op == vayu::BinOp::NotEq ||
+                    n->op == vayu::BinOp::Lt || n->op == vayu::BinOp::LtEq ||
+                    n->op == vayu::BinOp::Gt || n->op == vayu::BinOp::GtEq) {
+                    return VirTypeKind::Bool;
+                }
+                if (l == VirTypeKind::Int && r == VirTypeKind::Int) return VirTypeKind::Int;
+                if ((l == VirTypeKind::Int || l == VirTypeKind::Float) &&
+                    (r == VirTypeKind::Int || r == VirTypeKind::Float)) return VirTypeKind::Float;
+                return VirTypeKind::Any;
+            }
+            case EK::Call: {
+                const auto* c = static_cast<const vayu::CallExpr*>(e);
+                if (c->callee->kind == EK::NameRef) {
+                    const auto* n = static_cast<const vayu::NameRefExpr*>(c->callee.get());
+                    if (n->name == "str")   return VirTypeKind::Str;
+                    if (n->name == "int")   return VirTypeKind::Int;
+                    if (n->name == "float") return VirTypeKind::Float;
+                    if (n->name == "bool")  return VirTypeKind::Bool;
+                    if (n->name == "len")   return VirTypeKind::Int;
+                    return VirTypeKind::Any;
+                }
+                return VirTypeKind::Any;
+            }
+            default:
+                return VirTypeKind::Any;
+            }
+        }
 
-    // ============================================================================
-    // Printer
-    // ============================================================================
+        int LoweringContext::lowerCall(const vayu::CallExpr* c) {
+            using EK = vayu::ExprKind;
+
+            if (c->callee->kind == EK::Attr) {
+                const auto* attr = static_cast<const vayu::AttrExpr*>(c->callee.get());
+                if (attr->target->kind != EK::NameRef) {
+                    result.plannedPhase = 10;
+                    result.failedFeatureName = "Classes";
+                    result.message = "lowering for method call on non-name receiver is not "
+                        "implemented yet (planned Phase 10)";
+                    return -1;
+                }
+                const auto* recvName =
+                    static_cast<const vayu::NameRefExpr*>(attr->target.get());
+                VirTypeKind recvType = VirTypeKind::Any;
+                auto tit = varTypes.find(recvName->name);
+                if (tit != varTypes.end()) recvType = tit->second;
+
+                if (recvType != VirTypeKind::Str) {
+                    result.plannedPhase = 10;
+                    result.failedFeatureName = "Classes";
+                    result.message = "lowering for method call on non-str variable \"" +
+                        recvName->name + "\" is not implemented yet (planned Phase 10)";
+                    return -1;
+                }
+
+                int recvReg = lowerExpr(attr->target.get());
+                if (recvReg < 0) return -1;
+
+                std::vector<int> argRegs;
+                argRegs.push_back(recvReg);
+                for (const auto& a : c->args) {
+                    int r = lowerExpr(a.value.get());
+                    if (r < 0) return -1;
+                    argRegs.push_back(r);
+                }
+
+                VirBuiltin builtin;
+                const std::string& m = attr->name;
+                if (m == "upper")       builtin = VirBuiltin::StrUpper;
+                else if (m == "lower")       builtin = VirBuiltin::StrLower;
+                else if (m == "strip")       builtin = VirBuiltin::StrStrip;
+                else if (m == "contains")    builtin = VirBuiltin::StrContains;
+                else if (m == "find")        builtin = VirBuiltin::StrFind;
+                else if (m == "starts_with") builtin = VirBuiltin::StrStartsWith;
+                else if (m == "ends_with")   builtin = VirBuiltin::StrEndsWith;
+                else if (m == "is_digit")    builtin = VirBuiltin::StrIsDigit;
+                else if (m == "is_alpha")    builtin = VirBuiltin::StrIsAlpha;
+                else if (m == "is_space")    builtin = VirBuiltin::StrIsSpace;
+                else if (m == "replace")     builtin = VirBuiltin::StrReplace;
+                else if (m == "char_at")     builtin = VirBuiltin::StrCharAt;
+                else if (m == "to_int")      builtin = VirBuiltin::StrToInt;
+                else {
+                    result.plannedPhase = 4;
+                    result.failedFeatureName = "Strings";
+                    result.message = "lowering for string method '." + m +
+                        "' is not implemented yet (planned Phase 4)";
+                    return -1;
+                }
+
+                int dest = allocReg();
+                VirInstruction i;
+                i.opcode = VirOpcode::CallBuiltin;
+                i.destReg = dest;
+                i.builtin = builtin;
+                i.argRegs = std::move(argRegs);
+                i.sourceLoc = c->loc;
+                entry.instructions.push_back(i);
+                bumpLocalTo(dest);
+                return dest;
+            }
+
+            if (c->callee->kind != EK::NameRef) {
+                result.plannedPhase = 10;
+                result.failedFeatureName = "Classes";
+                result.message = "lowering for call with non-name callee is not implemented "
+                    "yet (planned Phase 10)";
+                return -1;
+            }
+            const auto* callee = static_cast<const vayu::NameRefExpr*>(c->callee.get());
+            const std::string& name = callee->name;
+
+            VirBuiltin builtinOp;
+            bool isBuiltin = true;
+            if (name == "print") builtinOp = VirBuiltin::Print;
+            else if (name == "str")   builtinOp = VirBuiltin::ToStr;
+            else if (name == "int")   builtinOp = VirBuiltin::ToInt;
+            else if (name == "float") builtinOp = VirBuiltin::ToFloat;
+            else if (name == "bool")  builtinOp = VirBuiltin::ToBool;
+            else if (name == "len")   builtinOp = VirBuiltin::LenStr;
+            else                      isBuiltin = false;
+
+            if (isBuiltin) {
+                if (name == "len") {
+                    if (c->args.size() != 1) {
+                        result.plannedPhase = 5;
+                        result.failedFeatureName = "Functions";
+                        result.message = "len() requires exactly 1 argument";
+                        return -1;
+                    }
+                    VirTypeKind at = inferType(c->args[0].value.get());
+                    if (at != VirTypeKind::Str) {
+                        result.plannedPhase = 7;
+                        result.failedFeatureName = "Collections";
+                        result.message = "lowering for len() on non-str value is not "
+                            "implemented yet (planned Phase 7)";
+                        return -1;
+                    }
+                }
+
+                std::vector<int> argRegs;
+                for (const auto& a : c->args) {
+                    int r = lowerExpr(a.value.get());
+                    if (r < 0) return -1;
+                    argRegs.push_back(r);
+                }
+                int dest = allocReg();
+                VirInstruction i;
+                i.opcode = VirOpcode::CallBuiltin;
+                i.destReg = dest;
+                i.builtin = builtinOp;
+                i.argRegs = std::move(argRegs);
+                i.sourceLoc = c->loc;
+                entry.instructions.push_back(i);
+                bumpLocalTo(dest);
+                return dest;
+            }
+
+            auto it = topLevelFunctions.find(name);
+            if (it == topLevelFunctions.end()) {
+                result.plannedPhase = 10;
+                result.failedFeatureName = "Functions";
+                result.message = "call to unknown function \"" + name +
+                    "\" (higher-order function calls are Phase 10)";
+                return -1;
+            }
+            int funcIndex = it->second;
+            std::vector<int> argRegs;
+            for (const auto& a : c->args) {
+                int r = lowerExpr(a.value.get());
+                if (r < 0) return -1;
+                argRegs.push_back(r);
+            }
+            int dest = allocReg();
+            VirInstruction i;
+            i.opcode = VirOpcode::Call;
+            i.destReg = dest;
+            i.funcIndex = funcIndex;
+            i.argRegs = std::move(argRegs);
+            i.sourceLoc = c->loc;
+            entry.instructions.push_back(i);
+            bumpLocalTo(dest);
+            return dest;
+        }
+
+    } // namespace
 
     std::string VirPrinter::print(const VirModule& module) const {
         std::ostringstream oss;
@@ -481,10 +763,6 @@ namespace vib {
         oss << "}\n";
         return oss.str();
     }
-
-    // ============================================================================
-    // Verifier — structural checks only in Phase 2.
-    // ============================================================================
 
     VerifierResult VirVerifier::verify(const VirModule& module) const {
         VerifierResult r;
@@ -607,6 +885,83 @@ namespace vib {
                             return r;
                         }
                     }
+                    if (instr.opcode == VirOpcode::Call) {
+                        if (instr.funcIndex < 0 ||
+                            instr.funcIndex >= (int)module.functions.size()) {
+                            r.message = "verifier: Call funcIndex " +
+                                std::to_string(instr.funcIndex) +
+                                " out of range in function \"" + fn.name + "\"";
+                            return r;
+                        }
+                        if (!regOK(instr.destReg)) {
+                            r.message = "verifier: Call destReg out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                        const auto& callee = module.functions[(size_t)instr.funcIndex];
+                        if (instr.argRegs.size() != callee.paramNames.size()) {
+                            r.message = "verifier: Call to \"" + callee.name +
+                                "\" passes " + std::to_string(instr.argRegs.size()) +
+                                " arg(s), callee expects " +
+                                std::to_string(callee.paramNames.size()) +
+                                " in function \"" + fn.name + "\"";
+                            return r;
+                        }
+                        for (int a : instr.argRegs) {
+                            if (!regOK(a)) {
+                                r.message = "verifier: Call argReg out of range in function \"" +
+                                    fn.name + "\"";
+                                return r;
+                            }
+                        }
+                    }
+                    if (instr.opcode == VirOpcode::CallBuiltin) {
+                        if (!regOK(instr.destReg)) {
+                            r.message = "verifier: CallBuiltin destReg out of range in function \"" +
+                                fn.name + "\"";
+                            return r;
+                        }
+                        size_t n = instr.argRegs.size();
+                        bool arityOK = true;
+                        switch (instr.builtin) {
+                        case VirBuiltin::Print:         arityOK = true; break;
+                        case VirBuiltin::ToStr:
+                        case VirBuiltin::ToInt:
+                        case VirBuiltin::ToFloat:
+                        case VirBuiltin::ToBool:
+                        case VirBuiltin::LenStr:
+                        case VirBuiltin::StrUpper:
+                        case VirBuiltin::StrLower:
+                        case VirBuiltin::StrStrip:
+                        case VirBuiltin::StrIsDigit:
+                        case VirBuiltin::StrIsAlpha:
+                        case VirBuiltin::StrIsSpace:
+                        case VirBuiltin::StrToInt:
+                            arityOK = (n == 1); break;
+                        case VirBuiltin::StrContains:
+                        case VirBuiltin::StrFind:
+                        case VirBuiltin::StrStartsWith:
+                        case VirBuiltin::StrEndsWith:
+                        case VirBuiltin::StrCharAt:
+                            arityOK = (n == 2); break;
+                        case VirBuiltin::StrReplace:
+                            arityOK = (n == 3); break;
+                        }
+                        if (!arityOK) {
+                            r.message = "verifier: CallBuiltin(" +
+                                std::string(builtinName(instr.builtin)) +
+                                ") wrong arity " + std::to_string(n) +
+                                " in function \"" + fn.name + "\"";
+                            return r;
+                        }
+                        for (int a : instr.argRegs) {
+                            if (!regOK(a)) {
+                                r.message = "verifier: CallBuiltin argReg out of range in function \"" +
+                                    fn.name + "\"";
+                                return r;
+                            }
+                        }
+                    }
                     if (isTerminator(instr.opcode)) terminated = true;
                 }
                 if (!terminated) {
@@ -621,43 +976,99 @@ namespace vib {
         return r;
     }
 
-    // ============================================================================
-    // Lowering — Phase 2 handles only PassStmt / empty programs.
-    // ============================================================================
-
     LoweringResult VirLowering::lower(const vayu::Block& program) const {
         LoweringResult result;
-
         VirModule& m = result.module;
         m.name = "main";
 
         VirFunction mainFn;
         mainFn.name = "main";
         mainFn.returnType = { VirTypeKind::None };
+        m.functions.push_back(std::move(mainFn));
 
-        VirBlock entry;
-        entry.label = "entry";
-
-        LoweringContext ctx(m, mainFn, entry, result);
-        if (!ctx.lowerBlock(program)) {
-            return result;
+        std::unordered_map<std::string, int> topLevelFunctions;
+        for (const auto& stmt : program.stmts) {
+            if (stmt->kind != vayu::StmtKind::Def) continue;
+            const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
+            VirFunction fn;
+            fn.name = d->name;
+            fn.returnType = { VirTypeKind::None };
+            for (const auto& p : d->params) {
+                fn.paramNames.push_back(p.name);
+                fn.paramTypes.push_back({ VirTypeKind::Any });
+            }
+            int idx = (int)m.functions.size();
+            m.functions.push_back(std::move(fn));
+            topLevelFunctions[d->name] = idx;
         }
 
-        // Implicit return None.
+        for (const auto& stmt : program.stmts) {
+            if (stmt->kind != vayu::StmtKind::Def) continue;
+            const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
+            int idx = topLevelFunctions[d->name];
+            VirFunction& fn = m.functions[(size_t)idx];
+
+            VirBlock entry;
+            entry.label = "entry";
+
+            LoweringContext fctx(m, fn, entry, result);
+            fctx.topLevelFunctions = topLevelFunctions;
+            for (const auto& pname : fn.paramNames) {
+                int slot = fctx.nextLocal++;
+                fctx.localsByName[pname] = slot;
+            }
+
+            if (!fctx.lowerBlock(d->body)) {
+                return result;
+            }
+
+            bool hasRet = !entry.instructions.empty() &&
+                entry.instructions.back().opcode == VirOpcode::Ret;
+            if (!hasRet) {
+                int noneIdx = fctx.addNoneConst();
+                int retReg = fctx.emitConst(noneIdx, vayu::SourceLocation{});
+                VirInstruction ret;
+                ret.opcode = VirOpcode::Ret;
+                ret.operandReg = retReg;
+                entry.instructions.push_back(ret);
+            }
+
+            fn.localCount = fctx.nextLocal;
+            fn.blocks.push_back(std::move(entry));
+            fn.entryBlock = 0;
+        }
+
+        VirFunction& mainRef = m.functions[0];
+        VirBlock mainEntry;
+        mainEntry.label = "entry";
+
+        LoweringContext ctx(m, mainRef, mainEntry, result);
+        ctx.topLevelFunctions = topLevelFunctions;
+
+        for (const auto& stmt : program.stmts) {
+            if (stmt->kind == vayu::StmtKind::Def) continue;
+            if (stmt->kind == vayu::StmtKind::Pass) continue;
+            if (stmt->kind == vayu::StmtKind::Block) {
+                const auto* bs = static_cast<const vayu::BlockStmt*>(stmt.get());
+                if (!ctx.lowerBlock(bs->body)) return result;
+                continue;
+            }
+            int blocker = ctx.lowerStmt(stmt.get());
+            if (blocker > 0) return result;
+        }
+
         int noneIdx = ctx.addNoneConst();
         int retReg = ctx.emitConst(noneIdx, vayu::SourceLocation{});
-
         VirInstruction ret;
         ret.opcode = VirOpcode::Ret;
         ret.operandReg = retReg;
-        entry.instructions.push_back(ret);
+        mainEntry.instructions.push_back(ret);
 
-        mainFn.localCount = ctx.nextLocal;
-        mainFn.blocks.push_back(std::move(entry));
-        mainFn.entryBlock = 0;
-        m.functions.push_back(std::move(mainFn));
+        mainRef.localCount = ctx.nextLocal;
+        mainRef.blocks.push_back(std::move(mainEntry));
+        mainRef.entryBlock = 0;
+
         m.entryFunction = 0;
-
         result.success = true;
         return result;
     }

@@ -2,6 +2,7 @@
 #include "compiler/ast/Ast.hpp"
 #include "compiler/lexer/Token.hpp"
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace vib {
@@ -43,16 +44,41 @@ namespace vib {
         StrEq,      // <destReg> = <lhsReg> == <rhsReg>  (bool; both Str)
         StrNe,      // <destReg> = <lhsReg> != <rhsReg>  (bool; both Str)
         StrCmpLt,   // <destReg> = <lhsReg> <  <rhsReg>  (bool; both Str)
+        // Phase 5.1: calls.
+        Call,          // <destReg> = functions[funcIndex](argRegs...)  user-defined
+        CallBuiltin,   // <destReg> = builtin(argRegs...)                native
+    };
+
+    // Phase 5.1: builtin functions the VIR interpreter can dispatch.
+    // Adding entries requires adding an implementation in VirInterp.cpp and
+    // a case in the verifier's arity check.
+    enum class VirBuiltin {
+        Print,          // variadic
+        ToStr,          // str(x)       1 arg
+        ToInt,          // int(x)       1 arg
+        ToFloat,        // float(x)     1 arg
+        ToBool,         // bool(x)      1 arg
+        LenStr,         // len(s)       1 arg, str only
+        // Phase 4.3: string methods, dispatched as builtins with the receiver
+        // as argRegs[0].
+        StrUpper, StrLower, StrStrip,
+        StrContains, StrFind, StrStartsWith, StrEndsWith,
+        StrIsDigit, StrIsAlpha, StrIsSpace,
+        StrReplace, StrCharAt, StrToInt,
     };
 
     struct VirInstruction {
         VirOpcode            opcode = VirOpcode::Nop;
         int                  destReg = -1;
-        int                  operandReg = -1;   // Ret / Neg / StoreLocal / LoadLocal source
-        int                  lhsReg = -1;       // binary ops
-        int                  rhsReg = -1;       // binary ops
-        int                  constIndex = -1;   // Const
-        int                  localIndex = -1;   // StoreLocal / LoadLocal
+        int                  operandReg = -1;
+        int                  lhsReg = -1;
+        int                  rhsReg = -1;
+        int                  constIndex = -1;
+        int                  localIndex = -1;
+        // Phase 5.1: calls.
+        int                  funcIndex = -1;    // Call
+        VirBuiltin           builtin = VirBuiltin::Print;   // CallBuiltin
+        std::vector<int>     argRegs;           // Call / CallBuiltin
         vayu::SourceLocation sourceLoc;
     };
 
@@ -93,7 +119,36 @@ namespace vib {
     //   - Length / indexing / slicing are NOT part of Phase 4 lowering; they
     //     depend on call expressions (Phase 5) and index expressions (Phase 7).
     //   - Method calls (upper / lower / split / ...) are Phase 5 territory.
-
+    //
+    // .vye Vayu Executable package — design sketch (Phase 2A.1).
+    //
+    // A .vye package is a serialized VirModule plus a header and a section
+    // directory. It is NOT a native OS executable; a compatible Vayu/Integrator
+    // runtime is required to load and execute it. Conceptual layout:
+    //
+    //   magic          : 4 bytes, "VYE\0"
+    //   version        : u16 (currently 0x0001)
+    //   flags          : u16 (reserved; 0 for now)
+    //   section count  : u16
+    //   section table  : (tag u16, offset u32, length u32) * count
+    //   section 1 (CONSTANTS): serialized VirValue array (kind tag + payload)
+    //   section 2 (FUNCTIONS): serialized VirFunction array (name, paramNames,
+    //                          paramTypes, returnType, localCount, blocks,
+    //                          instructions)
+    //   section 3 (ENTRY):     entry function index (u32) and entry block (u32)
+    //   section 4 (DEBUG):     optional; source path, line table (deferred)
+    //
+    // Deterministic serialization: little-endian, fixed-width integers, string
+    // payloads prefixed with u32 length + UTF-8 bytes.
+    //
+    // VyeWriter::write()   — Phase 2A.2. Deterministic .vye emission.
+    // VyeReader::read()    — Phase 2B.1. Strict validation before use:
+    //                        rejects bad magic, unknown versions, section
+    //                        overlap, out-of-range offsets/lengths, invalid
+    //                        constant/function/branch indices, unknown opcodes.
+    // VyeRuntime::execute() — Phase 2B.2. Runs a loaded module.
+    //
+    // Not implemented in this pass. Feature::VyePackaging stays Deferred.
     struct VirPrinter {
         std::string print(const VirModule& module) const;
     };

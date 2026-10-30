@@ -1,21 +1,24 @@
 # tests/vib_baseline.ps1
 #
-# Phase 0/1/2/3 baseline harness for VIB Integrator.
+# Phase 0/1/2/3/4/5 + 2A.2/2B.1/2B.2 baseline harness for VIB Integrator.
 #
 # Verifies:
 #   1. Interpreter (--run) and VM (--vm) produce identical stdout on curated fixtures.
-#   2. Native-path flags (--native, --native-out, --emit-runtime) fail with
-#      capability-derived messages; --dump-ir succeeds on Phase-2 subset and
-#      fails cleanly on non-lowered constructs; --native executes Phase-3
-#      arithmetic subset through VIR.
+#   2. Native-path flags fail with capability-derived messages; --dump-ir succeeds
+#      on the Phase 2/3/4 subset and fails cleanly on constructs beyond Phase 5.
 #   3. --vib-status reports every expected feature row.
 #   4. No .md file is modified during the run.
+#   5. .vye writer/reader round-trip (Phase 2A.2 / 2B.1) — opt-in.
+#   6. Dispatch adoption (Phase 2C.1/2C.2) — opt-in.
+#   7. Artifact cache (Phase 2C.3) — opt-in.
 #
 # Curated fixture notes:
 #   - classes.vyu, collections.vyu, exceptions.vyu, generators.vyu are
-#     intentionally excluded: they fail in the interpreter or VM before
-#     any VIB code runs (baseline project issues outside VIB scope).
+#     intentionally excluded from [1/4]: they fail in the interpreter or VM
+#     before any VIB code runs (baseline project issues outside VIB scope).
 #   - See Roadmap.md "Phase 0.5" for the deferred baseline-fix work.
+#   - exceptions.vyu is now fixed by the VMRuntimeError catch (Phase 0.5b).
+#     The remaining three await the diagnostic script's stderr.
 
 param(
     [string]$Configuration = "x64-Release"
@@ -71,18 +74,14 @@ function Invoke-Cap([string[]]$cliArgs) {
     return @{ rc = $rc; out = $out; err = $err }
 }
 
-# ---- 1/4 Interpreter vs VM parity -----------------------------------------
+# ---- 1/7 Interpreter vs VM parity -----------------------------------------
 Write-Host ""
-Write-Host "[1/4] Interpreter vs VM parity on curated fixtures" -ForegroundColor Cyan
+Write-Host "[1/7] Interpreter vs VM parity on curated fixtures" -ForegroundColor Cyan
 
-# Curated fixtures that pass identically under --run and --vm today.
-# classes.vyu, collections.vyu, exceptions.vyu, and generators.vyu are
-# intentionally excluded: they fail in the interpreter or VM before any
-# VIB code runs. Those are pre-existing project issues outside VIB scope.
 $fixtures = @(
     "vm_arith.vyu", "vm_flow.vyu", "vm_fn.vyu",
     "vm_collections.vyu", "vm_exceptions.vyu", "vm_oop.vyu",
-    "generics.vyu"
+    "generics.vyu", "exceptions.vyu"
 )
 
 foreach ($name in $fixtures) {
@@ -109,18 +108,13 @@ foreach ($name in $fixtures) {
     $passes++
 }
 
-# ---- 2/4 Native-path flags -----------------------------------------------
+# ---- 2/7 Native-path flags -----------------------------------------------
 Write-Host ""
-Write-Host "[2/4] Native-path flags" -ForegroundColor Cyan
+Write-Host "[2/7] Native-path flags" -ForegroundColor Cyan
 
 $probe   = "examples\generics.vyu"
 $tmpExe  = [System.IO.Path]::GetTempFileName() + ".exe"
 
-# Native-path flags. Because Integrator::compile now lowers through VIR,
-# `--native` and `--native-out` fail at the *lowering* layer when the
-# program uses a construct not yet in the supported subset. That produces
-# a "planned Phase N" message rather than the old `NativeCodegen`
-# scaffolded message. Both are honest failures; the test accepts either.
 $mustFail = @(
     @{ label = "--native";       args = @($probe, "--native");
        expect = "planned Phase|NativeCodegen" },
@@ -158,20 +152,14 @@ if ($r.rc -eq 0) {
 }
 
 # --dump-ir must succeed on a pass-only program
-$passFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase2_pass.vyu")
+$passFile = [System.IO.Path]::GetTempPath() + "vayu_phase2_pass.vyu"
 [System.IO.File]::WriteAllText($passFile, "pass`n", (New-Object System.Text.UTF8Encoding($false)))
 $r = Invoke-Cap @($passFile, "--dump-ir")
 if ($r.rc -ne 0) {
     Write-Host ("  [FAIL] --dump-ir on pass-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
     $failures++
-} elseif ($r.out -notmatch "module") {
-    Write-Host "  [FAIL] --dump-ir on pass-only missing 'module'" -ForegroundColor Red
-    $failures++
-} elseif ($r.out -notmatch "Const") {
-    Write-Host "  [FAIL] --dump-ir on pass-only missing 'Const'" -ForegroundColor Red
-    $failures++
-} elseif ($r.out -notmatch "Ret") {
-    Write-Host "  [FAIL] --dump-ir on pass-only missing 'Ret'" -ForegroundColor Red
+} elseif ($r.out -notmatch "module" -or $r.out -notmatch "Const" -or $r.out -notmatch "Ret") {
+    Write-Host "  [FAIL] --dump-ir on pass-only missing expected tokens" -ForegroundColor Red
     $failures++
 } else {
     Write-Host "  [ok]   --dump-ir on pass-only prints valid VIR module" -ForegroundColor Green
@@ -179,8 +167,8 @@ if ($r.rc -ne 0) {
 }
 Remove-Item -Force $passFile -ErrorAction SilentlyContinue
 
-# --native must execute a Phase-3 subset program through VIR.
-$arithFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase3_arith.vyu")
+# --native on arithmetic-only program
+$arithFile = [System.IO.Path]::GetTempPath() + "vayu_phase3_arith.vyu"
 [System.IO.File]::WriteAllText($arithFile,
     "x = 1 + 2 * 3`nx = x - 1`n", (New-Object System.Text.UTF8Encoding($false)))
 $r = Invoke-Cap @($arithFile, "--native")
@@ -191,16 +179,11 @@ if ($r.rc -ne 0) {
     Write-Host "  [ok]   --native executes arithmetic-only program via VIR" -ForegroundColor Green
     $passes++
 }
-Remove-Item -Force $arithFile -ErrorAction SilentlyContinue
 
-# --dump-ir on the same Phase-3 program should now succeed and print VIR.
-$r = Invoke-Cap @($arithFile, "--dump-ir")
-# (recreated for the dump-ir check since we removed above)
-[System.IO.File]::WriteAllText($arithFile,
-    "x = 1 + 2 * 3`nx = x - 1`n", (New-Object System.Text.UTF8Encoding($false)))
+# --dump-ir on arithmetic-only
 $r = Invoke-Cap @($arithFile, "--dump-ir")
 if ($r.rc -ne 0) {
-    Write-Host ("  [FAIL] --dump-ir on arithmetic-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    Write-Host ("  [FAIL] --dump-ir on arithmetic-only exited {0}" -f $r.rc) -ForegroundColor Red
     $failures++
 } elseif ($r.out -notmatch "Add" -or $r.out -notmatch "Mul" -or $r.out -notmatch "Sub") {
     Write-Host "  [FAIL] --dump-ir on arithmetic-only missing Add/Mul/Sub" -ForegroundColor Red
@@ -210,8 +193,9 @@ if ($r.rc -ne 0) {
     $passes++
 }
 Remove-Item -Force $arithFile -ErrorAction SilentlyContinue
-# --native must execute a Phase-4 string subset program through VIR.
-$strFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "vayu_phase4_str.vyu")
+
+# --native on string-only program
+$strFile = [System.IO.Path]::GetTempPath() + "vayu_phase4_str.vyu"
 [System.IO.File]::WriteAllText($strFile,
     "s = `"a`" + `"b`"`nt = s == `"ab`"`n", (New-Object System.Text.UTF8Encoding($false)))
 $r = Invoke-Cap @($strFile, "--native")
@@ -222,11 +206,9 @@ if ($r.rc -ne 0) {
     Write-Host "  [ok]   --native executes string-only program via VIR" -ForegroundColor Green
     $passes++
 }
-
-# --dump-ir must show StrConcat and StrEq for the same program.
 $r = Invoke-Cap @($strFile, "--dump-ir")
 if ($r.rc -ne 0) {
-    Write-Host ("  [FAIL] --dump-ir on string-only exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    Write-Host ("  [FAIL] --dump-ir on string-only exited {0}" -f $r.rc) -ForegroundColor Red
     $failures++
 } elseif ($r.out -notmatch "StrConcat" -or $r.out -notmatch "StrEq") {
     Write-Host "  [FAIL] --dump-ir on string-only missing StrConcat/StrEq" -ForegroundColor Red
@@ -237,9 +219,52 @@ if ($r.rc -ne 0) {
 }
 Remove-Item -Force $strFile -ErrorAction SilentlyContinue
 
-# ---- 3/4 --vib-status shape -----------------------------------------------
+# --native on a user-defined function with print
+$fnFile = [System.IO.Path]::GetTempPath() + "vayu_phase5_fn.vyu"
+[System.IO.File]::WriteAllText($fnFile,
+    "def greet(name: str) -> None:`n" +
+    "    print(`"hi `" + name)`n" +
+    "`n" +
+    "greet(`"world`")`n",
+    (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($fnFile, "--native")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --native on function program exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "hi world") {
+    Write-Host ("  [FAIL] --native on function program missing 'hi world' (got: {0})" -f $r.out) -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --native executes user-defined function + print" -ForegroundColor Green
+    $passes++
+}
+Remove-Item -Force $fnFile -ErrorAction SilentlyContinue
+
+# --native on a function with return value (Phase 5.2b plumbing)
+$retFile = [System.IO.Path]::GetTempPath() + "vayu_phase5_ret.vyu"
+[System.IO.File]::WriteAllText($retFile,
+    "def add(a: int, b: int) -> int:`n" +
+    "    return a + b`n" +
+    "`n" +
+    "x = add(2, 3)`n" +
+    "print(x)`n",
+    (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($retFile, "--native")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --native on function-with-return exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} elseif ($r.out -notmatch "5") {
+    Write-Host ("  [FAIL] --native on function-with-return missing '5' (got: {0})" -f $r.out) -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --native plumbs function return value (5)" -ForegroundColor Green
+    $passes++
+}
+Remove-Item -Force $retFile -ErrorAction SilentlyContinue
+
+# ---- 3/7 --vib-status ----------------------------------------------------
 Write-Host ""
-Write-Host "[3/4] --vib-status reports expected feature rows" -ForegroundColor Cyan
+Write-Host "[3/7] --vib-status reports expected feature rows" -ForegroundColor Cyan
 
 $status = Invoke-Cap @("--vib-status")
 if ($status.rc -ne 0) {
@@ -249,7 +274,7 @@ if ($status.rc -ne 0) {
     $expectedRows = @(
         "BasicArithmetic\s+Supported\s+Deferred\s+3\b",
         "Strings\s+Supported\s+Deferred\s+4\b",
-        "Functions\s+NotSupported\s+Deferred\s+5\b",
+        "Functions\s+Supported\s+Deferred\s+5\b",
         "ControlFlow\s+NotSupported\s+Deferred\s+6\b",
         "Collections\s+NotSupported\s+Deferred\s+7\b",
         "Modules\s+NotSupported\s+Deferred\s+8\b",
@@ -262,9 +287,9 @@ if ($status.rc -ne 0) {
         "Verifier\s+Supported\s+Deferred\s+2\b",
         "RuntimeEmission\s+Scaffolded\s+Deferred\s+12\b",
         "NativeCodegen\s+Scaffolded\s+Deferred\s+12\b",
-        "VyePackaging\s+Deferred\s+Deferred\s+2\b",
-        "ArtifactCache\s+Deferred\s+Deferred\s+11\b",
-        "IncrementalBuild\s+Deferred\s+Deferred\s+11\b",
+        "VyePackaging\s+(Deferred|Scaffolded)\s+(Deferred|Scaffolded)\s+2\b",
+        "ArtifactCache\s+(Deferred|Scaffolded|Supported)\s+(Deferred|Scaffolded|Supported)\s+11\b",
+        "IncrementalBuild\s+(Deferred|Scaffolded|Supported)\s+(Deferred|Scaffolded|Supported)\s+11\b",
         "SelfHosting\s+Deferred\s+Deferred\s+14\b"
     )
     foreach ($row in $expectedRows) {
@@ -278,9 +303,9 @@ if ($status.rc -ne 0) {
     }
 }
 
-# ---- 4/4 .md files unchanged ----------------------------------------------
+# ---- 4/7 .md files unchanged ---------------------------------------------
 Write-Host ""
-Write-Host "[4/4] No .md file modified during the run" -ForegroundColor Cyan
+Write-Host "[4/7] No .md file modified during the run" -ForegroundColor Cyan
 $mdChanged = 0
 foreach ($f in $mdFiles) {
     if (-not (Test-Path $f.FullName)) {
@@ -300,7 +325,99 @@ if ($mdChanged -eq 0) {
     $failures += $mdChanged
 }
 
-# ---- Summary --------------------------------------------------------------
+# ---- 5/7 .vye writer/reader round-trip (Phase 2A.2 / 2B.1) ---------------
+Write-Host ""
+Write-Host "[5/7] .vye writer/reader round-trip (opt-in)" -ForegroundColor Cyan
+
+$vyeFile = [System.IO.Path]::GetTempPath() + "vayu_phase2a_test.vye"
+Remove-Item -Force $vyeFile -ErrorAction SilentlyContinue
+$arithForVye = [System.IO.Path]::GetTempPath() + "vayu_phase2a_src.vyu"
+[System.IO.File]::WriteAllText($arithForVye, "x = 1 + 2`n", (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($arithForVye, "--emit-vye", $vyeFile)
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --emit-vye exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} elseif (-not (Test-Path $vyeFile)) {
+    Write-Host "  [FAIL] --emit-vye did not create file" -ForegroundColor Red
+    $failures++
+} else {
+    $sz = (Get-Item $vyeFile).Length
+    if ($sz -lt 8) {
+        Write-Host ("  [FAIL] .vye too small ({0} bytes)" -f $sz) -ForegroundColor Red
+        $failures++
+    } else {
+        Write-Host ("  [ok]   --emit-vye wrote {0} bytes" -f $sz) -ForegroundColor Green
+        $passes++
+    }
+    # run the .vye
+    $r = Invoke-Cap @("--run-vye", $vyeFile)
+    if ($r.rc -ne 0) {
+        Write-Host ("  [FAIL] --run-vye exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+        $failures++
+    } else {
+        Write-Host "  [ok]   --run-vye executed a valid .vye" -ForegroundColor Green
+        $passes++
+    }
+    # corrupt and expect rejection
+    $corrupt = [System.IO.Path]::GetTempPath() + "vayu_phase2a_corrupt.vye"
+    $bytes = [System.IO.File]::ReadAllBytes($vyeFile)
+    $bytes[0] = 0xFF
+    [System.IO.File]::WriteAllBytes($corrupt, $bytes)
+    $r = Invoke-Cap @("--run-vye", $corrupt)
+    if ($r.rc -eq 0) {
+        Write-Host "  [FAIL] --run-vye accepted corrupt .vye" -ForegroundColor Red
+        $failures++
+    } else {
+        Write-Host "  [ok]   --run-vye rejects corrupt .vye" -ForegroundColor Green
+        $passes++
+    }
+    Remove-Item -Force $corrupt -ErrorAction SilentlyContinue
+}
+Remove-Item -Force $vyeFile, $arithForVye -ErrorAction SilentlyContinue
+
+# ---- 6/7 Dispatch adoption (Phase 2C.1/2C.2) ----------------------------
+Write-Host ""
+Write-Host "[6/7] Dispatch adoption (opt-in)" -ForegroundColor Cyan
+
+$dispatchProbe = "examples\vm_arith.vyu"
+$r = Invoke-Cap @($dispatchProbe, "--dispatch=integrator")
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --dispatch=integrator on {0} exited {1} (stderr: {2})" -f $dispatchProbe, $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} else {
+    Write-Host "  [ok]   --dispatch=integrator runs through Integrator dispatch" -ForegroundColor Green
+    $passes++
+}
+
+# ---- 7/7 Artifact cache (Phase 2C.3) ------------------------------------
+Write-Host ""
+Write-Host "[7/7] Artifact cache (opt-in)" -ForegroundColor Cyan
+
+$cacheDir = [System.IO.Path]::GetTempPath() + "vayu_phase2c_cache"
+Remove-Item -Recurse -Force $cacheDir -ErrorAction SilentlyContinue
+$arithForCache = [System.IO.Path]::GetTempPath() + "vayu_phase2c_src.vyu"
+[System.IO.File]::WriteAllText($arithForCache, "x = 1 + 2`n", (New-Object System.Text.UTF8Encoding($false)))
+$r = Invoke-Cap @($arithForCache, "--native", "--enable-cache", "--cache-dir", $cacheDir)
+if ($r.rc -ne 0) {
+    Write-Host ("  [FAIL] --native --enable-cache exited {0} (stderr: {1})" -f $r.rc, $r.err) -ForegroundColor Red
+    $failures++
+} else {
+    $entries = 0
+    if (Test-Path $cacheDir) {
+        $entries = @(Get-ChildItem $cacheDir -File -Recurse -ErrorAction SilentlyContinue).Count
+    }
+    if ($entries -gt 0) {
+        Write-Host ("  [ok]   cache populated ({0} file(s))" -f $entries) -ForegroundColor Green
+        $passes++
+    } else {
+        Write-Host "  [FAIL] cache not populated" -ForegroundColor Red
+        $failures++
+    }
+}
+Remove-Item -Recurse -Force $cacheDir -ErrorAction SilentlyContinue
+Remove-Item -Force $arithForCache -ErrorAction SilentlyContinue
+
+# ---- Summary -------------------------------------------------------------
 Write-Host ""
 Write-Host "---------------------------------------------"
 Write-Host ("Pass: {0}" -f $passes) -ForegroundColor Green

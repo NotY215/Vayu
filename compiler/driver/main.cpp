@@ -51,6 +51,8 @@ static void usage() {
         "  --dump-ast           print the parsed AST\n"
         "  --dump-bytecode      compile to bytecode and print disassembly\n"
         "  --dump-ir            print VIB IR (when implemented)\n"
+        "  --emit-vye <path>    write a .vye package to <path>\n"
+        "  --run-vye <path>     execute a .vye package\n"
         "\n"
         "Flags:\n"
         "  --no-check           skip the type checker\n"
@@ -58,10 +60,38 @@ static void usage() {
         "  --bench [N]          run the program N times (default 5)\n"
         "  --link=external      select VIB-managed external linking (reserved)\n"
         "  --link=embedded      reserved compatibility option; VIB owns link policy\n"
+        "  --enable-cache       enable the Phase 2C.3 artifact cache\n"
+        "  --cache-dir <path>   cache directory (default .vayu-cache)\n"
+        "  --dispatch=integrator route --run/--vm through Integrator dispatch\n"
         "\n"
         "Utility:\n"
         "  --emit-runtime <path>  unavailable until VIB runtime emission is implemented\n"
         "  --vib-status           print VIB Integrator capability matrix\n");
+}
+
+static void printVibStatus() {
+    using namespace vib;
+    std::printf("VIB Integrator status\n");
+    std::printf("=====================\n\n");
+    std::printf("Execution routes:\n");
+    std::printf("  Interpreter   --run       working (external to Integrator)\n");
+    std::printf("  VM            --vm        working (external to Integrator)\n");
+    std::printf("  Native        --native    Scaffolded (Phase 12)\n");
+    std::printf("  Vye           --run-vye   Supported (Phases 2A-2C)\n\n");
+    std::printf("Feature capabilities:\n");
+    std::printf("  %-26s %-13s %-11s %-5s %s\n",
+        "Feature", "Native", "Vye", "Phase", "Note");
+    std::printf("  %-26s %-13s %-11s %-5s %s\n",
+        "--------------------------", "-------------",
+        "-----------", "-----", "----");
+    for (const auto& c : Integrator::capabilities()) {
+        std::printf("  %-26s %-13s %-11s %-5d %s\n",
+            c.name,
+            Integrator::supportLevelName(c.nativeLevel),
+            Integrator::supportLevelName(c.vyeLevel),
+            c.plannedPhase,
+            c.note);
+    }
 }
 
 namespace {
@@ -87,31 +117,6 @@ namespace {
     }
 }
 
-static void printVibStatus() {
-    using namespace vib;
-    std::printf("VIB Integrator status\n");
-    std::printf("=====================\n\n");
-    std::printf("Execution routes:\n");
-    std::printf("  Interpreter   --run       working (external to Integrator)\n");
-    std::printf("  VM            --vm        working (external to Integrator)\n");
-    std::printf("  Native        --native    Scaffolded (Phase 12)\n");
-    std::printf("  Vye           (deferred)  Deferred (after Phase 10)\n\n");
-    std::printf("Feature capabilities:\n");
-    std::printf("  %-26s %-13s %-11s %-5s %s\n",
-        "Feature", "Native", "Vye", "Phase", "Note");
-    std::printf("  %-26s %-13s %-11s %-5s %s\n",
-        "--------------------------", "-------------",
-        "-----------", "-----", "----");
-    for (const auto& c : Integrator::capabilities()) {
-        std::printf("  %-26s %-13s %-11s %-5d %s\n",
-            c.name,
-            Integrator::supportLevelName(c.nativeLevel),
-            Integrator::supportLevelName(c.vyeLevel),
-            c.plannedPhase,
-            c.note);
-    }
-}
-
 int main(int argc, char** argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -119,7 +124,6 @@ int main(int argc, char** argv) {
 
     if (argc < 2) { usage(); return 1; }
 
-    // --emit-runtime <path>
     if (std::strcmp(argv[1], "--emit-runtime") == 0) {
         if (argc < 3) {
             std::fprintf(stderr, "vayuc: --emit-runtime requires a path\n");
@@ -133,13 +137,10 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // --vib-status  (no file needed; handled before file loading)
     if (std::strcmp(argv[1], "--vib-status") == 0) {
         printVibStatus();
         return 0;
     }
-
-    if (argc < 2) { usage(); return 1; }
 
     std::string file = argv[1];
 
@@ -152,6 +153,12 @@ int main(int argc, char** argv) {
     std::string nativeOutPath;
     vayu::NativeCompiler::LinkMode linkMode =
         vayu::NativeCompiler::LinkMode::External;
+    std::string emitVyePath;
+    std::string runVyePath;
+    bool        runVye = false;
+    bool        enableCache = false;
+    std::string cacheDir;
+    bool        dispatchIntegrator = false;
 
     for (int i = 2; i < argc; ++i) {
         const char* a = argv[i];
@@ -170,7 +177,6 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--no-check"))      skipCheck = true;
         else if (!std::strcmp(a, "--no-opt"))        useOpt = false;
         else if (!std::strcmp(a, "--backend")) {
-            // Retained as a temporary CLI compatibility selector; VIB is integrated.
             if (i + 1 >= argc) {
                 std::fprintf(stderr,
                     "vayuc: --backend requires an argument\n");
@@ -200,11 +206,54 @@ int main(int argc, char** argv) {
                 if (end && *end == '\0' && v > 0) { benchRuns = (int)v; ++i; }
             }
         }
+        else if (!std::strcmp(a, "--emit-vye")) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "vayuc: --emit-vye requires a path\n");
+                return 1;
+            }
+            emitVyePath = argv[++i];
+        }
+        else if (!std::strcmp(a, "--run-vye")) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "vayuc: --run-vye requires a path\n");
+                return 1;
+            }
+            runVyePath = argv[++i];
+            runVye = true;
+        }
+        else if (!std::strcmp(a, "--enable-cache")) {
+            enableCache = true;
+        }
+        else if (!std::strcmp(a, "--cache-dir")) {
+            if (i + 1 >= argc) {
+                std::fprintf(stderr, "vayuc: --cache-dir requires a path\n");
+                return 1;
+            }
+            cacheDir = argv[++i];
+        }
+        else if (!std::strcmp(a, "--dispatch=integrator")) {
+            dispatchIntegrator = true;
+        }
         else {
             std::fprintf(stderr, "vayuc: unknown flag '%s'\n", a);
             usage();
             return 1;
         }
+    }
+
+    // --run-vye  (before source load; doesn't require .vyu)
+    if (runVye) {
+        vayu::NativeCompiler nc;
+        nc.setCache(enableCache, cacheDir, false);
+        int rc = nc.runVye(runVyePath);
+        for (const auto& line : nc.lastStdout()) {
+            std::fputs(line.c_str(), stdout);
+            std::fputc('\n', stdout);
+        }
+        if (rc != 0) {
+            std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
+        }
+        return rc;
     }
 
     std::string src = readFile(file);
@@ -256,6 +305,18 @@ int main(int argc, char** argv) {
 
     std::string srcDir = sourceDirOf(file);
 
+    // ---------- emit-vye ----------
+    if (!emitVyePath.empty()) {
+        vayu::NativeCompiler nc;
+        nc.setCache(enableCache, cacheDir, false);
+        int rc = nc.emitVye(program, srcDir, emitVyePath);
+        if (rc != 0) {
+            std::fprintf(stderr, "%s: %s\n", file.c_str(), nc.lastError().c_str());
+            return rc;
+        }
+        return 0;
+    }
+
     // ---------- dump-bytecode ----------
     if (mode == Mode::DumpBytecode) {
         auto chunk = std::make_shared<vayu::Chunk>();
@@ -292,9 +353,10 @@ int main(int argc, char** argv) {
     }
 
     // ---------- native ----------
-    if (mode == Mode::Native) {
+    if (mode == Mode::Native || dispatchIntegrator) {
         if (!nativeOutPath.empty()) {
             vayu::NativeCompiler nc;
+            nc.setCache(enableCache, cacheDir, false);
             nc.setLinkMode(linkMode);
             nc.setOutputExe(nativeOutPath);
             int rc = nc.compileAndRun(program, srcDir);
@@ -307,6 +369,7 @@ int main(int argc, char** argv) {
         if (benchRuns > 0) {
             runBenchmark("native (includes compile)", benchRuns, [&]() {
                 vayu::NativeCompiler nc;
+                nc.setCache(enableCache, cacheDir, false);
                 nc.setLinkMode(linkMode);
                 if (nc.compileAndRun(program, srcDir) != 0) {
                     std::fprintf(stderr, "%s: %s\n",
@@ -318,6 +381,7 @@ int main(int argc, char** argv) {
         }
 
         vayu::NativeCompiler nc;
+        nc.setCache(enableCache, cacheDir, false);
         nc.setLinkMode(linkMode);
         int rc = nc.compileAndRun(program, srcDir);
         if (rc != 0) {

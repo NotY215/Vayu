@@ -936,6 +936,25 @@ namespace vayu {
                     throw VayuException{ exc, e.loc };
                 reload();
             }
+            catch (const VMRuntimeError& e) {
+                // VMRuntimeError is a sibling of RuntimeError (both extend
+                // std::runtime_error), so the previous catch does not fire.
+                // Convert to a Vayu-level exception so try/except inside the
+                // VM can catch it. Without this, a runtime error like
+                // division-by-zero escapes the whole runLoop and exits 1.
+                if (!frames_.empty() && &frames_.back() == frame)
+                    frame->ip = ip;
+                Value exc;
+                if (Interpreter::current_)
+                    exc = Interpreter::current_->vmMakeException(
+                        "RuntimeError", e.what());
+                else
+                    exc = Value(e.what());
+                unwindToHandler(exc);
+                if (frames_.size() <= stopAtFrameCount)
+                    throw VayuException{ exc, SourceLocation{} };
+                reload();
+            }
         }
     }
 
