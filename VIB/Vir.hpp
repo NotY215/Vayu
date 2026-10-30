@@ -197,7 +197,8 @@ namespace vib {
     };
 
     struct VirLowering {
-        LoweringResult lower(const vayu::Block& program) const;
+        LoweringResult lower(const vayu::Block& program,
+                             const std::string& sourceDir = {}) const;
     };
 
 } // namespace vib

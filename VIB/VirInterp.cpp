@@ -670,16 +670,16 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                 }
 
                 case VirOpcode::CallBuiltin: {
-                    std::vector<RtValue> args;
-                    args.reserve(instr.argRegs.size());
-                    for (int r : instr.argRegs) args.push_back(locals[(size_t)r]);
+                    std::vector<RtValue> callArgs;
+                    callArgs.reserve(instr.argRegs.size());
+                    for (int r : instr.argRegs) callArgs.push_back(locals[(size_t)r]);
                     RtValue r;
                     switch (instr.builtin) {
                     case VirBuiltin::Print: {
                         std::string line;
-                        for (size_t i = 0; i < args.size(); ++i) {
+                        for (size_t i = 0; i < callArgs.size(); ++i) {
                             if (i) line += " ";
-                            line += rtToString(args[i]);
+                            line += rtToString(callArgs[i]);
                         }
                         stdoutLines.push_back(line);
                         r.kind = VirValueKind::None;
@@ -687,11 +687,11 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     }
                     case VirBuiltin::ToStr: {
                         r.kind = VirValueKind::Str;
-                        r.s = rtToString(args[0]);
+                        r.s = rtToString(callArgs[0]);
                         break;
                     }
                     case VirBuiltin::ToInt: {
-                        const RtValue& v = args[0];
+                        const RtValue& v = callArgs[0];
                         r.kind = VirValueKind::Int;
                         if (v.kind == VirValueKind::Int)        r.i = v.i;
                         else if (v.kind == VirValueKind::Float) r.i = (long long)v.f;
@@ -706,7 +706,7 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                         break;
                     }
                     case VirBuiltin::ToFloat: {
-                        const RtValue& v = args[0];
+                        const RtValue& v = callArgs[0];
                         r.kind = VirValueKind::Float;
                         if (v.kind == VirValueKind::Int)        r.f = (double)v.i;
                         else if (v.kind == VirValueKind::Float) r.f = v.f;
@@ -722,21 +722,21 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     }
                     case VirBuiltin::ToBool: {
                         r.kind = VirValueKind::Bool;
-                        r.b = truthy(args[0]);
+                        r.b = truthy(callArgs[0]);
                         break;
                     }
                     case VirBuiltin::LenStr: {
                         r.kind = VirValueKind::Int;
-                        if (args[0].kind == VirValueKind::Str) {
-                            r.i = (long long)args[0].s.size();
-                        } else if (args[0].kind == VirValueKind::List && args[0].list) {
-                            r.i = (long long)args[0].list->size();
-                        } else if (args[0].kind == VirValueKind::Map && args[0].map) {
-                            r.i = (long long)args[0].map->size();
-                        } else if (args[0].kind == VirValueKind::Tuple && args[0].list) {
-                            r.i = (long long)args[0].list->size();
-                        } else if (args[0].kind == VirValueKind::Set && args[0].setElems) {
-                            r.i = (long long)args[0].setElems->size();
+                        if (callArgs[0].kind == VirValueKind::Str) {
+                            r.i = (long long)callArgs[0].s.size();
+                        } else if (callArgs[0].kind == VirValueKind::List && callArgs[0].list) {
+                            r.i = (long long)callArgs[0].list->size();
+                        } else if (callArgs[0].kind == VirValueKind::Map && callArgs[0].map) {
+                            r.i = (long long)callArgs[0].map->size();
+                        } else if (callArgs[0].kind == VirValueKind::Tuple && callArgs[0].list) {
+                            r.i = (long long)callArgs[0].list->size();
+                        } else if (callArgs[0].kind == VirValueKind::Set && callArgs[0].setElems) {
+                            r.i = (long long)callArgs[0].setElems->size();
                         } else {
                             out.kind = ErrorKind::RuntimeError; out.message = "interp: len() expects str/list/map/tuple/set"; return out;
                         }
@@ -745,7 +745,7 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     case VirBuiltin::StrUpper:
                     case VirBuiltin::StrLower: {
                         r.kind = VirValueKind::Str;
-                        std::string s = args[0].s;
+                        std::string s = callArgs[0].s;
                         for (auto& ch : s) {
                             if (instr.builtin == VirBuiltin::StrUpper) ch = (char)std::toupper((unsigned char)ch);
                             else                                        ch = (char)std::tolower((unsigned char)ch);
@@ -754,7 +754,7 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                         break;
                     }
                     case VirBuiltin::StrStrip: {
-                        const std::string& s = args[0].s;
+                        const std::string& s = callArgs[0].s;
                         size_t a = 0, b = s.size();
                         auto isws = [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; };
                         while (a < b && isws(s[a])) ++a;
@@ -765,51 +765,51 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     }
                     case VirBuiltin::StrContains: {
                         r.kind = VirValueKind::Bool;
-                        r.b = args[0].s.find(args[1].s) != std::string::npos;
+                        r.b = callArgs[0].s.find(callArgs[1].s) != std::string::npos;
                         break;
                     }
                     case VirBuiltin::StrFind: {
                         r.kind = VirValueKind::Int;
-                        size_t p = args[0].s.find(args[1].s);
+                        size_t p = callArgs[0].s.find(callArgs[1].s);
                         r.i = (p == std::string::npos) ? -1 : (long long)p;
                         break;
                     }
                     case VirBuiltin::StrStartsWith: {
                         r.kind = VirValueKind::Bool;
-                        r.b = args[0].s.size() >= args[1].s.size() &&
-                            args[0].s.compare(0, args[1].s.size(), args[1].s) == 0;
+                        r.b = callArgs[0].s.size() >= callArgs[1].s.size() &&
+                            callArgs[0].s.compare(0, callArgs[1].s.size(), callArgs[1].s) == 0;
                         break;
                     }
                     case VirBuiltin::StrEndsWith: {
                         r.kind = VirValueKind::Bool;
-                        r.b = args[0].s.size() >= args[1].s.size() &&
-                            args[0].s.compare(args[0].s.size() - args[1].s.size(),
-                                args[1].s.size(), args[1].s) == 0;
+                        r.b = callArgs[0].s.size() >= callArgs[1].s.size() &&
+                            callArgs[0].s.compare(callArgs[0].s.size() - callArgs[1].s.size(),
+                                callArgs[1].s.size(), callArgs[1].s) == 0;
                         break;
                     }
                     case VirBuiltin::StrIsDigit: {
                         r.kind = VirValueKind::Bool;
-                        r.b = !args[0].s.empty();
-                        for (char ch : args[0].s) if (!std::isdigit((unsigned char)ch)) { r.b = false; break; }
+                        r.b = !callArgs[0].s.empty();
+                        for (char ch : callArgs[0].s) if (!std::isdigit((unsigned char)ch)) { r.b = false; break; }
                         break;
                     }
                     case VirBuiltin::StrIsAlpha: {
                         r.kind = VirValueKind::Bool;
-                        r.b = !args[0].s.empty();
-                        for (char ch : args[0].s) if (!std::isalpha((unsigned char)ch)) { r.b = false; break; }
+                        r.b = !callArgs[0].s.empty();
+                        for (char ch : callArgs[0].s) if (!std::isalpha((unsigned char)ch)) { r.b = false; break; }
                         break;
                     }
                     case VirBuiltin::StrIsSpace: {
                         r.kind = VirValueKind::Bool;
-                        r.b = !args[0].s.empty();
+                        r.b = !callArgs[0].s.empty();
                         auto isws = [](char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v'; };
-                        for (char ch : args[0].s) if (!isws(ch)) { r.b = false; break; }
+                        for (char ch : callArgs[0].s) if (!isws(ch)) { r.b = false; break; }
                         break;
                     }
                     case VirBuiltin::StrReplace: {
-                        const std::string& hay = args[0].s;
-                        const std::string& oldS = args[1].s;
-                        const std::string& newS = args[2].s;
+                        const std::string& hay = callArgs[0].s;
+                        const std::string& oldS = callArgs[1].s;
+                        const std::string& newS = callArgs[2].s;
                         r.kind = VirValueKind::Str;
                         if (oldS.empty()) { r.s = hay; break; }
                         std::string outS;
@@ -824,8 +824,8 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                         break;
                     }
                     case VirBuiltin::StrCharAt: {
-                        const std::string& s = args[0].s;
-                        long long i = args[1].i;
+                        const std::string& s = callArgs[0].s;
+                        long long i = callArgs[1].i;
                         if (i < 0) i += (long long)s.size();
                         if (i < 0 || i >= (long long)s.size()) { out.kind = ErrorKind::RuntimeError; out.message = "interp: char_at out of range"; return out; }
                         r.kind = VirValueKind::Str;
@@ -834,8 +834,8 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     }
                     case VirBuiltin::StrToInt: {
                         r.kind = VirValueKind::Int;
-                        try { r.i = std::stoll(args[0].s); }
-                        catch (...) { out.kind = ErrorKind::RuntimeError; out.message = "interp: to_int() parse error on \"" + args[0].s + "\""; return out; }
+                        try { r.i = std::stoll(callArgs[0].s); }
+                        catch (...) { out.kind = ErrorKind::RuntimeError; out.message = "interp: to_int() parse error on \"" + callArgs[0].s + "\""; return out; }
                         break;
                     }
                     }

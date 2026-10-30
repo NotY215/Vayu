@@ -1,4 +1,7 @@
 #include "Vir.hpp"
+#include "compiler/lexer/Lexer.hpp"
+#include "compiler/parser/Parser.hpp"
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -1429,10 +1432,56 @@ namespace vib {
         return r;
     }
 
-    LoweringResult VirLowering::lower(const vayu::Block& program) const {
+    LoweringResult VirLowering::lower(const vayu::Block& program,
+                                      const std::string& sourceDir) const {
         LoweringResult result;
         VirModule& m = result.module;
         m.name = "main";
+
+        // Phase 8.1: load imported .vyu/.vayu modules (flat function merge).
+        std::vector<vayu::Block> importedBlocks;
+        auto tryLoad = [&](const std::string& modName) -> bool {
+            std::string base = sourceDir;
+            if (!base.empty() && base.back() != '/' && base.back() != '\\')
+                base.push_back('/');
+            for (const char* ext : {".vyu", ".vayu"}) {
+                std::string path = base + modName + ext;
+                std::ifstream in(path, std::ios::binary);
+                if (!in) continue;
+                std::stringstream ss; ss << in.rdbuf();
+                try {
+                    vayu::Lexer lexer(ss.str());
+                    auto tokens = lexer.tokenize();
+                    vayu::Parser parser(std::move(tokens));
+                    importedBlocks.push_back(parser.parseProgram());
+                    return true;
+                } catch (const std::exception& e) {
+                    result.plannedPhase = 8;
+                    result.failedFeatureName = "Modules";
+                    result.message = std::string("import '") + modName + "': " + e.what();
+                    return false;
+                }
+            }
+            result.plannedPhase = 8;
+            result.failedFeatureName = "Modules";
+            result.message = "cannot find module '" + modName + "'";
+            return false;
+        };
+        for (const auto& stmt : program.stmts) {
+            if (stmt->kind == vayu::StmtKind::Import) {
+                const auto* im = static_cast<const vayu::ImportStmt*>(stmt.get());
+                if (im->moduleName == "gui") {
+                    result.plannedPhase = 8;
+                    result.failedFeatureName = "Modules";
+                    result.message = "gui module requires native backend";
+                    return result;
+                }
+                if (!tryLoad(im->moduleName)) return result;
+            } else if (stmt->kind == vayu::StmtKind::FromImport) {
+                const auto* im = static_cast<const vayu::FromImportStmt*>(stmt.get());
+                if (!tryLoad(im->moduleName)) return result;
+            }
+        }
 
         VirFunction mainFn;
         mainFn.name = "main";
@@ -1440,60 +1489,64 @@ namespace vib {
         m.functions.push_back(std::move(mainFn));
 
         std::unordered_map<std::string, int> topLevelFunctions;
-        for (const auto& stmt : program.stmts) {
-            if (stmt->kind != vayu::StmtKind::Def) continue;
-            const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
-            VirFunction fn;
-            fn.name = d->name;
-            fn.returnType = { VirTypeKind::None };
-            for (const auto& p : d->params) {
-                fn.paramNames.push_back(p.name);
-                fn.paramTypes.push_back({ VirTypeKind::Any });
+        auto collectDefs = [&](const vayu::Block& blk) {
+            for (const auto& stmt : blk.stmts) {
+                if (stmt->kind != vayu::StmtKind::Def) continue;
+                const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
+                if (topLevelFunctions.count(d->name)) continue;
+                VirFunction fn;
+                fn.name = d->name;
+                fn.returnType = { VirTypeKind::None };
+                for (const auto& p : d->params) {
+                    fn.paramNames.push_back(p.name);
+                    fn.paramTypes.push_back({ VirTypeKind::Any });
+                }
+                int idx = (int)m.functions.size();
+                m.functions.push_back(std::move(fn));
+                topLevelFunctions[d->name] = idx;
             }
-            int idx = (int)m.functions.size();
-            m.functions.push_back(std::move(fn));
-            topLevelFunctions[d->name] = idx;
-        }
+        };
+        collectDefs(program);
+        for (const auto& ib : importedBlocks) collectDefs(ib);
 
-        for (const auto& stmt : program.stmts) {
-            if (stmt->kind != vayu::StmtKind::Def) continue;
-            const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
-            int idx = topLevelFunctions[d->name];
-            VirFunction& fn = m.functions[(size_t)idx];
-
-            VirBlock entry;
-            entry.label = "entry";
-
-            LoweringContext fctx(m, fn, entry, result);
-            fctx.topLevelFunctions = topLevelFunctions;
-            for (const auto& pname : fn.paramNames) {
-                int slot = fctx.nextLocal++;
-                fctx.localsByName[pname] = slot;
+        auto lowerDefs = [&](const vayu::Block& blk) -> bool {
+            for (const auto& stmt : blk.stmts) {
+                if (stmt->kind != vayu::StmtKind::Def) continue;
+                const auto* d = static_cast<const vayu::DefStmt*>(stmt.get());
+                auto it = topLevelFunctions.find(d->name);
+                if (it == topLevelFunctions.end()) continue;
+                VirFunction& fn = m.functions[(size_t)it->second];
+                if (!fn.blocks.empty()) continue; // already lowered
+                VirBlock entry;
+                entry.label = "entry";
+                LoweringContext fctx(m, fn, entry, result);
+                fctx.topLevelFunctions = topLevelFunctions;
+                for (const auto& pname : fn.paramNames) {
+                    int slot = fctx.nextLocal++;
+                    fctx.localsByName[pname] = slot;
+                }
+                fctx.nextReg = fctx.nextLocal;
+                if (!fctx.lowerBlock(d->body)) return false;
+                bool hasRet = !entry.instructions.empty() &&
+                    entry.instructions.back().opcode == VirOpcode::Ret;
+                if (!hasRet) {
+                    int noneIdx = fctx.addNoneConst();
+                    int retReg = fctx.emitConst(noneIdx, vayu::SourceLocation{});
+                    VirInstruction ret;
+                    ret.opcode = VirOpcode::Ret;
+                    ret.operandReg = retReg;
+                    entry.instructions.push_back(ret);
+                }
+                fn.localCount = fctx.nextLocal;
+                fn.blocks.push_back(std::move(entry));
+                fn.entryBlock = 0;
             }
-            // Registers and locals share slots at runtime. Params occupy
-            // locals[0..N). Temporaries must start after them or Const/temps
-            // overwrite parameter values (e.g. print("hi " + name) -> "hi hi ").
-            fctx.nextReg = fctx.nextLocal;
+            return true;
+        };
+        if (!lowerDefs(program)) return result;
+        for (const auto& ib : importedBlocks)
+            if (!lowerDefs(ib)) return result;
 
-            if (!fctx.lowerBlock(d->body)) {
-                return result;
-            }
-
-            bool hasRet = !entry.instructions.empty() &&
-                entry.instructions.back().opcode == VirOpcode::Ret;
-            if (!hasRet) {
-                int noneIdx = fctx.addNoneConst();
-                int retReg = fctx.emitConst(noneIdx, vayu::SourceLocation{});
-                VirInstruction ret;
-                ret.opcode = VirOpcode::Ret;
-                ret.operandReg = retReg;
-                entry.instructions.push_back(ret);
-            }
-
-            fn.localCount = fctx.nextLocal;
-            fn.blocks.push_back(std::move(entry));
-            fn.entryBlock = 0;
-        }
 
         VirFunction& mainRef = m.functions[0];
         VirBlock mainEntry;
@@ -1505,6 +1558,8 @@ namespace vib {
         for (const auto& stmt : program.stmts) {
             if (stmt->kind == vayu::StmtKind::Def) continue;
             if (stmt->kind == vayu::StmtKind::Pass) continue;
+            if (stmt->kind == vayu::StmtKind::Import) continue;
+            if (stmt->kind == vayu::StmtKind::FromImport) continue;
             if (stmt->kind == vayu::StmtKind::Block) {
                 const auto* bs = static_cast<const vayu::BlockStmt*>(stmt.get());
                 if (!ctx.lowerBlock(bs->body)) return result;

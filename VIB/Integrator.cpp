@@ -17,7 +17,7 @@ namespace vib {
                 { Feature::Functions,        "Functions",        SupportLevel::Supported,    SupportLevel::Deferred,  5, "Phase 5: user functions, calls, recursion, ret plumbing, print, conversions." },
                 { Feature::ControlFlow,      "ControlFlow",      SupportLevel::Supported,    SupportLevel::Deferred,  6, "Phase 6.1: if/elif/else, while, for-range, break, continue; ** // and or not str*." },
                 { Feature::Collections,      "Collections",      SupportLevel::Supported,    SupportLevel::Deferred,  7, "Phase 7.1–7.2: list/map/tuple/set literals, index get/set, len()." },
-                { Feature::Modules,          "Modules",          SupportLevel::NotSupported, SupportLevel::Deferred,  8, "Interpreter and VM support this today; Integrator lowering pending." },
+                { Feature::Modules,          "Modules",          SupportLevel::Supported,    SupportLevel::Deferred,  8, "Phase 8.1: import/from-import flat function merge from .vyu/.vayu." },
                 { Feature::Exceptions,       "Exceptions",       SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Classes,          "Classes",          SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Generics,         "Generics",         SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
@@ -370,7 +370,7 @@ namespace vib {
         (void)outputPath;
 
         VirLowering lowering;
-        LoweringResult lr = lowering.lower(program);
+        LoweringResult lr = lowering.lower(program, sourceDir);
         if (!lr.success) {
             CompileResult r;
             r.success = false;
@@ -439,7 +439,7 @@ namespace vib {
     DumpIRResult Integrator::dumpIR(const vayu::Block& program,
         const std::string&) const {
         VirLowering lowering;
-        LoweringResult lr = lowering.lower(program);
+        LoweringResult lr = lowering.lower(program, sourceDir);
         if (!lr.success) {
             DumpIRResult r;
             r.success = false;
@@ -479,7 +479,7 @@ namespace vib {
         const std::string& vyePath) const {
         EmitVyeResult r;
         VirLowering lowering;
-        LoweringResult lr = lowering.lower(program);
+        LoweringResult lr = lowering.lower(program, sourceDir);
         if (!lr.success) {
             r.success = false;
             r.kind = ErrorKind::CompilationError;
