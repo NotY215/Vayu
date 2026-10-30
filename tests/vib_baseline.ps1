@@ -275,7 +275,7 @@ if ($status.rc -ne 0) {
         "BasicArithmetic\s+Supported\s+Deferred\s+3\b",
         "Strings\s+Supported\s+Deferred\s+4\b",
         "Functions\s+Supported\s+Deferred\s+5\b",
-        "ControlFlow\s+NotSupported\s+Deferred\s+6\b",
+        "ControlFlow\s+Supported\s+Deferred\s+6\b",
         "Collections\s+NotSupported\s+Deferred\s+7\b",
         "Modules\s+NotSupported\s+Deferred\s+8\b",
         "Exceptions\s+NotSupported\s+Deferred\s+10\b",
@@ -287,7 +287,7 @@ if ($status.rc -ne 0) {
         "Verifier\s+Supported\s+Deferred\s+2\b",
         "RuntimeEmission\s+Scaffolded\s+Deferred\s+12\b",
         "NativeCodegen\s+Scaffolded\s+Deferred\s+12\b",
-        "VyePackaging\s+(Deferred|Scaffolded)\s+(Deferred|Scaffolded)\s+2\b",
+        "VyePackaging\s+Supported\s+Supported\s+2\b",
         "ArtifactCache\s+(Deferred|Scaffolded|Supported)\s+(Deferred|Scaffolded|Supported)\s+11\b",
         "IncrementalBuild\s+(Deferred|Scaffolded|Supported)\s+(Deferred|Scaffolded|Supported)\s+11\b",
         "SelfHosting\s+Deferred\s+Deferred\s+14\b"

@@ -103,7 +103,10 @@ namespace vib {
 
             const VirBlock& block = fn.blocks[(size_t)fn.entryBlock];
 
-            for (const auto& instr : block.instructions) {
+            // Phase 6.1: instruction-index jumps (targetBlock = pc within this block).
+            for (size_t pc = 0; pc < block.instructions.size(); ) {
+                const auto& instr = block.instructions[pc];
+                size_t nextPc = pc + 1;
                 switch (instr.opcode) {
                 case VirOpcode::Nop:
                     break;
@@ -499,6 +502,27 @@ namespace vib {
                     break;
                 }
 
+                case VirOpcode::Jump: {
+                    if (instr.targetBlock < 0 ||
+                        instr.targetBlock > (int)block.instructions.size()) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: Jump target out of range";
+                        return out;
+                    }
+                    nextPc = (size_t)instr.targetBlock;
+                    break;
+                }
+                case VirOpcode::JumpIfFalse: {
+                    if (instr.targetBlock < 0 ||
+                        instr.targetBlock > (int)block.instructions.size()) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: JumpIfFalse target out of range";
+                        return out;
+                    }
+                    if (!truthy(locals[(size_t)instr.operandReg]))
+                        nextPc = (size_t)instr.targetBlock;
+                    break;
+                }
                 case VirOpcode::Ret: {
                     out.success = true;
                     out.kind = ErrorKind::None;
@@ -506,6 +530,7 @@ namespace vib {
                     return out;
                 }
                 }
+                pc = nextPc;
             }
 
             out.kind = ErrorKind::RuntimeError;

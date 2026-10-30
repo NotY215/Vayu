@@ -47,6 +47,9 @@ namespace vib {
         // Phase 5.1: calls.
         Call,          // <destReg> = functions[funcIndex](argRegs...)  user-defined
         CallBuiltin,   // <destReg> = builtin(argRegs...)                native
+        // Phase 6.1: control flow.
+        Jump,          // unconditional jump to targetBlock
+        JumpIfFalse,   // if !truthy(operandReg) jump to targetBlock
     };
 
     // Phase 5.1: builtin functions the VIR interpreter can dispatch.
@@ -79,6 +82,8 @@ namespace vib {
         int                  funcIndex = -1;    // Call
         VirBuiltin           builtin = VirBuiltin::Print;   // CallBuiltin
         std::vector<int>     argRegs;           // Call / CallBuiltin
+        // Phase 6.1: control flow.
+        int                  targetBlock = -1;  // Jump / JumpIfFalse
         vayu::SourceLocation sourceLoc;
     };
 

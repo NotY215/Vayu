@@ -141,12 +141,17 @@ namespace vib {
                 s += ")";
                 return s;
             }
+            case VirOpcode::Jump:
+                return "Jump(@" + std::to_string(i.targetBlock) + ")";
+            case VirOpcode::JumpIfFalse:
+                return "JumpIfFalse(r" + std::to_string(i.operandReg) +
+                    ", @" + std::to_string(i.targetBlock) + ")";
             }
             return "?";
         }
 
         bool isTerminator(VirOpcode op) {
-            return op == VirOpcode::Ret;
+            return op == VirOpcode::Ret || op == VirOpcode::Jump;
         }
 
         struct BlockerInfo {
@@ -199,6 +204,14 @@ namespace vib {
 
             std::unordered_map<std::string, VirTypeKind> varTypes;
             std::unordered_map<std::string, int> topLevelFunctions;
+
+            // Phase 6.1: break/continue patch sites (instruction indices).
+            struct LoopFrame {
+                std::vector<int> breakJumps;    // Jump instr indices to patch to exit
+                std::vector<int> continueJumps; // Jump instr indices to patch to header
+                int continueTarget = -1;        // set after header is known
+            };
+            std::vector<LoopFrame> loopStack;
 
             LoweringContext(VirModule& m, VirFunction& f, VirBlock& e, LoweringResult& r)
                 : module(m), fn(f), entry(e), result(r) {
@@ -375,6 +388,138 @@ namespace vib {
                 return 0;
             }
 
+            // Phase 6.1: If / Elif / Else.
+            if (s->kind == SK::If) {
+                const auto* is = static_cast<const vayu::IfStmt*>(s);
+                std::vector<int> joinJumps;
+
+                auto emitBranch = [&](const vayu::Expr* cond, const vayu::Block& body,
+                    bool hasMore) -> int {
+                    int condReg = lowerExpr(cond);
+                    if (condReg < 0) return -1;
+                    VirInstruction jfalse;
+                    jfalse.opcode = VirOpcode::JumpIfFalse;
+                    jfalse.operandReg = condReg;
+                    jfalse.targetBlock = -1;
+                    jfalse.sourceLoc = is->loc;
+                    int jfalseIdx = (int)entry.instructions.size();
+                    entry.instructions.push_back(jfalse);
+                    if (!lowerBlock(body)) return -1;
+                    if (hasMore) {
+                        VirInstruction jjoin;
+                        jjoin.opcode = VirOpcode::Jump;
+                        jjoin.targetBlock = -1;
+                        jjoin.sourceLoc = is->loc;
+                        joinJumps.push_back((int)entry.instructions.size());
+                        entry.instructions.push_back(jjoin);
+                    }
+                    entry.instructions[(size_t)jfalseIdx].targetBlock =
+                        (int)entry.instructions.size();
+                    return 0;
+                };
+
+                bool hasElifOrElse = !is->elifs.empty() || is->elseBody.has_value();
+                if (emitBranch(is->cond.get(), is->thenBody, hasElifOrElse) < 0)
+                    return result.plannedPhase;
+
+                for (size_t ei = 0; ei < is->elifs.size(); ++ei) {
+                    bool more = (ei + 1 < is->elifs.size()) || is->elseBody.has_value();
+                    if (emitBranch(is->elifs[ei].cond.get(), is->elifs[ei].body, more) < 0)
+                        return result.plannedPhase;
+                }
+
+                if (is->elseBody) {
+                    if (!lowerBlock(*is->elseBody)) return result.plannedPhase;
+                }
+
+                int joinPc = (int)entry.instructions.size();
+                for (int idx : joinJumps)
+                    entry.instructions[(size_t)idx].targetBlock = joinPc;
+                return 0;
+            }
+
+            // Phase 6.1: while
+            if (s->kind == SK::While) {
+                const auto* ws = static_cast<const vayu::WhileStmt*>(s);
+                int header = (int)entry.instructions.size();
+
+                loopStack.push_back(LoopFrame{});
+                loopStack.back().continueTarget = header;
+
+                int condReg = lowerExpr(ws->cond.get());
+                if (condReg < 0) { loopStack.pop_back(); return result.plannedPhase; }
+
+                VirInstruction jfalse;
+                jfalse.opcode = VirOpcode::JumpIfFalse;
+                jfalse.operandReg = condReg;
+                jfalse.targetBlock = -1;
+                jfalse.sourceLoc = ws->loc;
+                int jfalseIdx = (int)entry.instructions.size();
+                entry.instructions.push_back(jfalse);
+
+                if (!lowerBlock(ws->body)) { loopStack.pop_back(); return result.plannedPhase; }
+
+                VirInstruction jback;
+                jback.opcode = VirOpcode::Jump;
+                jback.targetBlock = header;
+                jback.sourceLoc = ws->loc;
+                entry.instructions.push_back(jback);
+
+                int exitPc = (int)entry.instructions.size();
+                entry.instructions[(size_t)jfalseIdx].targetBlock = exitPc;
+
+                LoopFrame frame = std::move(loopStack.back());
+                loopStack.pop_back();
+                for (int idx : frame.breakJumps)
+                    entry.instructions[(size_t)idx].targetBlock = exitPc;
+                for (int idx : frame.continueJumps)
+                    entry.instructions[(size_t)idx].targetBlock = header;
+                return 0;
+            }
+
+            // Phase 6.1: break / continue
+            if (s->kind == SK::Break) {
+                if (loopStack.empty()) {
+                    result.plannedPhase = 6;
+                    result.failedFeatureName = "ControlFlow";
+                    result.message = "break outside loop";
+                    return 6;
+                }
+                VirInstruction j;
+                j.opcode = VirOpcode::Jump;
+                j.targetBlock = -1;
+                j.sourceLoc = s->loc;
+                loopStack.back().breakJumps.push_back((int)entry.instructions.size());
+                entry.instructions.push_back(j);
+                return 0;
+            }
+            if (s->kind == SK::Continue) {
+                if (loopStack.empty()) {
+                    result.plannedPhase = 6;
+                    result.failedFeatureName = "ControlFlow";
+                    result.message = "continue outside loop";
+                    return 6;
+                }
+                VirInstruction j;
+                j.opcode = VirOpcode::Jump;
+                j.targetBlock = loopStack.back().continueTarget;
+                j.sourceLoc = s->loc;
+                if (j.targetBlock < 0) {
+                    loopStack.back().continueJumps.push_back((int)entry.instructions.size());
+                }
+                entry.instructions.push_back(j);
+                return 0;
+            }
+
+            // Phase 6.1: for — not yet (iterator protocol); reject clearly.
+            if (s->kind == SK::For) {
+                result.plannedPhase = 6;
+                result.failedFeatureName = "ControlFlow";
+                result.message = "lowering for 'for' loops is not implemented yet "
+                    "(planned Phase 6; while/if/break/continue are supported)";
+                return 6;
+            }
+
             BlockerInfo b = blockerFor(s);
             result.plannedPhase = b.phase;
             result.failedFeatureName = b.featureName;
@@ -453,11 +598,12 @@ namespace vib {
                 VirOpcode op;
                 bool needsStringOp = false;
                 switch (n->op) {
-                case vayu::BinOp::Add:    op = VirOpcode::Add;   break;
-                case vayu::BinOp::Sub:    op = VirOpcode::Sub;   break;
-                case vayu::BinOp::Mul:    op = VirOpcode::Mul;   break;
-                case vayu::BinOp::Div:    op = VirOpcode::Div;   break;
-                case vayu::BinOp::Mod:    op = VirOpcode::Mod;   break;
+                case vayu::BinOp::Add:      op = VirOpcode::Add; break;
+                case vayu::BinOp::Sub:      op = VirOpcode::Sub; break;
+                case vayu::BinOp::Mul:      op = VirOpcode::Mul; break;
+                case vayu::BinOp::Div:      op = VirOpcode::Div; break;
+                case vayu::BinOp::FloorDiv: op = VirOpcode::Div; break; // int floor div via same opcode
+                case vayu::BinOp::Mod:      op = VirOpcode::Mod; break;
                 case vayu::BinOp::Eq:     op = VirOpcode::CmpEq; needsStringOp = true; break;
                 case vayu::BinOp::NotEq:  op = VirOpcode::CmpNe; needsStringOp = true; break;
                 case vayu::BinOp::Lt:     op = VirOpcode::CmpLt; needsStringOp = true; break;
@@ -1017,6 +1163,10 @@ namespace vib {
                 int slot = fctx.nextLocal++;
                 fctx.localsByName[pname] = slot;
             }
+            // Registers and locals share slots at runtime. Params occupy
+            // locals[0..N). Temporaries must start after them or Const/temps
+            // overwrite parameter values (e.g. print("hi " + name) -> "hi hi ").
+            fctx.nextReg = fctx.nextLocal;
 
             if (!fctx.lowerBlock(d->body)) {
                 return result;

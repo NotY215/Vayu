@@ -142,6 +142,24 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // --run-vye may be argv[1] with no source file (standalone mode).
+    if (std::strcmp(argv[1], "--run-vye") == 0) {
+        if (argc < 3) {
+            std::fprintf(stderr, "vayuc: --run-vye requires a path\n");
+            return 1;
+        }
+        vayu::NativeCompiler nc;
+        int rc = nc.runVye(argv[2]);
+        for (const auto& line : nc.lastStdout()) {
+            std::fputs(line.c_str(), stdout);
+            std::fputc('\n', stdout);
+        }
+        if (rc != 0) {
+            std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
+        }
+        return rc;
+    }
+
     std::string file = argv[1];
 
     enum class Mode { Run, Check, DumpTokens, DumpAst, DumpBytecode, DumpIR, Native };

@@ -15,7 +15,7 @@ namespace vib {
                 { Feature::BasicArithmetic,  "BasicArithmetic",  SupportLevel::Supported,    SupportLevel::Deferred,  3, "Phase 3: integer/bool literals, arithmetic, comparisons, simple assignment." },
                 { Feature::Strings,          "Strings",          SupportLevel::Supported,    SupportLevel::Deferred,  4, "Phase 4: literals, concat, comparisons, methods, len()." },
                 { Feature::Functions,        "Functions",        SupportLevel::Supported,    SupportLevel::Deferred,  5, "Phase 5: user functions, calls, recursion, ret plumbing, print, conversions." },
-                { Feature::ControlFlow,      "ControlFlow",      SupportLevel::NotSupported, SupportLevel::Deferred,  6, "Interpreter and VM support this today; Integrator lowering pending." },
+                { Feature::ControlFlow,      "ControlFlow",      SupportLevel::Supported,    SupportLevel::Deferred,  6, "Phase 6.1: if/elif/else, while, break, continue; for deferred." },
                 { Feature::Collections,      "Collections",      SupportLevel::NotSupported, SupportLevel::Deferred,  7, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Modules,          "Modules",          SupportLevel::NotSupported, SupportLevel::Deferred,  8, "Interpreter and VM support this today; Integrator lowering pending." },
                 { Feature::Exceptions,       "Exceptions",       SupportLevel::NotSupported, SupportLevel::Deferred, 10, "Interpreter and VM support this today; Integrator lowering pending." },
@@ -149,6 +149,7 @@ namespace vib {
                         writeU16(body, (uint16_t)ins.builtin);
                         writeU32(body, (uint32_t)ins.argRegs.size());
                         for (int r : ins.argRegs) writeI32(body, r);
+                        writeI32(body, ins.targetBlock);
                     }
                 }
                 writeI32(body, fn.entryBlock);
@@ -285,6 +286,9 @@ namespace vib {
                             if (!readU32(raw, off, ar)) { err = "vye: truncated argReg"; return false; }
                             ins.argRegs[ai] = (int)ar;
                         }
+                        uint32_t tb = 0;
+                        if (!readU32(raw, off, tb)) { err = "vye: truncated targetBlock"; return false; }
+                        ins.targetBlock = (int)tb;
                         blk.instructions.push_back(std::move(ins));
                     }
                     fn.blocks.push_back(std::move(blk));
@@ -386,6 +390,29 @@ namespace vib {
             r.plannedPhase = 2;
             r.message = vr.message;
             return r;
+        }
+
+        // Phase 2C.3: populate content-addressed cache on successful lower+verify.
+        if (cache_.enabled) {
+            std::string serialized = serializeModule(lr.module);
+            std::string dir = cache_.cacheDir.empty() ? ".vayu-cache" : cache_.cacheDir;
+            std::string key = toHex(fnv1a(serialized));
+            std::string sub = dir + "/objects";
+#ifdef _WIN32
+            system(("if not exist \"" + sub + "\" mkdir \"" + sub + "\"").c_str());
+#else
+            system(("mkdir -p \"" + sub + "\"").c_str());
+#endif
+            std::string objPath = sub + "/" + key + ".vye";
+            std::ofstream cout(objPath, std::ios::binary);
+            if (cout) {
+                cout.write(serialized.data(), (std::streamsize)serialized.size());
+                cout.close();
+                if (cache_.verbose) {
+                    std::fprintf(stderr, "vib: cache wrote %s (%zu bytes)\n",
+                        objPath.c_str(), serialized.size());
+                }
+            }
         }
 
         VirInterpreter interp;
