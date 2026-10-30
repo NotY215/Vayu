@@ -15,7 +15,7 @@ This roadmap records the current implementation state and the intended sequence 
 - The current priority is to expand the Integrator and VIR into a correct execution pipeline, then progress toward native machine-code generation and the later roadmap milestones.
 - The Integrator must not silently claim support for language features that are only available in the interpreter or VM.
 - VIR must be structurally verified before interpretation or any later backend consumes it.
-- The `.vye` executable-package track is maintained under Phase 2A–2C and is **Completed** as opt-in infrastructure (`--emit-vye`, `--run-vye`, `--dispatch=integrator`, `--enable-cache`). Do not treat package work as a prerequisite for unrelated VIR feature work.
+- The `.vye` executable-package track is maintained under Phase 2A–2C and is **Completed** as opt-in infrastructure (`--emit-vye`, `--run-vye`, `--output`, `--dispatch=integrator`, `--enable-cache`). Do not treat package work as a prerequisite for unrelated VIR feature work.
 - Existing interpreter/VM behaviour is useful reference material, but failures in those paths must be distinguished from Integrator/VIR failures.
 - Do not reintroduce the removed external-backend design, bundled foreign-language runtimes, DLL directories, LLD executables, or platform import-library dependencies.
 - ONNX remains a later Vayu-owned track. Do not add a Python ONNX generator or Python package dependency.
@@ -68,110 +68,24 @@ The VIR interpreter is the current execution route for the implemented VIR subse
 | **0.5a** | Completed | Fix `run_all.ps1` `Invoke-Backend` regression. | Harness restored. |
 | **0.5b (partial)** | Completed | Fix `exceptions.vyu` VM (`VMRuntimeError` catch). Provide `tests/diagnose_baseline.ps1`. | `exceptions.vyu --vm` green. |
 | **0.5b (remaining)** | Working | `classes.vyu` / `collections.vyu` are type-checker errors (`compiler/sema`); `generators.vyu --vm` still crashes `0xC0000409`; `exceptions.vyu` has `--run` vs `--vm` stdout parity drift. | Baseline green after authorized sema/interp/vm fixes. |
-| **4.3** | Completed | String method calls via type tracking: `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, `to_int`. | `Strings` note updated; methods dispatch through `CallBuiltin`. |
-| **5.1** | Completed | Functions, calls, arity checks, recursion, `print`, `str`/`int`/`float`/`bool` conversions, `len(str)`. | `Functions Supported`. |
-| **5.2b** | Completed | Return-value plumbing through `Call`: `executeFunction` returns the `RtValue`, and `Call` pushes it to `destReg`. | Return values work end-to-end. |
-| **6.1** | Completed | Conditional branches (`If`/`Elif`/`Else`), `while`, `for x in range(N)`, `break`/`continue`, plus `**`/`//`/`and`/`or`/`not`/string `*`. | `ControlFlow Supported`. |
-| **6.2** | Planned | Branch-target verification, unreachable-code diagnostics. | Invalid-branch tests reject. |
-| **7.1–7.2** | Planned | Collections: `list` → `map`/`tuple`/`set`, indexing, slicing, ownership. | `Collections Supported`. |
-| **8.1–8.2** | Planned | Modules and multi-file programs. | `Modules Supported`. |
+| **4.3** | Completed | String method calls via type tracking. | `Strings` Supported. |
+| **5.1–5.2b** | Completed | Functions, calls, recursion, return plumbing. | `Functions` Supported. |
+| **6.1** | Completed | if/elif/else, while, for-range, break/continue, `**`/`//`/`and`/`or`/`not`/string `*`. | `ControlFlow` Supported. |
+| **6.2** | Completed | Branch-target verification for Jump/JumpIfFalse. | Invalid targets rejected. |
+| **7.1** | Completed | Lists: literals, index get/set, `len(list)`, print. | `Collections` Supported (list). |
+| **7.2** | Planned | map, tuple, set, slicing, ownership refinements. | Full collections. |
+| **8.1–8.2** | Planned | Modules and multi-file programs. | `Modules` Supported. |
 | **9.1–9.2** | Planned | Malformed-VIR suite, runtime-compatibility reporting. | Hardened verifier. |
-| **10.1–10.2** | Planned | Exceptions, classes, closures, higher-order functions, generators, pointers, standard-library surface. | Each feature flips individually. |
-| **2A.1** | Completed | `.vye` design comment block in `Vir.hpp`. | Design captured. |
-| **2A.2** | Completed | Deterministic `.vye` writer, gated by `--emit-vye <path>`. | `--emit-vye` writes a package. |
-| **2B.1** | Completed | Strict `.vye` reader + verifier. | Reader passes malformed-package tests. |
-| **2B.2** | Completed | `--run-vye <path>` execution verb. | Round-trip + execution tests. |
-| **2C.1** | Completed | Dispatch adoption via `--dispatch=integrator`. | Opt-in Integrator dispatch. |
-| **2C.2** | Completed | Dispatch adoption for supported VIR subset. | Opt-in Integrator dispatch. |
-| **2C.3** | Completed | Content-addressed artifact cache (`--enable-cache`). | Cache populates on `--native`/`--emit-vye`. |
-| **11–14** | Planned | Measurement, native codegen, ONNX, release/self-host. | Unchanged. |
+| **10.1–10.2** | Planned | Exceptions, classes, closures, generators, pointers, stdlib surface. | Each feature flips individually. |
+| **2A–2C** | Completed | `.vye` emit/run, `--output` alias, dispatch, cache. | Opt-in package path. |
+| **11–14** | Planned | Measurement, native codegen, ONNX, self-host. | Unchanged. |
 
-### Phase 0.5 — Baseline repair
+### Tooling notes
 
-Phase 0.5 is tracked separately from the VIR feature sequence because it repairs pre-existing Interpreter/VM and harness regressions. Phase 0.5a is **Completed**. The exceptions VM catch fix and diagnostic script are **Completed** under 0.5b. The remaining classes, collections, and generators failures are **Working** and require authorized changes under `compiler/sema/**`, `compiler/interp/**`, and/or `compiler/vm/**`.
+- `vayuc` with no arguments opens an interactive REPL (copyright banner; `--help`).
+- `--output <path>` is an alias for `--emit-vye` and writes a `.vye` Vayu Executable (not a native OS PE; requires `vayuc --run-vye`).
+- Windows builds can embed `assets/Vayu_logo.ico` into `vayuc.exe` and build `Vayu-IDE.exe` (uses `assets/IDE.ico`) for a lightweight `.vyu` editor with Run/Compile.
 
-### Phase 4 — Strings
+## 5–8
 
-Phases 4.1–4.2 are **Completed**: the baseline string contract, literals, concatenation, and comparisons are implemented. Phase 4.3 is also **Completed**: type-tracked string method calls cover `upper`, `lower`, `strip`, `contains`, `find`, `starts_with`, `ends_with`, `is_digit`, `is_alpha`, `is_space`, `replace`, `char_at`, and `to_int`. These methods dispatch through `CallBuiltin`.
-
-**Acceptance:** preserve tests for string literals, comparisons, method dispatch, empty strings, ASCII and multibyte text, and invalid operations.
-
-### Phase 5 — Functions and calls
-
-Phase 5.1 and **5.2b are Completed**: function declarations/calls, arity checks, recursion, `print`, conversions, `len(str)`, and return-value plumbing through `Call`.
-
-**Acceptance:** preserve tests for nested calls, parameter passing, recursion, return values, scope isolation, wrong-arity rejection, and call-stack safety.
-
-### Phase 6 — Control flow
-
-Phase **6.1 is Completed**: if/elif/else, while, `for x in range(N)`, break, continue, plus `**`, `//`, `and`/`or`/`not`, and string `*`. Phase 6.2 extends VIR verification for branch targets and unreachable code.
-
-**Acceptance:** branch and loop fixtures pass, invalid targets are rejected, and control-flow support is backed by verifier and execution tests.
-
-### Phase 7 — Collections
-
-Expand collection support incrementally, beginning with lists and then maps, tuples, and sets. Specify representation, ownership/lifetime, indexing, mutation, equality, iteration, and error behaviour for each supported type.
-
-**Acceptance:** each collection type has independent lowering, verifier, interpreter, and fixture coverage before the aggregate feature is marked supported.
-
-### Phase 8 — Modules and multi-file programs
-
-Define module identity, import resolution, symbol visibility, duplicate handling, and deterministic multi-file compilation. Keep dependency behaviour explicit and testable.
-
-**Acceptance:** a multi-file Vayu program resolves imports, rejects missing or duplicate symbols, and executes with deterministic results.
-
-### Phase 9 — Verifier hardening and runtime compatibility
-
-Build malformed-VIR tests covering invalid opcodes, out-of-range registers/locals, invalid branch targets, malformed operands, invalid type/feature combinations, and runtime compatibility mismatches. Report unsupported features clearly and safely.
-
-**Acceptance:** malformed VIR is rejected before execution, with stable diagnostics and regression coverage.
-
-### Phase 10 — Broader language coverage
-
-Expand support feature by feature: exceptions, classes, closures, generators, pointers, and standard-library operations. Each feature must be independently designed, implemented, tested, and reflected in the capability matrix. Existing interpreter/VM support is not proof of Integrator support.
-
-**Acceptance:** every advertised feature has focused positive and negative tests and an explicit support-level transition.
-
-### Phases 11–14 — Later milestones
-
-These milestones remain planned and retain their prior scope:
-
-- **Phase 11 — Measurement:** establish reproducible measurements for compilation, execution, startup, memory, and generated artifact size. Use measurements to guide optimization rather than assumptions.
-- **Phase 12 — Native code generation:** generate native machine code from verified VIR, define target/ABI rules, and prove correctness with end-to-end tests for each supported target. Do not label native code generation complete while `--native` is only Integrator-mediated in-memory execution.
-- **Phase 13 — Vayu-native ONNX and AI/ML:** implement a Vayu-owned ONNX reader/runtime, validate model structure and tensor metadata, and expand operator coverage through numerical correctness tests. No Python generator or Python runtime dependency.
-- **Phase 14 — Release and self-host:** publish an accurate support matrix, test clean builds and installs, document compatibility and diagnostics, and consider self-hosting only when the compiler subset is stable.
-
-## 5. Validation and completion rules
-
-Every phase requires the relevant combination of:
-- focused unit and integration tests;
-- positive fixtures for supported behaviour;
-- negative fixtures for unsupported or invalid behaviour;
-- verifier and malformed-input tests where applicable;
-- deterministic expected output and exit status;
-- reproducible build/test commands;
-- updated capability reporting and documentation.
-
-A roadmap row, placeholder, sample program, or successful compilation alone is not implementation evidence. Do not mark a feature supported until the required tests demonstrate its semantics.
-
-## 6. Performance policy
-
-Performance claims must be based on reproducible measurements. Track compilation time, execution time, startup overhead, memory use, and generated artifact size separately. Comparisons with interpreters, JITs, or native compilers must use equivalent workloads and documented test conditions. Correctness and semantic coverage take priority over optimization.
-
-## 7. Immediate implementation order
-
-1. Continue **Phase 0.5b (remaining)** for type-checker and VM crash failures when explicitly authorized.
-2. Start **Phase 6.2** branch-target verification and unreachable-code diagnostics.
-3. Keep Phases 7–10 planned until implementation and acceptance tests are complete.
-4. Keep Phases 11–14 planned until their implementation and validation are delivered.
-
----
-
-**Roadmap rule:** VIB support is established by implementation, verifier behaviour, and tests. Never infer Integrator capability from the broader historical feature set of the Vayu interpreter or VM.
-
-
-## 8. Repository licensing
-
-Vayu uses the **Vayu Proprietary License (All Rights Reserved)** in the repository's `LICENSE` file. It does not grant a general license to copy, modify, redistribute, or incorporate Vayu code into other projects. Separate written permission from the rights holder(s) is required, except for rights that apply under mandatory law or GitHub's platform terms.
-
-A public GitHub repository is still publicly viewable, and GitHub's Terms of Service may permit platform-level viewing and forking. A proprietary license cannot technically prevent copying or make enforcement automatic. If the goal is to keep the source inaccessible to the public, the repository must also be made private. Third-party files may remain subject to their own licenses.
+Validation, performance, licensing, and roadmap rules are unchanged: support is established by implementation, verifier behaviour, and tests.
