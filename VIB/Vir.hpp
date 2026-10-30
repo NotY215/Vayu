@@ -7,10 +7,10 @@
 
 namespace vib {
 
-    enum class VirTypeKind { None, Bool, Int, Float, Str, List, Any };
+    enum class VirTypeKind { None, Bool, Int, Float, Str, List, Map, Tuple, Set, Any };
     struct VirType { VirTypeKind kind = VirTypeKind::None; };
 
-    enum class VirValueKind { None, Bool, Int, Float, Str, List };
+    enum class VirValueKind { None, Bool, Int, Float, Str, List, Map, Tuple, Set };
     struct VirValue {
         VirValueKind kind = VirValueKind::None;
         bool         boolValue = false;
@@ -61,6 +61,15 @@ namespace vib {
         ListGet,       // <destReg> = list[<rhsReg>] from <lhsReg>
         ListSet,       // list[<rhsReg>] in <lhsReg> = <operandReg>
         ListLen,       // <destReg> = len(list in <operandReg>)
+        // Phase 7.2: map / tuple / set
+        MapNew,        // <destReg> = {}
+        MapSet,        // map[lhs][rhs key] = operand
+        MapGet,        // dest = map[lhs][rhs key]
+        MapHas,        // dest bool = key in map
+        TupleNew,      // dest = tuple from argRegs
+        SetNew,        // dest = set
+        SetAdd,        // set lhs add operand
+        SetHas,        // dest bool = elem in set
     };
 
     // Phase 5.1: builtin functions the VIR interpreter can dispatch.

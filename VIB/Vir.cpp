@@ -394,7 +394,8 @@ namespace vib {
                     int valueReg = lowerExpr(as->value.get());
                     if (valueReg < 0) return result.plannedPhase;
                     VirInstruction st;
-                    st.opcode = VirOpcode::ListSet;
+                    VirTypeKind bt = inferType(ix->target.get());
+                    st.opcode = (bt == VirTypeKind::Map) ? VirOpcode::MapSet : VirOpcode::ListSet;
                     st.lhsReg = base;
                     st.rhsReg = idx;
                     st.operandReg = valueReg;
@@ -852,6 +853,69 @@ namespace vib {
                 bumpLocalTo(dest);
                 return dest;
             }
+            case EK::MapLit: {
+                const auto* n = static_cast<const vayu::MapLitExpr*>(e);
+                int dest = allocReg();
+                VirInstruction mk;
+                mk.opcode = VirOpcode::MapNew;
+                mk.destReg = dest;
+                mk.sourceLoc = e->loc;
+                entry.instructions.push_back(mk);
+                bumpLocalTo(dest);
+                for (const auto& ent : n->entries) {
+                    int kr = lowerExpr(ent.key.get());
+                    if (kr < 0) return -1;
+                    int vr = lowerExpr(ent.value.get());
+                    if (vr < 0) return -1;
+                    VirInstruction st;
+                    st.opcode = VirOpcode::MapSet;
+                    st.lhsReg = dest;
+                    st.rhsReg = kr;
+                    st.operandReg = vr;
+                    st.sourceLoc = e->loc;
+                    entry.instructions.push_back(st);
+                }
+                return dest;
+            }
+            case EK::TupleLit: {
+                const auto* n = static_cast<const vayu::TupleLitExpr*>(e);
+                std::vector<int> regs;
+                for (const auto& el : n->elements) {
+                    int r = lowerExpr(el.get());
+                    if (r < 0) return -1;
+                    regs.push_back(r);
+                }
+                int dest = allocReg();
+                VirInstruction mk;
+                mk.opcode = VirOpcode::TupleNew;
+                mk.destReg = dest;
+                mk.argRegs = std::move(regs);
+                mk.sourceLoc = e->loc;
+                entry.instructions.push_back(mk);
+                bumpLocalTo(dest);
+                return dest;
+            }
+            case EK::SetLit: {
+                const auto* n = static_cast<const vayu::SetLitExpr*>(e);
+                int dest = allocReg();
+                VirInstruction mk;
+                mk.opcode = VirOpcode::SetNew;
+                mk.destReg = dest;
+                mk.sourceLoc = e->loc;
+                entry.instructions.push_back(mk);
+                bumpLocalTo(dest);
+                for (const auto& el : n->elements) {
+                    int er = lowerExpr(el.get());
+                    if (er < 0) return -1;
+                    VirInstruction add;
+                    add.opcode = VirOpcode::SetAdd;
+                    add.lhsReg = dest;
+                    add.operandReg = er;
+                    add.sourceLoc = e->loc;
+                    entry.instructions.push_back(add);
+                }
+                return dest;
+            }
             case EK::ListLit: {
                 const auto* n = static_cast<const vayu::ListLitExpr*>(e);
                 int dest = allocReg();
@@ -881,7 +945,11 @@ namespace vib {
                 if (idx < 0) return -1;
                 int dest = allocReg();
                 VirInstruction g;
-                g.opcode = VirOpcode::ListGet;
+                VirTypeKind bt = inferType(n->target.get());
+                if (bt == VirTypeKind::Map)
+                    g.opcode = VirOpcode::MapGet;
+                else
+                    g.opcode = VirOpcode::ListGet; // list or tuple
                 g.destReg = dest;
                 g.lhsReg = base;
                 g.rhsReg = idx;

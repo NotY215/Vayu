@@ -782,12 +782,18 @@ namespace vayu {
                     static_cast<const NameRefExpr*>(n->target.get());
                 if (consts_.count(nm->name))
                     error(n->loc, "cannot assign to const '" + nm->name + "'");
-                TypePtr ex = lookupUserVar(nm->name);
-                if (ex) {
-                    if (!isAssignable(ex, v))
-                        error(n->loc, "cannot assign " + v->toString() +
-                            " to '" + nm->name + "' of type " +
-                            ex->toString());
+                // Phase 0.5b: assignment binds in the *current* scope only.
+                // Outer names are shadowed (Python-like local binding), and
+                // rebinding a name to a different type in the same scope is
+                // allowed so sequential example scripts type-check.
+                TypePtr ex = nullptr;
+                if (!scopes_.empty()) {
+                    auto fit = scopes_.back().vars.find(nm->name);
+                    if (fit != scopes_.back().vars.end())
+                        ex = fit->second;
+                }
+                if (ex && isAssignable(ex, v)) {
+                    // same-type reassignment: keep existing type
                 }
                 else {
                     defineVar(nm->name, v);
@@ -972,10 +978,13 @@ namespace vayu {
                     it->toString());
             }
 
+            // Phase 0.5b: loop variable is scoped to the loop body.
+            pushScope();
             defineVar(n->targetName, elem);
             ++loopDepth_;
             for (auto& st : n->body.stmts) checkStmt(st.get());
             --loopDepth_;
+            popScope();
             return;
         }
 

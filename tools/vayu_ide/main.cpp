@@ -183,8 +183,8 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
     wc.hCursor = LoadCursor(nullptr, IDC_IBEAM);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     // Load IDE.ico if present beside exe or from resource ID 1
-    wc.hIcon = (HICON)LoadImageW(hi, L"IDI_ICON1", IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
-    if (!wc.hIcon) wc.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    wc.hIcon = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+    if (!wc.hIcon) wc.hIcon = LoadIconW(nullptr, MAKEINTRESOURCEW(32512)); // IDI_APPLICATION
     RegisterClassW(&wc);
 
     HMENU menu = CreateMenu();

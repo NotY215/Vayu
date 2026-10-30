@@ -16,8 +16,10 @@ namespace vib {
             long long    i = 0;
             double       f = 0.0;
             std::string  s;
-            // Phase 7.1: shared list payload (identity for mutation).
+            // Phase 7.1/7.2: shared collection payloads.
             std::shared_ptr<std::vector<RtValue>> list;
+            std::shared_ptr<std::vector<std::pair<RtValue, RtValue>>> map; // ordered pairs
+            std::shared_ptr<std::vector<RtValue>> setElems;
         };
 
         RtValue fromVir(const VirValue& v) {
@@ -38,6 +40,9 @@ namespace vib {
             case VirValueKind::Float: return v.f != 0.0;
             case VirValueKind::Str:   return !v.s.empty();
             case VirValueKind::List:  return v.list && !v.list->empty();
+            case VirValueKind::Map:   return v.map && !v.map->empty();
+            case VirValueKind::Tuple: return v.list && !v.list->empty();
+            case VirValueKind::Set:   return v.setElems && !v.setElems->empty();
             }
             return false;
         }
@@ -68,6 +73,41 @@ namespace vib {
                     }
                 }
                 o += "]";
+                return o;
+            }
+            case VirValueKind::Map: {
+                std::string o = "{";
+                if (v.map) {
+                    for (size_t i = 0; i < v.map->size(); ++i) {
+                        if (i) o += ", ";
+                        o += rtToString((*v.map)[i].first) + ": " +
+                             rtToString((*v.map)[i].second);
+                    }
+                }
+                o += "}";
+                return o;
+            }
+            case VirValueKind::Tuple: {
+                std::string o = "(";
+                if (v.list) {
+                    for (size_t i = 0; i < v.list->size(); ++i) {
+                        if (i) o += ", ";
+                        o += rtToString((*v.list)[i]);
+                    }
+                    if (v.list->size() == 1) o += ",";
+                }
+                o += ")";
+                return o;
+            }
+            case VirValueKind::Set: {
+                std::string o = "{";
+                if (v.setElems) {
+                    for (size_t i = 0; i < v.setElems->size(); ++i) {
+                        if (i) o += ", ";
+                        o += rtToString((*v.setElems)[i]);
+                    }
+                }
+                o += "}";
                 return o;
             }
             }
@@ -343,9 +383,9 @@ namespace vib {
                 case VirOpcode::ListGet: {
                     const RtValue& lst = locals[(size_t)instr.lhsReg];
                     const RtValue& ix = locals[(size_t)instr.rhsReg];
-                    if (lst.kind != VirValueKind::List || !lst.list) {
+                    if ((lst.kind != VirValueKind::List && lst.kind != VirValueKind::Tuple) || !lst.list) {
                         out.kind = ErrorKind::RuntimeError;
-                        out.message = "interp: index on non-list";
+                        out.message = "interp: index on non-list/tuple";
                         return out;
                     }
                     if (ix.kind != VirValueKind::Int) {
@@ -400,7 +440,117 @@ namespace vib {
                     break;
                 }
 
-                case VirOpcode::CmpEq: case VirOpcode::CmpNe:
+                
+                case VirOpcode::MapNew: {
+                    RtValue r; r.kind = VirValueKind::Map;
+                    r.map = std::make_shared<std::vector<std::pair<RtValue, RtValue>>>();
+                    locals[(size_t)instr.destReg] = std::move(r);
+                    break;
+                }
+                case VirOpcode::MapSet: {
+                    RtValue& m = locals[(size_t)instr.lhsReg];
+                    if (m.kind != VirValueKind::Map || !m.map) {
+                        out.kind = ErrorKind::RuntimeError; out.message = "interp: MapSet on non-map"; return out;
+                    }
+                    const RtValue& key = locals[(size_t)instr.rhsReg];
+                    const RtValue& val = locals[(size_t)instr.operandReg];
+                    bool found = false;
+                    for (auto& kv : *m.map) {
+                        if (kv.first.kind == key.kind &&
+                            ((key.kind == VirValueKind::Str && kv.first.s == key.s) ||
+                             (key.kind == VirValueKind::Int && kv.first.i == key.i) ||
+                             (key.kind == VirValueKind::Bool && kv.first.b == key.b))) {
+                            kv.second = val; found = true; break;
+                        }
+                    }
+                    if (!found) m.map->push_back({key, val});
+                    break;
+                }
+                case VirOpcode::MapGet: {
+                    const RtValue& m = locals[(size_t)instr.lhsReg];
+                    const RtValue& key = locals[(size_t)instr.rhsReg];
+                    if (m.kind != VirValueKind::Map || !m.map) {
+                        out.kind = ErrorKind::RuntimeError; out.message = "interp: MapGet on non-map"; return out;
+                    }
+                    bool found = false;
+                    for (const auto& kv : *m.map) {
+                        if (kv.first.kind == key.kind &&
+                            ((key.kind == VirValueKind::Str && kv.first.s == key.s) ||
+                             (key.kind == VirValueKind::Int && kv.first.i == key.i) ||
+                             (key.kind == VirValueKind::Bool && kv.first.b == key.b))) {
+                            locals[(size_t)instr.destReg] = kv.second;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        RtValue none; none.kind = VirValueKind::None;
+                        locals[(size_t)instr.destReg] = none;
+                    }
+                    break;
+                }
+                case VirOpcode::MapHas: {
+                    const RtValue& m = locals[(size_t)instr.lhsReg];
+                    const RtValue& key = locals[(size_t)instr.rhsReg];
+                    RtValue r; r.kind = VirValueKind::Bool; r.b = false;
+                    if (m.kind == VirValueKind::Map && m.map) {
+                        for (const auto& kv : *m.map) {
+                            if (kv.first.kind == key.kind &&
+                                ((key.kind == VirValueKind::Str && kv.first.s == key.s) ||
+                                 (key.kind == VirValueKind::Int && kv.first.i == key.i)))
+                            { r.b = true; break; }
+                        }
+                    }
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+                case VirOpcode::TupleNew: {
+                    RtValue r; r.kind = VirValueKind::Tuple;
+                    r.list = std::make_shared<std::vector<RtValue>>();
+                    for (int ar : instr.argRegs)
+                        r.list->push_back(locals[(size_t)ar]);
+                    locals[(size_t)instr.destReg] = std::move(r);
+                    break;
+                }
+                case VirOpcode::SetNew: {
+                    RtValue r; r.kind = VirValueKind::Set;
+                    r.setElems = std::make_shared<std::vector<RtValue>>();
+                    locals[(size_t)instr.destReg] = std::move(r);
+                    break;
+                }
+                case VirOpcode::SetAdd: {
+                    RtValue& s = locals[(size_t)instr.lhsReg];
+                    if (s.kind != VirValueKind::Set || !s.setElems) {
+                        out.kind = ErrorKind::RuntimeError; out.message = "interp: SetAdd on non-set"; return out;
+                    }
+                    const RtValue& el = locals[(size_t)instr.operandReg];
+                    bool found = false;
+                    for (const auto& e : *s.setElems) {
+                        if (e.kind == el.kind &&
+                            ((el.kind == VirValueKind::Int && e.i == el.i) ||
+                             (el.kind == VirValueKind::Str && e.s == el.s)))
+                        { found = true; break; }
+                    }
+                    if (!found) s.setElems->push_back(el);
+                    break;
+                }
+                case VirOpcode::SetHas: {
+                    const RtValue& s = locals[(size_t)instr.lhsReg];
+                    const RtValue& el = locals[(size_t)instr.rhsReg];
+                    RtValue r; r.kind = VirValueKind::Bool; r.b = false;
+                    if (s.kind == VirValueKind::Set && s.setElems) {
+                        for (const auto& e : *s.setElems) {
+                            if (e.kind == el.kind &&
+                                ((el.kind == VirValueKind::Int && e.i == el.i) ||
+                                 (el.kind == VirValueKind::Str && e.s == el.s)))
+                            { r.b = true; break; }
+                        }
+                    }
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+
+case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                 case VirOpcode::CmpLt: case VirOpcode::CmpLe:
                 case VirOpcode::CmpGt: case VirOpcode::CmpGe: {
                     const RtValue& a = locals[(size_t)instr.lhsReg];
@@ -581,8 +731,14 @@ namespace vib {
                             r.i = (long long)args[0].s.size();
                         } else if (args[0].kind == VirValueKind::List && args[0].list) {
                             r.i = (long long)args[0].list->size();
+                        } else if (args[0].kind == VirValueKind::Map && args[0].map) {
+                            r.i = (long long)args[0].map->size();
+                        } else if (args[0].kind == VirValueKind::Tuple && args[0].list) {
+                            r.i = (long long)args[0].list->size();
+                        } else if (args[0].kind == VirValueKind::Set && args[0].setElems) {
+                            r.i = (long long)args[0].setElems->size();
                         } else {
-                            out.kind = ErrorKind::RuntimeError; out.message = "interp: len() expects str or list"; return out;
+                            out.kind = ErrorKind::RuntimeError; out.message = "interp: len() expects str/list/map/tuple/set"; return out;
                         }
                         break;
                     }
