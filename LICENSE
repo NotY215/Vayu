@@ -6,13 +6,11 @@ Alias: Fliczo
 Project community: Vayu Community
 Repository: https://github.com/NotY215/Vayu
 
-Vayu is maintained by its project owner and contributors in the Vayu Community.
-The project source code is licensed under the GNU General Public License
-version 3 or, at your option, any later version (GPL-3.0-or-later).
+Vayu is maintained by Shreyas Mishra (NotY215, also known as Fliczo) with
+contributions from the Vayu Community.
 
-This attribution identifies the project and its owner. The GNU General Public
-License text below governs copying, distribution, modification, warranty,
-and liability.
+This project is licensed under the GNU General Public License, Version 3.
+The complete license terms are provided below.
 
 --------------------------------------------------------------------------
 
@@ -636,4 +634,35 @@ an absolute waiver of all civil liability in connection with the
 Program, unless a warranty or assumption of liability accompanies a
 copy of the Program in return for a fee.
 
+
                      END OF TERMS AND CONDITIONS
+
+
+            How to Apply These Terms to Your New Programs
+
+If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these
+terms.
+
+To do so, attach the following notices to the program. It is safest to
+attach them to the start of each source file to most effectively state
+the exclusion of warranty; and each file should have at least the
+"copyright" line and a pointer to where the full notice is found.
+
+Vayu
+Copyright (C) 2026 Shreyas Mishra (NotY215, also known as Fliczo)
+Project community: Vayu Community
+Repository: https://github.com/NotY215/Vayu
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 3.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License, Version 3, for more details.
+
+You should have received a copy of the GNU General Public License,
+Version 3, along with this program. If not, see
+<https://www.gnu.org/licenses/>.
