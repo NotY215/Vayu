@@ -174,15 +174,15 @@ Vayu is building **VIB (Vayu Integration Backend)**, the integrated toolchain im
 flowchart TD
     S[".vyu Source"] --> F["Vayu Frontend"]
     F --> A["AST + Semantic Analysis"]
-    A --> I["Small Verified Integrator Representation (planned)"]
-    I --> P[".vye Package Writer (planned)"]
+    A --> I["Verified Integrator Representation (implemented subset)"]
+    I --> P[".vye Package Writer (working)"]
     P --> E[".vye Vayu Executable"]
-    E --> R["Compatible Vayu / Integrator Runtime (planned)"]
+    E --> R["Vayu / Integrator Runtime (working)"]
 ```
 
 **[→ VIB Architecture](docs/vib.md) · [→ Complete VIB Technical Documentation](docs/vib-documentation.md) · [→ Full Roadmap](Roadmap.md)**
 
-> Status: the initial Integrator, `.vye` format, and package execution path are planned work, not yet complete. Use the currently supported interpreter/VM paths until the new pipeline has passing tests.
+> Status: the 0.1–4.2 Integrator foundation, VIR, verifier, arithmetic, strings, and initial function support are completed. The `.vye` design is completed; its writer, reader, run path, dispatch adoption, and cache remain Working. Function return-value plumbing is also Working. See [Roadmap.md](Roadmap.md) for exact phase status.
 
 ## 🧰 Windows Toolchain and Runtime Layout
 
@@ -533,7 +533,7 @@ The goal is to make Vayu useful for small programs, applications, games, AI syst
 
 Vayu has an expanding language frontend, interpreter, bytecode compiler/VM, runtime integrations, package tooling, and editor tooling. The compiler/runtime is transitioning to **VIB (Vayu Integration Backend)**, which implements the Integrator architecture inside this repository. The first priority is a small, verified subset and the planned `.vye` Vayu Executable package, which requires a compatible Vayu/Integrator runtime.
 
-The first Integrator and `.vye` implementation is still roadmap work until its format, execution path, and tests are present. Do not assume native code generation or `.vye` support is complete. Use the currently supported interpreter/VM paths.
+The Integrator foundation through Phase 4.2 is completed, with string methods and the Phase 5.1 function subset also completed. Phase 5.2b return-value plumbing remains Working. The `.vye` design is completed, while package writing, reading, execution, dispatch adoption, and caching remain Working. Native machine-code generation is still Planned. Use the currently supported interpreter/VM paths where the relevant tests pass.
 
 Current language and runtime features remain subject to execution-mode coverage. Native support must be re-established feature-by-feature through the shared conformance suite rather than inferred from interpreter support.
 
