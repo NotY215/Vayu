@@ -15,7 +15,7 @@ This roadmap records the current implementation state and the intended sequence 
 - The current priority is to expand the Integrator and VIR into a correct execution pipeline, then progress toward native machine-code generation and the later roadmap milestones.
 - The Integrator must not silently claim support for language features that are only available in the interpreter or VM.
 - VIR must be structurally verified before interpretation or any later backend consumes it.
-- The `.vye` executable-package track (design, writer, reader/runtime, dispatch adoption, and cache) is explicitly deferred under Phase 2A–2C. Do not treat it as the active prerequisite for the current VIR work.
+- The `.vye` executable-package track is maintained separately under Phase 2A–2C. The design is Completed; writer, reader/runtime, dispatch adoption, and cache tasks are Working. Do not treat package work as a prerequisite for unrelated VIR feature work.
 - Existing interpreter/VM behaviour is useful reference material, but failures in those paths must be distinguished from Integrator/VIR failures.
 - Do not reintroduce the removed external-backend design, bundled foreign-language runtimes, DLL directories, LLD executables, or platform import-library dependencies.
 - ONNX remains a later Vayu-owned track. Do not add a Python ONNX generator or Python package dependency.
