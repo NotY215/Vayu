@@ -38,47 +38,49 @@ static const COLORREF COL_DIM    = RGB(140, 140, 140);
 static const COLORREF COL_TIP_BG = RGB(45, 45, 48);
 static const COLORREF COL_TIP_FG = RGB(220, 220, 170);
 
+// 0 = statement-only, 1 = expression-only, 2 = both (VS Code–style filtering)
 struct Snippet {
     const wchar_t* trigger;
     const wchar_t* insert; // \x01 = caret
     const wchar_t* help;
+    int kind;
 };
 
 static const Snippet kSnips[] = {
-    { L"print",    L"print(\"\x01\")",                    L"print(value) — write to standard output" },
-    { L"pass",     L"pass",                               L"pass — no-op statement" },
-    { L"def",      L"def \x01():\r\n    pass\r\n",       L"def name(params) — define a function" },
-    { L"return",   L"return \x01",                        L"return — exit function with a value" },
-    { L"if",       L"if \x01:\r\n    pass\r\n",          L"if condition — conditional branch" },
-    { L"elif",     L"elif \x01:\r\n    pass\r\n",        L"elif — else-if branch" },
-    { L"else",     L"else:\r\n    \x01\r\n",              L"else — default branch" },
-    { L"while",    L"while \x01:\r\n    pass\r\n",       L"while condition — loop" },
-    { L"for",      L"for \x01 in range(10):\r\n    pass\r\n", L"for x in iterable — loop" },
-    { L"class",    L"class \x01:\r\n    pass\r\n",       L"class — define a type" },
-    { L"import",   L"import \x01",                        L"import module — load a module" },
-    { L"from",     L"from \x01 import ",                  L"from module import name" },
-    { L"try",      L"try:\r\n    \x01\r\nexcept:\r\n    pass\r\n", L"try/except — error handling" },
-    { L"except",   L"except \x01:\r\n    pass\r\n",      L"except — catch errors" },
-    { L"raise",    L"raise \x01",                         L"raise — throw an error" },
-    { L"true",     L"true",                               L"true — boolean true" },
-    { L"false",    L"false",                              L"false — boolean false" },
-    { L"None",     L"None",                               L"None — null value" },
-    { L"input",    L"input(\"\x01\")",                    L"input(prompt) — read a line as str" },
-    { L"read_int", L"read_int()",                         L"read_int() — read an integer from stdin" },
-    { L"len",      L"len(\x01)",                          L"len(x) — length of str/list/map/..." },
-    { L"str",      L"str(\x01)",                          L"str(x) — convert to string" },
-    { L"int",      L"int(\x01)",                          L"int(x) — convert to integer" },
-    { L"float",    L"float(\x01)",                        L"float(x) — convert to float" },
-    { L"bool",     L"bool(\x01)",                         L"bool(x) — convert to bool" },
-    { L"and",      L"and ",                               L"and — logical AND" },
-    { L"or",       L"or ",                                L"or — logical OR" },
-    { L"not",      L"not ",                               L"not — logical NOT" },
-    { L"self",     L"self",                               L"self — instance reference in methods" },
-    { L"break",    L"break",                              L"break — exit the nearest loop" },
-    { L"continue", L"continue",                           L"continue — next loop iteration" },
-    { L"append",   L"append(\x01)",                       L"list.append(x) — push element" },
-    { L"range",    L"range(\x01)",                        L"range(n) — 0..n-1 sequence" },
-    { nullptr, nullptr, nullptr }
+    { L"print",    L"print(\"\x01\")",              L"print(value) — write to standard output", 2 },
+    { L"pass",     L"pass",                         L"pass — no-op statement", 0 },
+    { L"def",      L"def \x01():\r\n    pass\r\n", L"def name(params) — define a function", 0 },
+    { L"return",   L"return \x01",                  L"return — exit function with a value", 0 },
+    { L"if",       L"if \x01:\r\n    pass\r\n",    L"if condition — conditional branch", 0 },
+    { L"elif",     L"elif \x01:\r\n    pass\r\n",  L"elif — else-if branch", 0 },
+    { L"else",     L"else:\r\n    \x01\r\n",        L"else — default branch", 0 },
+    { L"while",    L"while \x01:\r\n    pass\r\n", L"while condition — loop", 0 },
+    { L"for",      L"for \x01 in range(10):\r\n    pass\r\n", L"for x in iterable — loop", 0 },
+    { L"class",    L"class \x01:\r\n    pass\r\n", L"class — define a type", 0 },
+    { L"import",   L"import \x01",                  L"import module — load a module", 0 },
+    { L"from",     L"from \x01 import ",            L"from module import name", 0 },
+    { L"try",      L"try:\r\n    \x01\r\nexcept:\r\n    pass\r\n", L"try/except — error handling", 0 },
+    { L"except",   L"except \x01:\r\n    pass\r\n", L"except — catch errors", 0 },
+    { L"raise",    L"raise \x01",                   L"raise — throw an error", 0 },
+    { L"true",     L"true",                         L"true — boolean true", 1 },
+    { L"false",    L"false",                        L"false — boolean false", 1 },
+    { L"None",     L"None",                         L"None — null value", 1 },
+    { L"input",    L"input(\"\x01\")",              L"input(prompt) — read a line as str", 1 },
+    { L"read_int", L"read_int()",                   L"read_int() — read an integer from stdin", 1 },
+    { L"len",      L"len(\x01)",                    L"len(x) — length of str/list/map/...", 1 },
+    { L"str",      L"str(\x01)",                    L"str(x) — convert to string", 1 },
+    { L"int",      L"int(\x01)",                    L"int(x) — convert to integer", 1 },
+    { L"float",    L"float(\x01)",                  L"float(x) — convert to float", 1 },
+    { L"bool",     L"bool(\x01)",                   L"bool(x) — convert to bool", 1 },
+    { L"and",      L"and ",                         L"and — logical AND", 1 },
+    { L"or",       L"or ",                          L"or — logical OR", 1 },
+    { L"not",      L"not ",                         L"not — logical NOT", 1 },
+    { L"self",     L"self",                         L"self — instance reference in methods", 1 },
+    { L"break",    L"break",                        L"break — exit the nearest loop", 0 },
+    { L"continue", L"continue",                     L"continue — next loop iteration", 0 },
+    { L"range",    L"range(\x01)",                  L"range(n) — 0..n-1 sequence", 1 },
+    { L"append",   L"append(\x01)",                 L"list.append(x) — push element", 1 },
+    { nullptr, nullptr, nullptr, 0 }
 };
 
 static std::string WideToUtf8(const std::wstring& w) {
@@ -295,30 +297,99 @@ static void AcceptCompletion() {
     SetStatus(L"Ready");
 }
 
+
+// VS Code–style context: suppress inside strings; stmt vs expr positions.
+enum class EditCtx { None, Stmt, Expr };
+
+static EditCtx DetectContext() {
+    int caret = 0, end = 0;
+    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&caret, (LPARAM)&end);
+    std::wstring all = GetEditText(gEdit);
+    if (caret > (int)all.size()) caret = (int)all.size();
+
+    // Line start → caret
+    int lineStart = caret;
+    while (lineStart > 0 && all[(size_t)lineStart - 1] != L'\n') --lineStart;
+    std::wstring line = all.substr((size_t)lineStart, (size_t)(caret - lineStart));
+
+    // Inside string? toggle on unescaped " or '
+    bool inStr = false;
+    wchar_t quote = 0;
+    for (size_t i = 0; i < line.size(); ++i) {
+        wchar_t c = line[i];
+        if (c == L'\\' && inStr) { ++i; continue; }
+        if (!inStr && (c == L'"' || c == L'\'')) { inStr = true; quote = c; }
+        else if (inStr && c == quote) { inStr = false; quote = 0; }
+    }
+    if (inStr) return EditCtx::None;
+
+    // Strip trailing prefix being typed
+    while (!line.empty()) {
+        wchar_t c = line.back();
+        if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
+            (c >= L'0' && c <= L'9') || c == L'_') line.pop_back();
+        else break;
+    }
+    // Trim spaces
+    while (!line.empty() && (line.back() == L' ' || line.back() == L'\t')) line.pop_back();
+    if (line.empty()) return EditCtx::Stmt;
+
+    wchar_t last = line.back();
+    // After ( [ { , = : operators → expression
+    if (last == L'(' || last == L'[' || last == L'{' || last == L',' ||
+        last == L'=' || last == L'+' || last == L'-' || last == L'*' ||
+        last == L'/' || last == L'%' || last == L'<' || last == L'>' ||
+        last == L'!' || last == L'&' || last == L'|')
+        return EditCtx::Expr;
+    // after keywords that take expressions
+    auto ends_with = [&](const wchar_t* s) {
+        size_t n = wcslen(s);
+        return line.size() >= n && line.compare(line.size() - n, n, s) == 0;
+    };
+    if (ends_with(L"return") || ends_with(L"print") || ends_with(L"if") ||
+        ends_with(L"while") || ends_with(L"elif") || ends_with(L"in") ||
+        ends_with(L"and") || ends_with(L"or") || ends_with(L"not"))
+        return EditCtx::Expr;
+    // after ':' on same line → still can be stmt (suite on same line rare) → stmt
+    if (last == L':') return EditCtx::Stmt;
+    return EditCtx::Stmt;
+}
+
 static void UpdateIntelliSense(HWND hwnd) {
     (void)hwnd;
     std::wstring prefix = WordBeforeCaret();
     if (prefix.empty()) { HideCompl(); return; }
 
+    EditCtx ctx = DetectContext();
+    if (ctx == EditCtx::None) { HideCompl(); return; } // inside string — silent
+
     std::vector<std::wstring> items;
     for (int i = 0; kSnips[i].trigger; ++i) {
-        if (_wcsnicmp(kSnips[i].trigger, prefix.c_str(), prefix.size()) == 0)
-            items.push_back(kSnips[i].trigger);
+        if (_wcsnicmp(kSnips[i].trigger, prefix.c_str(), prefix.size()) != 0)
+            continue;
+        // kind: 0 stmt, 1 expr, 2 both
+        int k = kSnips[i].kind;
+        if (ctx == EditCtx::Stmt && k == 1) continue; // no pure-expr at stmt start
+        if (ctx == EditCtx::Expr && k == 0) continue; // no statements inside exprs
+        items.push_back(kSnips[i].trigger);
     }
-    std::wstring body = GetEditText(gEdit);
-    std::wstring cur;
-    for (size_t i = 0; i <= body.size(); ++i) {
-        wchar_t c = (i < body.size()) ? body[i] : L' ';
-        if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
-            (c >= L'0' && c <= L'9') || c == L'_') cur.push_back(c);
-        else {
-            if (cur.size() > prefix.size() &&
-                _wcsnicmp(cur.c_str(), prefix.c_str(), prefix.size()) == 0) {
-                bool seen = false;
-                for (auto& x : items) if (x == cur) { seen = true; break; }
-                if (!seen && cur != prefix) items.push_back(cur);
+    // Buffer identifiers — useful in expression positions (VS Code-like).
+    if (ctx == EditCtx::Expr || ctx == EditCtx::Stmt) {
+        std::wstring body = GetEditText(gEdit);
+        std::wstring cur;
+        for (size_t i = 0; i <= body.size(); ++i) {
+            wchar_t c = (i < body.size()) ? body[i] : L' ';
+            if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
+                (c >= L'0' && c <= L'9') || c == L'_') cur.push_back(c);
+            else {
+                if (cur.size() > prefix.size() &&
+                    _wcsnicmp(cur.c_str(), prefix.c_str(), prefix.size()) == 0) {
+                    bool seen = false;
+                    for (auto& x : items) if (x == cur) { seen = true; break; }
+                    if (!seen && cur != prefix) items.push_back(cur);
+                }
+                cur.clear();
             }
-            cur.clear();
         }
     }
     if (items.empty()) { HideCompl(); return; }
@@ -434,6 +505,7 @@ static LRESULT CALLBACK EditProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 static void Layout(HWND hwnd, int w, int h) {
+    (void)hwnd;
     const int statusH = 22, labelH = 18;
     int outH = gOutHeight;
     if (outH < 80) outH = 80;

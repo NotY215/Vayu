@@ -1677,7 +1677,9 @@ namespace vib {
                     ret.operandReg = retReg;
                     entry.instructions.push_back(ret);
                 }
-                fn.localCount = fctx.nextLocal;
+                // Registers and named locals share the same slots; localCount must
+                // cover the highest temporary register used during lowering.
+                fn.localCount = fctx.nextLocal > fctx.nextReg ? fctx.nextLocal : fctx.nextReg;
                 fn.blocks.push_back(std::move(entry));
                 fn.entryBlock = 0;
             }
@@ -1716,7 +1718,7 @@ namespace vib {
         ret.operandReg = retReg;
         mainEntry.instructions.push_back(ret);
 
-        mainRef.localCount = ctx.nextLocal;
+        mainRef.localCount = ctx.nextLocal > ctx.nextReg ? ctx.nextLocal : ctx.nextReg;
         mainRef.blocks.push_back(std::move(mainEntry));
         mainRef.entryBlock = 0;
 
