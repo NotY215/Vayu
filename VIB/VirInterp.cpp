@@ -186,6 +186,11 @@ namespace vib {
                         out.message = "interp: invalid LoadLocal index";
                         return out;
                     }
+                    if (instr.destReg < 0 || instr.destReg >= fn.localCount) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: LoadLocal destReg out of range";
+                        return out;
+                    }
                     locals[(size_t)instr.destReg] = locals[(size_t)instr.localIndex];
                     break;
                 }
@@ -551,7 +556,40 @@ namespace vib {
                     break;
                 }
 
-case VirOpcode::CmpEq: case VirOpcode::CmpNe:
+case VirOpcode::BitAnd: case VirOpcode::BitOr: case VirOpcode::BitXor:
+                case VirOpcode::BitShl: case VirOpcode::BitShr: {
+                    const RtValue& a = locals[(size_t)instr.lhsReg];
+                    const RtValue& b = locals[(size_t)instr.rhsReg];
+                    if (a.kind != VirValueKind::Int || b.kind != VirValueKind::Int) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: bitwise op requires integers";
+                        return out;
+                    }
+                    RtValue r; r.kind = VirValueKind::Int;
+                    switch (instr.opcode) {
+                    case VirOpcode::BitAnd: r.i = a.i & b.i; break;
+                    case VirOpcode::BitOr:  r.i = a.i | b.i; break;
+                    case VirOpcode::BitXor: r.i = a.i ^ b.i; break;
+                    case VirOpcode::BitShl: r.i = a.i << (b.i & 63); break;
+                    case VirOpcode::BitShr: r.i = a.i >> (b.i & 63); break;
+                    default: break;
+                    }
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+                case VirOpcode::BitNot: {
+                    const RtValue& a = locals[(size_t)instr.operandReg];
+                    if (a.kind != VirValueKind::Int) {
+                        out.kind = ErrorKind::RuntimeError;
+                        out.message = "interp: ~ requires integer";
+                        return out;
+                    }
+                    RtValue r; r.kind = VirValueKind::Int; r.i = ~a.i;
+                    locals[(size_t)instr.destReg] = r;
+                    break;
+                }
+
+                case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                 case VirOpcode::CmpLt: case VirOpcode::CmpLe:
                 case VirOpcode::CmpGt: case VirOpcode::CmpGe: {
                     const RtValue& a = locals[(size_t)instr.lhsReg];
@@ -688,8 +726,10 @@ case VirOpcode::CmpEq: case VirOpcode::CmpNe:
                     }
                     
                     case VirBuiltin::Input: {
-                        if (!callArgs.empty() && callArgs[0].kind == VirValueKind::Str)
+                        if (!callArgs.empty() && callArgs[0].kind == VirValueKind::Str) {
                             std::fputs(callArgs[0].s.c_str(), stdout);
+                            std::fflush(stdout);
+                        }
                         std::string line;
                         if (!std::getline(std::cin, line)) line.clear();
                         // strip \r

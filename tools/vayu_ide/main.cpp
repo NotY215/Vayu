@@ -1,4 +1,4 @@
-// Vayu-IDE — dark theme, OUTPUT, live IntelliSense (click + hover tips), auto-pairs.
+// Vayu-IDE — dark theme, OUTPUT pane, no IntelliSense.
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define UNICODE
@@ -11,23 +11,19 @@
 #include <sstream>
 #include <process.h>
 #include <memory>
-#include <algorithm>
 
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 
-static HWND gMain, gEdit, gOut, gStatus, gSplitLabel, gCompl, gTip;
+static HWND gEdit, gOut, gStatus, gSplitLabel;
 static std::wstring gPath;
 static bool gDirty = false;
 static const wchar_t* CLS = L"VayuIDEWnd";
-static HBRUSH gBgBrush, gEditBrush, gOutBrush, gTipBrush;
+static HBRUSH gBgBrush, gEditBrush, gOutBrush;
 static HFONT gFont, gUiFont;
 static int gOutHeight = 180;
-static bool gSuppressEnChange = false;
 static HICON gIconBig = nullptr, gIconSm = nullptr;
-static WNDPROC gOldLbProc = nullptr;
-static LRESULT CALLBACK LbProc(HWND h, UINT msg, WPARAM wp, LPARAM lp);
 
 static const COLORREF COL_BG     = RGB(32, 32, 32);
 static const COLORREF COL_EDIT   = RGB(30, 30, 30);
@@ -35,53 +31,6 @@ static const COLORREF COL_OUT    = RGB(24, 24, 24);
 static const COLORREF COL_TEXT   = RGB(204, 204, 204);
 static const COLORREF COL_STATUS = RGB(0, 122, 204);
 static const COLORREF COL_DIM    = RGB(140, 140, 140);
-static const COLORREF COL_TIP_BG = RGB(45, 45, 48);
-static const COLORREF COL_TIP_FG = RGB(220, 220, 170);
-
-// 0 = statement-only, 1 = expression-only, 2 = both (VS Code–style filtering)
-struct Snippet {
-    const wchar_t* trigger;
-    const wchar_t* insert; // \x01 = caret
-    const wchar_t* help;
-    int kind;
-};
-
-static const Snippet kSnips[] = {
-    { L"print",    L"print(\"\x01\")",              L"print(value) — write to standard output", 2 },
-    { L"pass",     L"pass",                         L"pass — no-op statement", 0 },
-    { L"def",      L"def \x01():\r\n    pass\r\n", L"def name(params) — define a function", 0 },
-    { L"return",   L"return \x01",                  L"return — exit function with a value", 0 },
-    { L"if",       L"if \x01:\r\n    pass\r\n",    L"if condition — conditional branch", 0 },
-    { L"elif",     L"elif \x01:\r\n    pass\r\n",  L"elif — else-if branch", 0 },
-    { L"else",     L"else:\r\n    \x01\r\n",        L"else — default branch", 0 },
-    { L"while",    L"while \x01:\r\n    pass\r\n", L"while condition — loop", 0 },
-    { L"for",      L"for \x01 in range(10):\r\n    pass\r\n", L"for x in iterable — loop", 0 },
-    { L"class",    L"class \x01:\r\n    pass\r\n", L"class — define a type", 0 },
-    { L"import",   L"import \x01",                  L"import module — load a module", 0 },
-    { L"from",     L"from \x01 import ",            L"from module import name", 0 },
-    { L"try",      L"try:\r\n    \x01\r\nexcept:\r\n    pass\r\n", L"try/except — error handling", 0 },
-    { L"except",   L"except \x01:\r\n    pass\r\n", L"except — catch errors", 0 },
-    { L"raise",    L"raise \x01",                   L"raise — throw an error", 0 },
-    { L"true",     L"true",                         L"true — boolean true", 1 },
-    { L"false",    L"false",                        L"false — boolean false", 1 },
-    { L"None",     L"None",                         L"None — null value", 1 },
-    { L"input",    L"input(\"\x01\")",              L"input(prompt) — read a line as str", 1 },
-    { L"read_int", L"read_int()",                   L"read_int() — read an integer from stdin", 1 },
-    { L"len",      L"len(\x01)",                    L"len(x) — length of str/list/map/...", 1 },
-    { L"str",      L"str(\x01)",                    L"str(x) — convert to string", 1 },
-    { L"int",      L"int(\x01)",                    L"int(x) — convert to integer", 1 },
-    { L"float",    L"float(\x01)",                  L"float(x) — convert to float", 1 },
-    { L"bool",     L"bool(\x01)",                   L"bool(x) — convert to bool", 1 },
-    { L"and",      L"and ",                         L"and — logical AND", 1 },
-    { L"or",       L"or ",                          L"or — logical OR", 1 },
-    { L"not",      L"not ",                         L"not — logical NOT", 1 },
-    { L"self",     L"self",                         L"self — instance reference in methods", 1 },
-    { L"break",    L"break",                        L"break — exit the nearest loop", 0 },
-    { L"continue", L"continue",                     L"continue — next loop iteration", 0 },
-    { L"range",    L"range(\x01)",                  L"range(n) — 0..n-1 sequence", 1 },
-    { L"append",   L"append(\x01)",                 L"list.append(x) — push element", 1 },
-    { nullptr, nullptr, nullptr, 0 }
-};
 
 static std::string WideToUtf8(const std::wstring& w) {
     if (w.empty()) return {};
@@ -149,9 +98,7 @@ static void OpenFile(HWND hwnd) {
     gPath = file;
     std::ifstream in(WideToUtf8(gPath), std::ios::binary);
     std::ostringstream ss; ss << in.rdbuf();
-    gSuppressEnChange = true;
     SetWindowTextW(gEdit, Utf8ToWide(ss.str()).c_str());
-    gSuppressEnChange = false;
     gDirty = false;
     SetStatus(gPath.c_str());
 }
@@ -213,299 +160,7 @@ static void RunVayu(HWND hwnd, bool compileVye) {
     if (th) CloseHandle((HANDLE)th); else { delete ctx; AppendOut(L"[error] thread\r\n"); }
 }
 
-static std::wstring WordBeforeCaret() {
-    int start = 0, end = 0;
-    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
-    std::wstring all = GetEditText(gEdit);
-    if (start > (int)all.size()) start = (int)all.size();
-    int i = start;
-    while (i > 0) {
-        wchar_t c = all[(size_t)i - 1];
-        if (!((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
-              (c >= L'0' && c <= L'9') || c == L'_')) break;
-        --i;
-    }
-    return all.substr((size_t)i, (size_t)(start - i));
-}
-
-static void HideCompl() {
-    if (gCompl) ShowWindow(gCompl, SW_HIDE);
-    if (gTip) ShowWindow(gTip, SW_HIDE);
-}
-
-static const wchar_t* HelpForLabel(const wchar_t* label) {
-    for (int i = 0; kSnips[i].trigger; ++i)
-        if (wcscmp(kSnips[i].trigger, label) == 0) return kSnips[i].help;
-    return L"Identifier in current buffer";
-}
-
-static void ShowTipForSel() {
-    if (!gCompl || !IsWindowVisible(gCompl)) return;
-    int sel = (int)SendMessageW(gCompl, LB_GETCURSEL, 0, 0);
-    if (sel < 0) { if (gTip) ShowWindow(gTip, SW_HIDE); return; }
-    wchar_t label[128];
-    SendMessageW(gCompl, LB_GETTEXT, sel, (LPARAM)label);
-    const wchar_t* help = HelpForLabel(label);
-    if (!gTip) {
-        gTip = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-            L"STATIC", L"",
-            WS_POPUP | WS_BORDER | SS_LEFT,
-            0, 0, 400, 44, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-        SendMessageW(gTip, WM_SETFONT, (WPARAM)gUiFont, TRUE);
-    }
-    SetWindowTextW(gTip, help);
-    RECT rc; GetWindowRect(gCompl, &rc);
-    SetWindowPos(gTip, HWND_TOPMOST, rc.right + 6, rc.top + sel * 18, 420, 48,
-        SWP_SHOWWINDOW | SWP_NOACTIVATE);
-}
-
-static void AcceptCompletion() {
-    if (!gCompl || !IsWindowVisible(gCompl)) return;
-    int sel = (int)SendMessageW(gCompl, LB_GETCURSEL, 0, 0);
-    if (sel < 0) { HideCompl(); return; }
-    wchar_t label[128];
-    SendMessageW(gCompl, LB_GETTEXT, sel, (LPARAM)label);
-
-    const wchar_t* insert = label;
-    for (int i = 0; kSnips[i].trigger; ++i)
-        if (wcscmp(kSnips[i].trigger, label) == 0) { insert = kSnips[i].insert; break; }
-
-    std::wstring prefix = WordBeforeCaret();
-    int start = 0, end = 0;
-    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
-    int p0 = start - (int)prefix.size();
-    if (p0 < 0) p0 = 0;
-
-    std::wstring text = insert;
-    int caretOff = -1;
-    size_t marker = text.find(L'\x01');
-    if (marker != std::wstring::npos) {
-        caretOff = (int)marker;
-        text.erase(marker, 1);
-    }
-
-    gSuppressEnChange = true;
-    SendMessageW(gEdit, EM_SETSEL, p0, start);
-    SendMessageW(gEdit, EM_REPLACESEL, TRUE, (LPARAM)text.c_str());
-    if (caretOff >= 0) {
-        int cpos = p0 + caretOff;
-        SendMessageW(gEdit, EM_SETSEL, cpos, cpos);
-    }
-    gSuppressEnChange = false;
-    HideCompl();
-    SetFocus(gEdit);
-    SetStatus(L"Ready");
-}
-
-
-// VS Code–style context: suppress inside strings; stmt vs expr positions.
-enum class EditCtx { None, Stmt, Expr };
-
-static EditCtx DetectContext() {
-    int caret = 0, end = 0;
-    SendMessageW(gEdit, EM_GETSEL, (WPARAM)&caret, (LPARAM)&end);
-    std::wstring all = GetEditText(gEdit);
-    if (caret > (int)all.size()) caret = (int)all.size();
-
-    // Line start → caret
-    int lineStart = caret;
-    while (lineStart > 0 && all[(size_t)lineStart - 1] != L'\n') --lineStart;
-    std::wstring line = all.substr((size_t)lineStart, (size_t)(caret - lineStart));
-
-    // Inside string? toggle on unescaped " or '
-    bool inStr = false;
-    wchar_t quote = 0;
-    for (size_t i = 0; i < line.size(); ++i) {
-        wchar_t c = line[i];
-        if (c == L'\\' && inStr) { ++i; continue; }
-        if (!inStr && (c == L'"' || c == L'\'')) { inStr = true; quote = c; }
-        else if (inStr && c == quote) { inStr = false; quote = 0; }
-    }
-    if (inStr) return EditCtx::None;
-
-    // Strip trailing prefix being typed
-    while (!line.empty()) {
-        wchar_t c = line.back();
-        if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
-            (c >= L'0' && c <= L'9') || c == L'_') line.pop_back();
-        else break;
-    }
-    // Trim spaces
-    while (!line.empty() && (line.back() == L' ' || line.back() == L'\t')) line.pop_back();
-    if (line.empty()) return EditCtx::Stmt;
-
-    wchar_t last = line.back();
-    // After ( [ { , = : operators → expression
-    if (last == L'(' || last == L'[' || last == L'{' || last == L',' ||
-        last == L'=' || last == L'+' || last == L'-' || last == L'*' ||
-        last == L'/' || last == L'%' || last == L'<' || last == L'>' ||
-        last == L'!' || last == L'&' || last == L'|')
-        return EditCtx::Expr;
-    // after keywords that take expressions
-    auto ends_with = [&](const wchar_t* s) {
-        size_t n = wcslen(s);
-        return line.size() >= n && line.compare(line.size() - n, n, s) == 0;
-    };
-    if (ends_with(L"return") || ends_with(L"print") || ends_with(L"if") ||
-        ends_with(L"while") || ends_with(L"elif") || ends_with(L"in") ||
-        ends_with(L"and") || ends_with(L"or") || ends_with(L"not"))
-        return EditCtx::Expr;
-    // after ':' on same line → still can be stmt (suite on same line rare) → stmt
-    if (last == L':') return EditCtx::Stmt;
-    return EditCtx::Stmt;
-}
-
-static void UpdateIntelliSense(HWND hwnd) {
-    (void)hwnd;
-    std::wstring prefix = WordBeforeCaret();
-    if (prefix.empty()) { HideCompl(); return; }
-
-    EditCtx ctx = DetectContext();
-    if (ctx == EditCtx::None) { HideCompl(); return; } // inside string — silent
-
-    std::vector<std::wstring> items;
-    for (int i = 0; kSnips[i].trigger; ++i) {
-        if (_wcsnicmp(kSnips[i].trigger, prefix.c_str(), prefix.size()) != 0)
-            continue;
-        // kind: 0 stmt, 1 expr, 2 both
-        int k = kSnips[i].kind;
-        if (ctx == EditCtx::Stmt && k == 1) continue; // no pure-expr at stmt start
-        if (ctx == EditCtx::Expr && k == 0) continue; // no statements inside exprs
-        items.push_back(kSnips[i].trigger);
-    }
-    // Buffer identifiers — useful in expression positions (VS Code-like).
-    if (ctx == EditCtx::Expr || ctx == EditCtx::Stmt) {
-        std::wstring body = GetEditText(gEdit);
-        std::wstring cur;
-        for (size_t i = 0; i <= body.size(); ++i) {
-            wchar_t c = (i < body.size()) ? body[i] : L' ';
-            if ((c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') ||
-                (c >= L'0' && c <= L'9') || c == L'_') cur.push_back(c);
-            else {
-                if (cur.size() > prefix.size() &&
-                    _wcsnicmp(cur.c_str(), prefix.c_str(), prefix.size()) == 0) {
-                    bool seen = false;
-                    for (auto& x : items) if (x == cur) { seen = true; break; }
-                    if (!seen && cur != prefix) items.push_back(cur);
-                }
-                cur.clear();
-            }
-        }
-    }
-    if (items.empty()) { HideCompl(); return; }
-    std::sort(items.begin(), items.end());
-    items.erase(std::unique(items.begin(), items.end()), items.end());
-
-    if (!gCompl) {
-        gCompl = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW, L"LISTBOX", L"",
-            WS_POPUP | WS_BORDER | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT,
-            0, 0, 280, 220, gMain, nullptr, GetModuleHandleW(nullptr), nullptr);
-        SendMessageW(gCompl, WM_SETFONT, (WPARAM)gFont, TRUE);
-        gOldLbProc = (WNDPROC)SetWindowLongPtrW(gCompl, GWLP_WNDPROC, (LONG_PTR)LbProc);
-    }
-    SendMessageW(gCompl, LB_RESETCONTENT, 0, 0);
-    for (auto& it : items) SendMessageW(gCompl, LB_ADDSTRING, 0, (LPARAM)it.c_str());
-    SendMessageW(gCompl, LB_SETCURSEL, 0, 0);
-
-    POINT pt{ 20, 40 };
-    ClientToScreen(gEdit, &pt);
-    int h = (int)items.size() * 20 + 8;
-    if (h > 240) h = 240;
-    if (h < 60) h = 60;
-    SetWindowPos(gCompl, HWND_TOPMOST, pt.x, pt.y, 280, h, SWP_SHOWWINDOW);
-    ShowTipForSel();
-}
-
-// Listbox subclass: single-click accept + hover tip
-static LRESULT CALLBACK LbProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
-    if (msg == WM_LBUTTONUP) {
-        LRESULT r = CallWindowProcW(gOldLbProc, h, msg, wp, lp);
-        POINT pt{ LOWORD(lp), HIWORD(lp) };
-        LRESULT hit = SendMessageW(h, LB_ITEMFROMPOINT, 0, MAKELPARAM(pt.x, pt.y));
-        if (!HIWORD(hit)) {
-            SendMessageW(h, LB_SETCURSEL, LOWORD(hit), 0);
-            ShowTipForSel();
-            AcceptCompletion();
-        }
-        return r;
-    }
-    if (msg == WM_MOUSEMOVE) {
-        POINT pt{ LOWORD(lp), HIWORD(lp) };
-        LRESULT hit = SendMessageW(h, LB_ITEMFROMPOINT, 0, MAKELPARAM(pt.x, pt.y));
-        if (!HIWORD(hit)) {
-            int sel = (int)LOWORD(hit);
-            if (sel != (int)SendMessageW(h, LB_GETCURSEL, 0, 0)) {
-                SendMessageW(h, LB_SETCURSEL, sel, 0);
-                ShowTipForSel();
-            }
-        }
-    }
-    return CallWindowProcW(gOldLbProc, h, msg, wp, lp);
-}
-
-static WNDPROC gOldEditProc;
-static LRESULT CALLBACK EditProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
-    if (msg == WM_CHAR) {
-        wchar_t ch = (wchar_t)wp;
-        const wchar_t* pair = nullptr;
-        if (ch == L'(') pair = L")";
-        else if (ch == L'[') pair = L"]";
-        else if (ch == L'{') pair = L"}";
-        else if (ch == L'"') pair = L"\"";
-        else if (ch == L'\'') pair = L"'";
-        if (pair) {
-            LRESULT r = CallWindowProcW(gOldEditProc, h, msg, wp, lp);
-            int start = 0, end = 0;
-            SendMessageW(h, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
-            gSuppressEnChange = true;
-            SendMessageW(h, EM_REPLACESEL, TRUE, (LPARAM)pair);
-            SendMessageW(h, EM_SETSEL, start, start);
-            gSuppressEnChange = false;
-            UpdateIntelliSense(gMain);
-            return r;
-        }
-        if (ch == L')' || ch == L']' || ch == L'}') {
-            int start = 0, end = 0;
-            SendMessageW(h, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
-            std::wstring all = GetEditText(h);
-            if (start < (int)all.size() && all[(size_t)start] == ch) {
-                SendMessageW(h, EM_SETSEL, start + 1, start + 1);
-                return 0;
-            }
-        }
-        LRESULT r = CallWindowProcW(gOldEditProc, h, msg, wp, lp);
-        if ((ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || ch == L'_')
-            UpdateIntelliSense(gMain);
-        else if (ch == L' ' || ch == L'\r' || ch == L'\n' || ch == L'\t' || ch == L'.')
-            HideCompl();
-        return r;
-    }
-    if (msg == WM_KEYDOWN) {
-        if (wp == VK_ESCAPE) { HideCompl(); return 0; }
-        if (gCompl && IsWindowVisible(gCompl)) {
-            if (wp == VK_RETURN || wp == VK_TAB) { AcceptCompletion(); return 0; }
-            if (wp == VK_UP || wp == VK_DOWN) {
-                int sel = (int)SendMessageW(gCompl, LB_GETCURSEL, 0, 0);
-                int cnt = (int)SendMessageW(gCompl, LB_GETCOUNT, 0, 0);
-                if (cnt <= 0) return 0;
-                if (wp == VK_UP) sel = (sel <= 0) ? cnt - 1 : sel - 1;
-                else sel = (sel + 1) % cnt;
-                SendMessageW(gCompl, LB_SETCURSEL, sel, 0);
-                ShowTipForSel();
-                return 0;
-            }
-        }
-        if (wp == VK_BACK) {
-            LRESULT r = CallWindowProcW(gOldEditProc, h, msg, wp, lp);
-            UpdateIntelliSense(gMain);
-            return r;
-        }
-    }
-    return CallWindowProcW(gOldEditProc, h, msg, wp, lp);
-}
-
-static void Layout(HWND hwnd, int w, int h) {
-    (void)hwnd;
+static void Layout(HWND, int w, int h) {
     const int statusH = 22, labelH = 18;
     int outH = gOutHeight;
     if (outH < 80) outH = 80;
@@ -521,11 +176,9 @@ static void Layout(HWND hwnd, int w, int h) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
-        gMain = hwnd;
         gBgBrush = CreateSolidBrush(COL_BG);
         gEditBrush = CreateSolidBrush(COL_EDIT);
         gOutBrush = CreateSolidBrush(COL_OUT);
-        gTipBrush = CreateSolidBrush(COL_TIP_BG);
         gFont = CreateFontW(16, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
             CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Cascadia Mono");
         if (!gFont)
@@ -545,25 +198,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY,
             0, 0, 0, 0, hwnd, (HMENU)1004, GetModuleHandleW(nullptr), nullptr);
         gStatus = CreateWindowExW(0, L"STATIC",
-            L" Ready  ·  F5 Run  ·  F7 Compile .vye  ·  type for IntelliSense (click / Enter)",
+            L" Ready  ·  F5 Run  ·  F7 Compile .vye",
             WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hwnd, (HMENU)1002, GetModuleHandleW(nullptr), nullptr);
 
         SendMessageW(gEdit, WM_SETFONT, (WPARAM)gFont, TRUE);
         SendMessageW(gOut, WM_SETFONT, (WPARAM)gFont, TRUE);
         SendMessageW(gSplitLabel, WM_SETFONT, (WPARAM)gUiFont, TRUE);
         SendMessageW(gStatus, WM_SETFONT, (WPARAM)gUiFont, TRUE);
-
-        gOldEditProc = (WNDPROC)SetWindowLongPtrW(gEdit, GWLP_WNDPROC, (LONG_PTR)EditProc);
         return 0;
     }
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORSTATIC: {
         HDC hdc = (HDC)wp; HWND ctrl = (HWND)lp;
-        if (ctrl == gTip) {
-            SetTextColor(hdc, COL_TIP_FG);
-            SetBkColor(hdc, COL_TIP_BG);
-            return (LRESULT)gTipBrush;
-        }
         SetTextColor(hdc, COL_TEXT);
         if (ctrl == gOut) { SetBkColor(hdc, COL_OUT); return (LRESULT)gOutBrush; }
         if (ctrl == gEdit) { SetBkColor(hdc, COL_EDIT); return (LRESULT)gEditBrush; }
@@ -585,10 +231,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_SIZE: Layout(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
     case WM_COMMAND: {
-        if ((HWND)lp == gCompl) {
-            if (HIWORD(wp) == LBN_SELCHANGE) { ShowTipForSel(); return 0; }
-            if (HIWORD(wp) == LBN_DBLCLK) { AcceptCompletion(); return 0; }
-        }
         switch (LOWORD(wp)) {
         case 1: OpenFile(hwnd); break;
         case 2: Save(hwnd); break;
@@ -599,8 +241,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case 7: PostMessageW(hwnd, WM_CLOSE, 0, 0); break;
         case 8: ClearOut(); break;
         }
-        if (HIWORD(wp) == EN_CHANGE && (HWND)lp == gEdit && !gSuppressEnChange)
-            gDirty = true;
+        if (HIWORD(wp) == EN_CHANGE && (HWND)lp == gEdit) gDirty = true;
         return 0;
     }
     case WM_CLOSE:
@@ -617,7 +258,6 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
-    // Load embedded icon resource id 1 (from vayu_ide.rc → assets/IDE.ico)
     gIconBig = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON,
         GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
     gIconSm = (HICON)LoadImageW(hi, MAKEINTRESOURCEW(1), IMAGE_ICON,
@@ -659,13 +299,7 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
     if (gIconBig) SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)gIconBig);
     if (gIconSm) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)gIconSm);
     else if (gIconBig) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)gIconBig);
-
     ShowWindow(hwnd, show);
-
-    // Create listbox early so we can subclass
-    UpdateIntelliSense(hwnd); // no-op until type
-    if (gCompl)
-        gOldLbProc = (WNDPROC)SetWindowLongPtrW(gCompl, GWLP_WNDPROC, (LONG_PTR)LbProc);
 
     ACCEL acc[] = {
         { FVIRTKEY | FCONTROL, 'O', 1 },
@@ -680,10 +314,6 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
         if (!TranslateAcceleratorW(hwnd, hAcc, &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
-        }
-        // Subclass listbox when first created by UpdateIntelliSense
-        if (gCompl && !gOldLbProc) {
-            gOldLbProc = (WNDPROC)SetWindowLongPtrW(gCompl, GWLP_WNDPROC, (LONG_PTR)LbProc);
         }
     }
     return (int)msg.wParam;

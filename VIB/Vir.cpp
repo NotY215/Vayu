@@ -104,6 +104,24 @@ namespace vib {
             case VirOpcode::LogNot:
                 return "r" + std::to_string(i.destReg) + " = LogNot(r" +
                     std::to_string(i.operandReg) + ")";
+            case VirOpcode::BitNot:
+                return "r" + std::to_string(i.destReg) + " = BitNot(r" +
+                    std::to_string(i.operandReg) + ")";
+            case VirOpcode::BitAnd:
+                return "r" + std::to_string(i.destReg) + " = BitAnd(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::BitOr:
+                return "r" + std::to_string(i.destReg) + " = BitOr(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::BitXor:
+                return "r" + std::to_string(i.destReg) + " = BitXor(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::BitShl:
+                return "r" + std::to_string(i.destReg) + " = BitShl(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
+            case VirOpcode::BitShr:
+                return "r" + std::to_string(i.destReg) + " = BitShr(r" +
+                    std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
             case VirOpcode::StrRepeat:
                 return "r" + std::to_string(i.destReg) + " = StrRepeat(r" +
                     std::to_string(i.lhsReg) + ", r" + std::to_string(i.rhsReg) + ")";
@@ -585,6 +603,7 @@ namespace vib {
                         }
                     }
                 }
+                int listLocal = -1; // stable spill slot for for-in list
                 if (!isRange) {
                     if (!fs->iterable) {
                         result.plannedPhase = 6;
@@ -592,8 +611,29 @@ namespace vib {
                         result.message = "for: missing iterable (planned Phase 6)";
                         return 6;
                     }
-                    listReg = lowerExpr(fs->iterable.get());
-                    if (listReg < 0) return result.plannedPhase;
+                    int listTmp = lowerExpr(fs->iterable.get());
+                    if (listTmp < 0) return result.plannedPhase;
+                    if (nextLocal < nextReg) nextLocal = nextReg;
+                    listLocal = nextLocal++;
+                    if (listLocal >= nextReg) nextReg = listLocal + 1;
+                    {
+                        VirInstruction st;
+                        st.opcode = VirOpcode::StoreLocal;
+                        st.operandReg = listTmp;
+                        st.localIndex = listLocal;
+                        st.sourceLoc = fs->loc;
+                        entry.instructions.push_back(st);
+                    }
+                    listReg = allocReg();
+                    {
+                        VirInstruction ld;
+                        ld.opcode = VirOpcode::LoadLocal;
+                        ld.destReg = listReg;
+                        ld.localIndex = listLocal;
+                        ld.sourceLoc = fs->loc;
+                        entry.instructions.push_back(ld);
+                        bumpLocalTo(listReg);
+                    }
                     limitReg = allocReg();
                     {
                         VirInstruction lenI;
@@ -606,8 +646,7 @@ namespace vib {
                     }
                 }
 
-                // Temps (listReg, limitReg, …) occupy the shared locals[] slots.
-                // Bump nextLocal past them so idx/target locals never clobber the list.
+                // Bump past temps so idx/target never alias listLocal.
                 if (nextLocal < nextReg) nextLocal = nextReg;
 
                 // idx = 0  (always use a dedicated index local)
@@ -693,7 +732,17 @@ namespace vib {
                     st.sourceLoc = fs->loc;
                     entry.instructions.push_back(st);
                 } else {
-                    // target = list[idx]
+                    // target = list[idx]  (reload list each iter — temps may reuse listReg)
+                    listReg = allocReg();
+                    {
+                        VirInstruction ldL;
+                        ldL.opcode = VirOpcode::LoadLocal;
+                        ldL.destReg = listReg;
+                        ldL.localIndex = listLocal;
+                        ldL.sourceLoc = fs->loc;
+                        entry.instructions.push_back(ldL);
+                        bumpLocalTo(listReg);
+                    }
                     int i2 = allocReg();
                     VirInstruction ld;
                     ld.opcode = VirOpcode::LoadLocal;
@@ -835,6 +884,19 @@ namespace vib {
                     bumpLocalTo(dest);
                     return dest;
                 }
+                if (n->op == vayu::UnOp::BNot) {
+                    int src = lowerExpr(n->operand.get());
+                    if (src < 0) return -1;
+                    int dest = allocReg();
+                    VirInstruction i;
+                    i.opcode = VirOpcode::BitNot;
+                    i.destReg = dest;
+                    i.operandReg = src;
+                    i.sourceLoc = e->loc;
+                    entry.instructions.push_back(i);
+                    bumpLocalTo(dest);
+                    return dest;
+                }
                 if (n->op != vayu::UnOp::Neg) {
                     result.plannedPhase = 3;
                     result.failedFeatureName = "BasicArithmetic";
@@ -869,6 +931,11 @@ namespace vib {
                 case vayu::BinOp::Pow:      op = VirOpcode::Pow; break;
                 case vayu::BinOp::And:      op = VirOpcode::LogAnd; break;
                 case vayu::BinOp::Or:       op = VirOpcode::LogOr; break;
+                case vayu::BinOp::BAnd:     op = VirOpcode::BitAnd; break;
+                case vayu::BinOp::BOr:      op = VirOpcode::BitOr; break;
+                case vayu::BinOp::BXor:     op = VirOpcode::BitXor; break;
+                case vayu::BinOp::Shl:      op = VirOpcode::BitShl; break;
+                case vayu::BinOp::Shr:      op = VirOpcode::BitShr; break;
                 case vayu::BinOp::Eq:     op = VirOpcode::CmpEq; needsStringOp = true; break;
                 case vayu::BinOp::NotEq:  op = VirOpcode::CmpNe; needsStringOp = true; break;
                 case vayu::BinOp::Lt:     op = VirOpcode::CmpLt; needsStringOp = true; break;
@@ -1374,6 +1441,11 @@ namespace vib {
                         instr.opcode == VirOpcode::Pow ||
                         instr.opcode == VirOpcode::LogAnd ||
                         instr.opcode == VirOpcode::LogOr ||
+                        instr.opcode == VirOpcode::BitAnd ||
+                        instr.opcode == VirOpcode::BitOr ||
+                        instr.opcode == VirOpcode::BitXor ||
+                        instr.opcode == VirOpcode::BitShl ||
+                        instr.opcode == VirOpcode::BitShr ||
                         instr.opcode == VirOpcode::StrRepeat ||
                         instr.opcode == VirOpcode::CmpEq ||
                         instr.opcode == VirOpcode::CmpNe ||
@@ -1405,6 +1477,7 @@ namespace vib {
                         }
                     }
                     if (instr.opcode == VirOpcode::LogNot ||
+                        instr.opcode == VirOpcode::BitNot ||
                         instr.opcode == VirOpcode::ListLen) {
                         if (!regOK(instr.destReg) || !regOK(instr.operandReg)) {
                             r.message = "verifier: unary op with out-of-range reg in function \"" +

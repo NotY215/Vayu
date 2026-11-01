@@ -33,7 +33,8 @@ namespace vib {
         Neg,        // <destReg> = -<operandReg>
         LogAnd,     // <destReg> = truthy(lhs) && truthy(rhs)
         LogOr,      // <destReg> = truthy(lhs) || truthy(rhs)
-        LogNot,     // <destReg> = !truthy(operandReg)
+        LogNot,
+        BitAnd, BitOr, BitXor, BitShl, BitShr, BitNot,     // <destReg> = !truthy(operandReg)
         StrRepeat,  // <destReg> = str * int
         CmpEq,      // <destReg> = <lhsReg> == <rhsReg>   (bool)
         CmpNe,

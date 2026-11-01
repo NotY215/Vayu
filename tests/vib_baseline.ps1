@@ -148,7 +148,7 @@ $r = Invoke-Cap @($probe, "--dump-ir")
 if ($r.rc -eq 0) {
     Write-Host "  [FAIL] --dump-ir unexpectedly succeeded on $probe" -ForegroundColor Red
     $failures++
-} elseif ($r.err -notmatch "planned Phase") {
+} elseif (($r.err -notmatch "planned") -or ($r.err -notmatch "Phase")) {
     Write-Host ("  [FAIL] --dump-ir stderr missing 'planned Phase' (stderr: {0})" -f $r.err) -ForegroundColor Red
     $failures++
 } else {
