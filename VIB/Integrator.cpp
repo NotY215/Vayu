@@ -416,10 +416,7 @@ namespace vib {
 
         VirInterpreter interp;
         VirExecResult er = interp.execute(lr.module);
-        for (const auto& line : er.stdoutLines) {
-            std::fputs(line.c_str(), stdout);
-            std::fputc('\n', stdout);
-        }
+        // Print already writes live during execute; do not double-print.
         if (!er.success) {
             CompileResult r;
             r.success = false;

@@ -720,6 +720,10 @@ case VirOpcode::BitAnd: case VirOpcode::BitOr: case VirOpcode::BitXor:
                             if (i) line += " ";
                             line += rtToString(callArgs[i]);
                         }
+                        // Live stdout so input()/prompts interleave correctly.
+                        std::fputs(line.c_str(), stdout);
+                        std::fputc('\n', stdout);
+                        std::fflush(stdout);
                         stdoutLines.push_back(line);
                         r.kind = VirValueKind::None;
                         break;

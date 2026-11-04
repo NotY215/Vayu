@@ -23,6 +23,7 @@ static const wchar_t* CLS = L"VayuIDEWnd";
 static HBRUSH gBgBrush, gEditBrush, gOutBrush;
 static HFONT gFont, gUiFont;
 static int gOutHeight = 180;
+static WNDPROC gOldEditProc = nullptr;
 static HICON gIconBig = nullptr, gIconSm = nullptr;
 
 static const COLORREF COL_BG     = RGB(32, 32, 32);
@@ -173,6 +174,40 @@ static void Layout(HWND, int w, int h) {
     MoveWindow(gStatus, 0, h - statusH, w, statusH, TRUE);
 }
 
+
+static LRESULT CALLBACK EditProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_CHAR) {
+        wchar_t ch = (wchar_t)wp;
+        const wchar_t* pair = nullptr;
+        if (ch == L'(') pair = L")";
+        else if (ch == L'[') pair = L"]";
+        else if (ch == L'{') pair = L"}";
+        else if (ch == L'"') pair = L"\"";
+        else if (ch == L'\'') pair = L"'";
+        if (pair) {
+            LRESULT r = CallWindowProcW(gOldEditProc, h, msg, wp, lp);
+            int start = 0, end = 0;
+            SendMessageW(h, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+            SendMessageW(h, EM_REPLACESEL, TRUE, (LPARAM)pair);
+            SendMessageW(h, EM_SETSEL, start, start);
+            return r;
+        }
+        if (ch == L')' || ch == L']' || ch == L'}') {
+            int start = 0, end = 0;
+            SendMessageW(h, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+            int len = GetWindowTextLengthW(h);
+            std::wstring s(len + 1, 0);
+            GetWindowTextW(h, &s[0], len + 1);
+            s.resize(len);
+            if (start < (int)s.size() && s[(size_t)start] == ch) {
+                SendMessageW(h, EM_SETSEL, start + 1, start + 1);
+                return 0;
+            }
+        }
+    }
+    return CallWindowProcW(gOldEditProc, h, msg, wp, lp);
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
@@ -205,6 +240,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SendMessageW(gOut, WM_SETFONT, (WPARAM)gFont, TRUE);
         SendMessageW(gSplitLabel, WM_SETFONT, (WPARAM)gUiFont, TRUE);
         SendMessageW(gStatus, WM_SETFONT, (WPARAM)gUiFont, TRUE);
+        gOldEditProc = (WNDPROC)SetWindowLongPtrW(gEdit, GWLP_WNDPROC, (LONG_PTR)EditProc);
         return 0;
     }
     case WM_CTLCOLOREDIT:

@@ -645,6 +645,20 @@ namespace vib {
                         bumpLocalTo(limitReg);
                     }
                 }
+                int limitLocal = -1;
+                if (!isRange) {
+                    if (nextLocal < nextReg) nextLocal = nextReg;
+                    limitLocal = nextLocal++;
+                    if (limitLocal >= nextReg) nextReg = limitLocal + 1;
+                    {
+                        VirInstruction st;
+                        st.opcode = VirOpcode::StoreLocal;
+                        st.operandReg = limitReg;
+                        st.localIndex = limitLocal;
+                        st.sourceLoc = fs->loc;
+                        entry.instructions.push_back(st);
+                    }
+                }
 
                 // Bump past temps so idx/target never alias listLocal.
                 if (nextLocal < nextReg) nextLocal = nextReg;
@@ -684,7 +698,17 @@ namespace vib {
                 loopStack.push_back(LoopFrame{});
                 loopStack.back().continueTarget = header;
 
-                // cond: idx < limit
+                // cond: idx < limit  (reload limit from local if spilled)
+                if (limitLocal >= 0) {
+                    limitReg = allocReg();
+                    VirInstruction ldLim;
+                    ldLim.opcode = VirOpcode::LoadLocal;
+                    ldLim.destReg = limitReg;
+                    ldLim.localIndex = limitLocal;
+                    ldLim.sourceLoc = fs->loc;
+                    entry.instructions.push_back(ldLim);
+                    bumpLocalTo(limitReg);
+                }
                 int iLoad = allocReg();
                 {
                     VirInstruction ld;

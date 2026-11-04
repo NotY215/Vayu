@@ -228,10 +228,7 @@ int main(int argc, char** argv) {
         }
         vayu::NativeCompiler nc;
         int rc = nc.runVye(argv[2]);
-        for (const auto& line : nc.lastStdout()) {
-            std::fputs(line.c_str(), stdout);
-            std::fputc('\n', stdout);
-        }
+        /* stdout already emitted live by VIR Print */
         if (rc != 0) {
             std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
         }
@@ -251,10 +248,7 @@ int main(int argc, char** argv) {
             if (ext == ".vye") {
                 vayu::NativeCompiler nc;
                 int rc = nc.runVye(argv[1]);
-                for (const auto& line : nc.lastStdout()) {
-                    std::fputs(line.c_str(), stdout);
-                    if (line.empty() || line.back() != '\n') std::fputc('\n', stdout);
-                }
+                /* stdout already emitted live by VIR Print */
                 if (rc != 0 && !nc.lastError().empty())
                     std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
                 return rc;
@@ -363,10 +357,7 @@ int main(int argc, char** argv) {
         vayu::NativeCompiler nc;
         nc.setCache(enableCache, cacheDir, false);
         int rc = nc.runVye(runVyePath);
-        for (const auto& line : nc.lastStdout()) {
-            std::fputs(line.c_str(), stdout);
-            std::fputc('\n', stdout);
-        }
+        /* stdout already emitted live by VIR Print */
         if (rc != 0) {
             std::fprintf(stderr, "vayuc: %s\n", nc.lastError().c_str());
         }
