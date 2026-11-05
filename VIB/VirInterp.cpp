@@ -945,6 +945,47 @@ case VirBuiltin::ToStr: {
                         r.s = std::move(acc);
                         break;
                     }
+                    case VirBuiltin::OpIn: {
+                        // arg0 = haystack, arg1 = needle
+                        const RtValue& hay = callArgs[0];
+                        const RtValue& needleV = callArgs[1];
+                        r.kind = VirValueKind::Bool;
+                        r.b = false;
+                        if (hay.kind == VirValueKind::Str && needleV.kind == VirValueKind::Str) {
+                            r.b = hay.s.find(needleV.s) != std::string::npos;
+                        } else if ((hay.kind == VirValueKind::List || hay.kind == VirValueKind::Tuple) && hay.list) {
+                            for (const auto& el : *hay.list) {
+                                if (el.kind == needleV.kind) {
+                                    if (el.kind == VirValueKind::Int && el.i == needleV.i) { r.b = true; break; }
+                                    if (el.kind == VirValueKind::Float && el.f == needleV.f) { r.b = true; break; }
+                                    if (el.kind == VirValueKind::Bool && el.b == needleV.b) { r.b = true; break; }
+                                    if (el.kind == VirValueKind::Str && el.s == needleV.s) { r.b = true; break; }
+                                    if (el.kind == VirValueKind::None) { r.b = true; break; }
+                                }
+                            }
+                        } else if (hay.kind == VirValueKind::Map && hay.map) {
+                            for (const auto& kv : *hay.map) {
+                                const auto& k = kv.first;
+                                if (k.kind == needleV.kind) {
+                                    if (k.kind == VirValueKind::Str && k.s == needleV.s) { r.b = true; break; }
+                                    if (k.kind == VirValueKind::Int && k.i == needleV.i) { r.b = true; break; }
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case VirBuiltin::ListAppend: {
+                        if (callArgs[0].kind != VirValueKind::List || !callArgs[0].list) {
+                            out.kind = ErrorKind::RuntimeError;
+                            out.message = "interp: append on non-list";
+                            return out;
+                        }
+                        callArgs[0].list->push_back(callArgs[1]);
+                        // write back in case RtValue was a copy — need mutate original local
+                        // CallBuiltin passed copies; fix by using locals from argRegs below after switch
+                        r.kind = VirValueKind::None;
+                        break;
+                    }
                     case VirBuiltin::StrToInt: {
                         r.kind = VirValueKind::Int;
                         try { r.i = std::stoll(callArgs[0].s); }

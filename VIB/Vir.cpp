@@ -61,6 +61,8 @@ namespace vib {
             case VirBuiltin::StrReplace:    return "StrReplace";
             case VirBuiltin::StrSplit:      return "StrSplit";
             case VirBuiltin::StrJoin:       return "StrJoin";
+            case VirBuiltin::OpIn:          return "OpIn";
+            case VirBuiltin::ListAppend:    return "ListAppend";
             case VirBuiltin::StrCharAt:     return "StrCharAt";
             case VirBuiltin::StrToInt:      return "StrToInt";
             }
@@ -966,6 +968,23 @@ namespace vib {
             }
             case EK::Binary: {
                 const auto* n = static_cast<const vayu::BinaryExpr*>(e);
+                // Phase: membership  x in xs / s
+                if (n->op == vayu::BinOp::In) {
+                    int needleR = lowerExpr(n->lhs.get());
+                    if (needleR < 0) return -1;
+                    int hayR = lowerExpr(n->rhs.get());
+                    if (hayR < 0) return -1;
+                    int dest = allocReg();
+                    VirInstruction i;
+                    i.opcode = VirOpcode::CallBuiltin;
+                    i.destReg = dest;
+                    i.builtin = VirBuiltin::OpIn;
+                    i.argRegs = { hayR, needleR }; // haystack, needle
+                    i.sourceLoc = e->loc;
+                    entry.instructions.push_back(i);
+                    bumpLocalTo(dest);
+                    return dest;
+                }
                 VirOpcode op;
                 bool needsStringOp = false;
                 switch (n->op) {
@@ -1220,14 +1239,6 @@ namespace vib {
                 const auto* attr = static_cast<const vayu::AttrExpr*>(c->callee.get());
                 // Receiver may be name, literal, or expression (e.g. "a,b".split(","))
                 VirTypeKind recvType = inferType(attr->target.get());
-                if (recvType != VirTypeKind::Str && recvType != VirTypeKind::Any) {
-                    result.plannedPhase = 10;
-                    result.failedFeatureName = "Classes";
-                    result.message = "lowering for method call on non-str receiver is not "
-                        "implemented yet (planned Phase 10)";
-                    return -1;
-                }
-
                 int recvReg = lowerExpr(attr->target.get());
                 if (recvReg < 0) return -1;
 
@@ -1241,6 +1252,28 @@ namespace vib {
 
                 VirBuiltin builtin;
                 const std::string& m = attr->name;
+
+                // list.append(x)
+                if (m == "append" && (recvType == VirTypeKind::List || recvType == VirTypeKind::Any)) {
+                    int dest = allocReg();
+                    VirInstruction i;
+                    i.opcode = VirOpcode::CallBuiltin;
+                    i.destReg = dest;
+                    i.builtin = VirBuiltin::ListAppend;
+                    i.argRegs = std::move(argRegs);
+                    i.sourceLoc = c->loc;
+                    entry.instructions.push_back(i);
+                    bumpLocalTo(dest);
+                    return dest;
+                }
+
+                if (recvType != VirTypeKind::Str && recvType != VirTypeKind::Any) {
+                    result.plannedPhase = 10;
+                    result.failedFeatureName = "Classes";
+                    result.message = "lowering for method call on non-str receiver is not "
+                        "implemented yet (planned Phase 10)";
+                    return -1;
+                }
                 if (m == "upper")       builtin = VirBuiltin::StrUpper;
                 else if (m == "lower")       builtin = VirBuiltin::StrLower;
                 else if (m == "strip")       builtin = VirBuiltin::StrStrip;

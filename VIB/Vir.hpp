@@ -93,6 +93,8 @@ namespace vib {
         StrIsDigit, StrIsAlpha, StrIsSpace,
         StrReplace, StrCharAt, StrToInt,
         StrSplit, StrJoin,
+        OpIn,            // needle in haystack -> bool
+        ListAppend,      // list.append(x)
     };
 
     struct VirInstruction {
