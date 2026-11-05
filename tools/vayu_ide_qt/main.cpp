@@ -331,8 +331,10 @@ private:
     }
 
     ZoomEdit* currentEditor() {
-        auto* w = tabs_->currentWidget();
-        return qobject_cast<ZoomEdit*>(w);
+        QWidget* w = tabs_->currentWidget();
+        if (!w || w == welcome_) return nullptr;
+        if (!w->property("vayuEditor").toBool()) return nullptr;
+        return static_cast<ZoomEdit*>(w);
     }
     QString currentPath() const {
         int i = tabs_->currentIndex();
@@ -351,6 +353,7 @@ private:
         QFont mono("Cascadia Mono", 11);
         if (!mono.exactMatch()) mono = QFont("Consolas", 11);
         ed->setFont(mono);
+        ed->setProperty("vayuEditor", true);
         int i = tabs_->addTab(ed, "untitled.vyu");
         tabs_->setTabToolTip(i, "");
         tabs_->setCurrentIndex(i);
@@ -375,6 +378,7 @@ private:
         if (!mono.exactMatch()) mono = QFont("Consolas", 11);
         ed->setFont(mono);
         ed->setPlainText(QString::fromUtf8(file.readAll()));
+        ed->setProperty("vayuEditor", true);
         int i = tabs_->addTab(ed, QFileInfo(path).fileName());
         tabs_->setTabToolTip(i, path);
         tabs_->setCurrentIndex(i);
