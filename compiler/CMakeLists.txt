@@ -17,27 +17,28 @@ add_library(vayu_compiler STATIC
     ../VIB/Vir.cpp
     ../VIB/VirInterp.cpp
 )
-target_include_directories(vayu_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(vayu_compiler PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
 if(WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vayuc.rc")
     add_executable(vayuc driver/main.cpp vayuc.rc)
 else()
     add_executable(vayuc driver/main.cpp)
 endif()
 target_link_libraries(vayuc PRIVATE vayu_compiler)
+
 add_executable(vls lsp/main.cpp lsp/LspServer.cpp)
 target_link_libraries(vls PRIVATE vayu_compiler)
+
 add_executable(vfmt fmt/main.cpp fmt/Formatter.cpp)
 target_link_libraries(vfmt PRIVATE vayu_compiler)
+
 add_executable(vlint lint/main.cpp lint/Linter.cpp)
 target_link_libraries(vlint PRIVATE vayu_compiler)
 
-    add_executable(Vayu-IDE ${_vayu_ide_sources})
-    target_link_libraries(Vayu-IDE PRIVATE Qt6::Widgets)
-    set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
-    message(STATUS "Vayu-IDE: Qt6 Widgets + IDE.ico")
-else
-
-# Vayu-IDE: Qt6 preferred, Win32 fallback; no foreground console when run from IDE
+# Vayu-IDE: Qt6 preferred, Win32 fallback
 find_package(Qt6 COMPONENTS Widgets QUIET)
 if(Qt6_FOUND)
     set(CMAKE_AUTOMOC ON)
