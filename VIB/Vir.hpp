@@ -92,6 +92,7 @@ namespace vib {
         StrContains, StrFind, StrStartsWith, StrEndsWith,
         StrIsDigit, StrIsAlpha, StrIsSpace,
         StrReplace, StrCharAt, StrToInt,
+        StrSplit, StrJoin,
     };
 
     struct VirInstruction {

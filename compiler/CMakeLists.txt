@@ -31,7 +31,13 @@ target_link_libraries(vfmt PRIVATE vayu_compiler)
 add_executable(vlint lint/main.cpp lint/Linter.cpp)
 target_link_libraries(vlint PRIVATE vayu_compiler)
 
-# Vayu-IDE: prefer Qt6 when available, else Win32 fallback
+    add_executable(Vayu-IDE ${_vayu_ide_sources})
+    target_link_libraries(Vayu-IDE PRIVATE Qt6::Widgets)
+    set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
+    message(STATUS "Vayu-IDE: Qt6 Widgets + IDE.ico")
+else
+
+# Vayu-IDE: Qt6 preferred, Win32 fallback; no foreground console when run from IDE
 find_package(Qt6 COMPONENTS Widgets QUIET)
 if(Qt6_FOUND)
     set(CMAKE_AUTOMOC ON)
@@ -46,7 +52,7 @@ if(Qt6_FOUND)
     add_executable(Vayu-IDE ${_vayu_ide_sources})
     target_link_libraries(Vayu-IDE PRIVATE Qt6::Widgets)
     set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
-    message(STATUS "Vayu-IDE: Qt6 Widgets + IDE.ico")
+    message(STATUS "Vayu-IDE: Qt6 + IDE.ico")
 elseif(WIN32)
     add_executable(Vayu-IDE WIN32
         ../tools/vayu_ide/main.cpp
@@ -54,5 +60,5 @@ elseif(WIN32)
     )
     target_link_libraries(Vayu-IDE PRIVATE comdlg32 user32 gdi32)
     set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
-    message(STATUS "Vayu-IDE: Win32 fallback + IDE.ico")
+    message(STATUS "Vayu-IDE: Win32 fallback")
 endif()

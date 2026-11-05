@@ -59,6 +59,8 @@ namespace vib {
             case VirBuiltin::StrIsAlpha:    return "StrIsAlpha";
             case VirBuiltin::StrIsSpace:    return "StrIsSpace";
             case VirBuiltin::StrReplace:    return "StrReplace";
+            case VirBuiltin::StrSplit:      return "StrSplit";
+            case VirBuiltin::StrJoin:       return "StrJoin";
             case VirBuiltin::StrCharAt:     return "StrCharAt";
             case VirBuiltin::StrToInt:      return "StrToInt";
             }
@@ -606,10 +608,20 @@ namespace vib {
                     if (call->callee && call->callee->kind == vayu::ExprKind::NameRef) {
                         const auto* calleen =
                             static_cast<const vayu::NameRefExpr*>(call->callee.get());
-                        if (calleen->name == "range" && call->args.size() == 1) {
+                        if (calleen->name == "range" && (call->args.size() == 1 || call->args.size() == 2)) {
                             isRange = true;
-                            limitReg = lowerExpr(call->args[0].value.get());
-                            if (limitReg < 0) return result.plannedPhase;
+                            if (call->args.size() == 1) {
+                                limitReg = lowerExpr(call->args[0].value.get());
+                                if (limitReg < 0) return result.plannedPhase;
+                            } else {
+                                // for i in range(start, end): idx starts at start, limit is end
+                                // reuse limitReg for end; start value stored after idx init below via rangeStartReg
+                                limitReg = lowerExpr(call->args[1].value.get());
+                                if (limitReg < 0) return result.plannedPhase;
+                                // mark start expr for later — store in listReg temporarily as startReg
+                                listReg = lowerExpr(call->args[0].value.get());
+                                if (listReg < 0) return result.plannedPhase;
+                            }
                         }
                     }
                 }
@@ -671,14 +683,19 @@ namespace vib {
                 // Bump past temps so idx/target never alias listLocal.
                 if (nextLocal < nextReg) nextLocal = nextReg;
 
-                // idx = 0  (always use a dedicated index local)
-                int zeroIdx = addIntConst(0);
-                int zeroReg = emitConst(zeroIdx, fs->loc);
+                // idx = 0, or range(start,end) start held in listReg when isRange && listReg>=0
                 int idxLocal = allocLocal();
                 {
+                    int initReg;
+                    if (isRange && listReg >= 0) {
+                        initReg = listReg; // start of range(start, end)
+                    } else {
+                        int zeroIdx = addIntConst(0);
+                        initReg = emitConst(zeroIdx, fs->loc);
+                    }
                     VirInstruction store;
                     store.opcode = VirOpcode::StoreLocal;
-                    store.operandReg = zeroReg;
+                    store.operandReg = initReg;
                     store.localIndex = idxLocal;
                     store.sourceLoc = fs->loc;
                     entry.instructions.push_back(store);
@@ -1246,6 +1263,8 @@ namespace vib {
                 else if (m == "is_alpha")    builtin = VirBuiltin::StrIsAlpha;
                 else if (m == "is_space")    builtin = VirBuiltin::StrIsSpace;
                 else if (m == "replace")     builtin = VirBuiltin::StrReplace;
+                else if (m == "split")       builtin = VirBuiltin::StrSplit;
+                else if (m == "join")        builtin = VirBuiltin::StrJoin;
                 else if (m == "char_at")     builtin = VirBuiltin::StrCharAt;
                 else if (m == "to_int")      builtin = VirBuiltin::StrToInt;
                 else {

@@ -897,6 +897,54 @@ case VirBuiltin::ToStr: {
                         r.s = std::string(1, s[(size_t)i]);
                         break;
                     }
+                    case VirBuiltin::StrSplit: {
+                        // split(sep?) -> list of str; default sep whitespace-ish single space
+                        std::string sep = " ";
+                        if (callArgs.size() >= 2 && callArgs[1].kind == VirValueKind::Str)
+                            sep = callArgs[1].s;
+                        const std::string& s = callArgs[0].s;
+                        r.kind = VirValueKind::List;
+                        r.list = std::make_shared<std::vector<RtValue>>();
+                        if (sep.empty()) {
+                            for (char ch : s) {
+                                RtValue part; part.kind = VirValueKind::Str; part.s = std::string(1, ch);
+                                r.list->push_back(std::move(part));
+                            }
+                        } else {
+                            size_t start = 0;
+                            while (true) {
+                                size_t pos = s.find(sep, start);
+                                RtValue part; part.kind = VirValueKind::Str;
+                                if (pos == std::string::npos) {
+                                    part.s = s.substr(start);
+                                    r.list->push_back(std::move(part));
+                                    break;
+                                }
+                                part.s = s.substr(start, pos - start);
+                                r.list->push_back(std::move(part));
+                                start = pos + sep.size();
+                            }
+                        }
+                        break;
+                    }
+                    case VirBuiltin::StrJoin: {
+                        // sep.join(list) — arg0 is sep (receiver), arg1 is list
+                        if (callArgs.size() < 2 || callArgs[1].kind != VirValueKind::List || !callArgs[1].list) {
+                            out.kind = ErrorKind::RuntimeError;
+                            out.message = "interp: join() expects a list";
+                            return out;
+                        }
+                        const std::string& sep = callArgs[0].s;
+                        std::string acc;
+                        auto& vec = *callArgs[1].list;
+                        for (size_t i = 0; i < vec.size(); ++i) {
+                            if (i) acc += sep;
+                            acc += rtToString(vec[i]);
+                        }
+                        r.kind = VirValueKind::Str;
+                        r.s = std::move(acc);
+                        break;
+                    }
                     case VirBuiltin::StrToInt: {
                         r.kind = VirValueKind::Int;
                         try { r.i = std::stoll(callArgs[0].s); }
