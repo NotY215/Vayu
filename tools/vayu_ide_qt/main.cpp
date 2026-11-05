@@ -81,7 +81,6 @@ protected:
 };
 
 class MainWindow : public QMainWindow {
-    Q_OBJECT
     QTreeWidget* explorer_ = nullptr;
     QTabWidget* tabs_ = nullptr;
     ZoomEdit* output_ = nullptr;
@@ -109,22 +108,21 @@ public:
         auto* actLay = new QVBoxLayout(activity);
         actLay->setContentsMargins(4, 8, 4, 8);
         actLay->setSpacing(8);
-        auto mkAct = [&](const QString& tip, const char* slot) {
+        auto mkAct = [&](const QString& tip, auto fn) {
             auto* b = new QToolButton;
             b->setToolTip(tip);
             b->setFixedSize(40, 40);
             b->setText(tip.left(1));
-            connect(b, &QToolButton::clicked, this, slot);
+            connect(b, &QToolButton::clicked, this, fn);
             actLay->addWidget(b);
             return b;
         };
-        mkAct("Explorer", SLOT(showExplorer()));
-        mkAct("Search", SLOT(showSearch()));
-        auto* gitBtn = mkAct("Source Control", SLOT(showGitComingSoon()));
-        Q_UNUSED(gitBtn);
-        // NO Extensions button (per product request)
+        mkAct(QStringLiteral("Explorer"), [this]{ showExplorer(); });
+        mkAct(QStringLiteral("Search"), [this]{ showSearch(); });
+        mkAct(QStringLiteral("Source Control"), [this]{ showGitComingSoon(); });
+        // NO Extensions button
         actLay->addStretch();
-        mkAct("Settings", SLOT(showSettings()));
+        mkAct(QStringLiteral("Settings"), [this]{ showSettings(); });
 
         // --- Side: explorer ---
         explorer_ = new QTreeWidget;
@@ -221,7 +219,7 @@ public:
         if (proc_) { proc_->kill(); proc_->waitForFinished(300); }
     }
 
-private slots:
+private:
     void showExplorer() { sideStack_->setCurrentIndex(0); }
     void showSearch() { sideStack_->setCurrentIndex(1); }
     void showGitComingSoon() {
@@ -638,9 +636,7 @@ private:
     }
 };
 
-#include <QMetaObject>
 // MOC: for slots without full moc when single file — use functor-only if needed.
-// Q_OBJECT requires moc; AUTOMOC handles main.cpp.
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
