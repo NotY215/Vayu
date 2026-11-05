@@ -1,4 +1,4 @@
-// Vayu-IDE (Qt6) — professional dark UI, Help browser, Run/Compile.
+// Vayu-IDE (Qt6) — dark UI, Help with examples, embedded IDE.ico
 #include <QApplication>
 #include <QMainWindow>
 #include <QSplitter>
@@ -13,50 +13,65 @@
 #include <QFont>
 #include <QDialog>
 #include <QVBoxLayout>
-#include <QLabel>
 #include <QTabWidget>
 #include <QFile>
-#include <QTextStream>
-#include <QKeySequence>
+#include <QIcon>
 #include <QDir>
 #include <QCoreApplication>
+#include <QKeySequence>
 
 static const char* kHelpSyntax = R"MD(
-# Vayu syntax (Integrator-supported subset)
+# Vayu syntax (Integrator subset)
 
-## Basics
-- Variables: `x = 1`, `s = "hi"`
-- Types (optional annotations): `x: int = 1`
-- Comments: `# comment`
+## Correct `if` / compare / strings
+
+**Wrong**
+```
+if c = heisenberg:
+print("ok")
+```
+
+**Right**
+```
+if c == "heisenberg":
+    print("ok")
+else:
+    print("try again")
+```
+
+Rules:
+1. Compare with `==`, not `=` (`=` is assignment only).
+2. String literals need quotes: `"heisenberg"`.
+3. Indent the body under `if` / `else` (4 spaces).
+4. `else:` not `else :` (space before `:` is ok, but no body without indent).
+
+## Full mini example
+```
+print("Hello World")
+c = input("say my name: ")
+if c == "heisenberg":
+    print("You are God damn Right")
+else:
+    print("try again")
+```
 
 ## Control flow
 ```
-if cond:
-    ...
-elif other:
-    ...
+if x > 0:
+    print("pos")
+elif x == 0:
+    print("zero")
 else:
-    ...
+    print("neg")
 
-while cond:
-    ...
+while n > 0:
+    n = n - 1
 
-for i in range(n):
-    ...
+for i in range(5):
+    print(i)
 
-for x in xs:   # list
-    ...
-
-break
-continue
-```
-
-## Functions
-```
-def add(a: int, b: int) -> int:
-    return a + b
-
-print(add(1, 2))
+for x in [10, 20, 30]:
+    print(x)
 ```
 
 ## Operators
@@ -67,46 +82,73 @@ print(add(1, 2))
 )MD";
 
 static const char* kHelpFunctions = R"MD(
-# Built-in functions (Integrator)
+# Built-in functions (examples)
 
-| Name | Use |
-|------|-----|
-| `print(...)` | Print values, space-separated, newline |
-| `input(prompt?)` | Read a line (str). Prompt on same line |
-| `read_int()` | Read a line as int |
-| `len(x)` | Length of str / list / map / tuple / set |
-| `str(x)` | Convert to string |
-| `int(x)` | Convert to int (str/float/bool) |
-| `float(x)` | Convert to float |
-| `bool(x)` | Truthiness |
-| `range(n)` | Used in `for i in range(n)` |
+### print
+```
+print("hi")
+print(1, 2, 3)
+```
+
+### input / read_int
+```
+name = input("Name: ")
+print("Hello, " + name)
+
+print("Enter an integer:")
+age = read_int()
+print(age + 1)
+```
+
+### len / str / int / float / bool
+```
+print(len("abc"))
+print(len([1, 2, 3]))
+print(str(42))
+print(int("10") + 1)
+print(float("3.5"))
+print(bool(0))
+```
+
+### range (in for)
+```
+for i in range(3):
+    print(i)
+```
 )MD";
 
 static const char* kHelpStrings = R"MD(
-# Strings (Integrator)
+# Strings (examples)
 
-- Literals: `"hello"`, concat `s + t`, repeat `s * n`
-- Compare: `== != <`
-- Methods (on a string value):
-  - `upper()` `lower()` `strip()`
-  - `contains(sub)` `find(sub)`
-  - `starts_with(p)` `ends_with(s)`
-  - `is_digit()` `is_alpha()` `is_space()`
-  - `replace(a, b)` `char_at(i)` `to_int()`
-- `len(s)` length
+```
+s = "Hello"
+t = s + ", World"
+print(t)
+print(s * 3)
+
+u = "  AbC  "
+print(u.strip())
+print(u.upper())
+print(u.lower())
+print(s.contains("ell"))
+print(s.starts_with("He"))
+print(s.ends_with("lo"))
+print(s.find("ll"))
+print("42".to_int() + 1)
+print(len(s))
+```
 )MD";
 
 class HelpDialog : public QDialog {
 public:
     explicit HelpDialog(QWidget* parent = nullptr) : QDialog(parent) {
         setWindowTitle(QStringLiteral("Vayu Help"));
-        resize(720, 520);
+        resize(780, 560);
         auto* tabs = new QTabWidget(this);
         auto make = [](const char* md) {
             auto* w = new QTextEdit;
             w->setReadOnly(true);
             w->setMarkdown(QString::fromUtf8(md));
-            w->setStyleSheet(QStringLiteral("QTextEdit { background:#1e1e1e; color:#d4d4d4; }"));
             return w;
         };
         tabs->addTab(make(kHelpSyntax), QStringLiteral("Syntax"));
@@ -127,6 +169,8 @@ public:
     MainWindow() {
         setWindowTitle(QStringLiteral("Vayu-IDE"));
         resize(1100, 750);
+        QIcon appIcon(QStringLiteral(":/IDE.ico"));
+        if (!appIcon.isNull()) setWindowIcon(appIcon);
 
         editor_ = new QPlainTextEdit;
         output_ = new QPlainTextEdit;
@@ -166,21 +210,18 @@ public:
         });
         connect(editor_, &QPlainTextEdit::textChanged, this, [this]{ dirty_ = true; });
 
-        // Dark theme
         qApp->setStyleSheet(QStringLiteral(
             "QMainWindow, QWidget { background-color: #1e1e1e; color: #d4d4d4; }"
-            "QPlainTextEdit { background-color: #252526; color: #d4d4d4; border: 1px solid #3c3c3c; }"
+            "QPlainTextEdit, QTextEdit { background-color: #252526; color: #d4d4d4; border: 1px solid #3c3c3c; }"
             "QToolBar { background: #2d2d2d; spacing: 6px; padding: 4px; border: none; }"
-            "QToolButton, QPushButton { background: #0e639c; color: white; padding: 6px 12px; border: none; border-radius: 4px; }"
-            "QToolButton:hover, QPushButton:hover { background: #1177bb; }"
+            "QToolButton { background: #0e639c; color: white; padding: 6px 12px; border: none; border-radius: 4px; }"
+            "QToolButton:hover { background: #1177bb; }"
             "QStatusBar { background: #007acc; color: white; }"
             "QSplitter::handle { background: #3c3c3c; }"
-            "QDialog { background: #1e1e1e; }"
-            "QTabWidget::pane { border: 1px solid #3c3c3c; }"
             "QTabBar::tab { background: #2d2d2d; color: #d4d4d4; padding: 8px 14px; }"
             "QTabBar::tab:selected { background: #0e639c; }"
         ));
-        statusBar()->showMessage(QStringLiteral("Ready · F5 Run · F7 Compile · Help for syntax"));
+        statusBar()->showMessage(QStringLiteral("Ready · F5 Run · F7 Compile · Help for examples"));
     }
 
 private:
@@ -253,6 +294,9 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Vayu-IDE"));
     QApplication::setOrganizationName(QStringLiteral("Vayu"));
+    QIcon appIcon(QStringLiteral(":/IDE.ico"));
+    if (!appIcon.isNull())
+        app.setWindowIcon(appIcon);
     MainWindow w;
     w.show();
     return app.exec();

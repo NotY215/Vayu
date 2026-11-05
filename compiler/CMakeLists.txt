@@ -35,12 +35,18 @@ target_link_libraries(vlint PRIVATE vayu_compiler)
 find_package(Qt6 COMPONENTS Widgets QUIET)
 if(Qt6_FOUND)
     set(CMAKE_AUTOMOC ON)
-    add_executable(Vayu-IDE
+    set(CMAKE_AUTORCC ON)
+    set(_vayu_ide_sources
         ../tools/vayu_ide_qt/main.cpp
+        ../tools/vayu_ide_qt/vayu_ide.qrc
     )
+    if(WIN32)
+        list(APPEND _vayu_ide_sources ../tools/vayu_ide_qt/vayu_ide_qt.rc)
+    endif()
+    add_executable(Vayu-IDE ${_vayu_ide_sources})
     target_link_libraries(Vayu-IDE PRIVATE Qt6::Widgets)
     set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
-    message(STATUS "Vayu-IDE: Qt6 Widgets")
+    message(STATUS "Vayu-IDE: Qt6 Widgets + IDE.ico")
 elseif(WIN32)
     add_executable(Vayu-IDE WIN32
         ../tools/vayu_ide/main.cpp
@@ -48,5 +54,5 @@ elseif(WIN32)
     )
     target_link_libraries(Vayu-IDE PRIVATE comdlg32 user32 gdi32)
     set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
-    message(STATUS "Vayu-IDE: Win32 fallback (install Qt6 for professional UI)")
+    message(STATUS "Vayu-IDE: Win32 fallback + IDE.ico")
 endif()
