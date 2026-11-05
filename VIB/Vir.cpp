@@ -63,6 +63,7 @@ namespace vib {
             case VirBuiltin::StrJoin:       return "StrJoin";
             case VirBuiltin::OpIn:          return "OpIn";
             case VirBuiltin::ListAppend:    return "ListAppend";
+            case VirBuiltin::Shell:         return "Shell";
             case VirBuiltin::StrCharAt:     return "StrCharAt";
             case VirBuiltin::StrToInt:      return "StrToInt";
             }
@@ -1331,6 +1332,7 @@ namespace vib {
             else if (name == "float") builtinOp = VirBuiltin::ToFloat;
             else if (name == "bool")  builtinOp = VirBuiltin::ToBool;
             else if (name == "len")   builtinOp = VirBuiltin::LenStr;
+            else if (name == "shell" || name == "system") builtinOp = VirBuiltin::Shell;
             else                      isBuiltin = false;
 
             if (isBuiltin) {

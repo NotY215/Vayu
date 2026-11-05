@@ -1,0 +1,25 @@
+/* Host-arch launcher for a .vye package. Compiled with the PC's cl.exe. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+int main(int argc, char** argv) {
+    (void)argc; (void)argv;
+    /* VYE_NAME and VAYU_EXE are filled by the emitter */
+    const char* vye = "PROGRAM.vye";
+    const char* vayu = "vayu.exe";
+    char cmd[2048];
+#ifdef _WIN32
+    char self[MAX_PATH];
+    GetModuleFileNameA(NULL, self, MAX_PATH);
+    char* slash = strrchr(self, '\\');
+    if (slash) *(slash + 1) = 0; else self[0] = 0;
+    snprintf(cmd, sizeof(cmd), "\"%s%s\" \"%s%s\"", self, vayu, self, vye);
+#else
+    snprintf(cmd, sizeof(cmd), "\"%s\" \"%s\"", vayu, vye);
+#endif
+    return system(cmd);
+}

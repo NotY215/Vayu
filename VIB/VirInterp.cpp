@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "VirInterp.hpp"
 #include <cctype>
 #include <cmath>
@@ -984,6 +985,17 @@ case VirBuiltin::ToStr: {
                         // write back in case RtValue was a copy — need mutate original local
                         // CallBuiltin passed copies; fix by using locals from argRegs below after switch
                         r.kind = VirValueKind::None;
+                        break;
+                    }
+                    case VirBuiltin::Shell: {
+                        if (callArgs.empty() || callArgs[0].kind != VirValueKind::Str) {
+                            out.kind = ErrorKind::RuntimeError;
+                            out.message = "interp: shell() expects a string command";
+                            return out;
+                        }
+                        int code = std::system(callArgs[0].s.c_str());
+                        r.kind = VirValueKind::Int;
+                        r.i = code;
                         break;
                     }
                     case VirBuiltin::StrToInt: {
