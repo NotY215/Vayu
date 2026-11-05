@@ -273,7 +273,17 @@ namespace vib {
                 : module(m), fn(f), entry(e), result(r) {
             }
 
-            int allocReg() { return nextReg++; }
+            int allocReg() {
+                // Temps must never alias named-local slots (shared locals[] array).
+                if (nextReg < nextLocal) nextReg = nextLocal;
+                return nextReg++;
+            }
+            int allocLocal() {
+                if (nextLocal < nextReg) nextLocal = nextReg;
+                int slot = nextLocal++;
+                if (nextReg < nextLocal) nextReg = nextLocal;
+                return slot;
+            }
             void bumpLocalTo(int r) { if (r >= nextLocal) nextLocal = r + 1; }
 
             int addIntConst(long long value) {
@@ -446,7 +456,7 @@ namespace vib {
                 auto it = localsByName.find(nr->name);
                 int localIdx;
                 if (it == localsByName.end()) {
-                    localIdx = nextLocal++;
+                    localIdx = allocLocal();
                     localsByName[nr->name] = localIdx;
                 }
                 else {
@@ -614,8 +624,7 @@ namespace vib {
                     int listTmp = lowerExpr(fs->iterable.get());
                     if (listTmp < 0) return result.plannedPhase;
                     if (nextLocal < nextReg) nextLocal = nextReg;
-                    listLocal = nextLocal++;
-                    if (listLocal >= nextReg) nextReg = listLocal + 1;
+                    listLocal = allocLocal();
                     {
                         VirInstruction st;
                         st.opcode = VirOpcode::StoreLocal;
@@ -648,8 +657,7 @@ namespace vib {
                 int limitLocal = -1;
                 if (!isRange) {
                     if (nextLocal < nextReg) nextLocal = nextReg;
-                    limitLocal = nextLocal++;
-                    if (limitLocal >= nextReg) nextReg = limitLocal + 1;
+                    limitLocal = allocLocal();
                     {
                         VirInstruction st;
                         st.opcode = VirOpcode::StoreLocal;
@@ -666,8 +674,7 @@ namespace vib {
                 // idx = 0  (always use a dedicated index local)
                 int zeroIdx = addIntConst(0);
                 int zeroReg = emitConst(zeroIdx, fs->loc);
-                int idxLocal = nextLocal++;
-                if (idxLocal >= nextReg) nextReg = idxLocal + 1;
+                int idxLocal = allocLocal();
                 {
                     VirInstruction store;
                     store.opcode = VirOpcode::StoreLocal;
@@ -682,9 +689,8 @@ namespace vib {
                 {
                     auto it = localsByName.find(fs->targetName);
                     if (it == localsByName.end()) {
-                        targetLocal = nextLocal++;
+                        targetLocal = allocLocal();
                         localsByName[fs->targetName] = targetLocal;
-                        if (targetLocal >= nextReg) nextReg = targetLocal + 1;
                     } else {
                         targetLocal = it->second;
                     }
@@ -1762,7 +1768,7 @@ namespace vib {
                     int slot = fctx.nextLocal++;
                     fctx.localsByName[pname] = slot;
                 }
-                fctx.nextReg = fctx.nextLocal;
+                fctx.nextReg = fctx.nextLocal; // temps start after params
                 if (!fctx.lowerBlock(d->body)) return false;
                 bool hasRet = !entry.instructions.empty() &&
                     entry.instructions.back().opcode == VirOpcode::Ret;

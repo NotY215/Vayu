@@ -31,12 +31,22 @@ target_link_libraries(vfmt PRIVATE vayu_compiler)
 add_executable(vlint lint/main.cpp lint/Linter.cpp)
 target_link_libraries(vlint PRIVATE vayu_compiler)
 
-# Lightweight Vayu-IDE (Win32)
-if(WIN32)
+# Vayu-IDE: prefer Qt6 when available, else Win32 fallback
+find_package(Qt6 COMPONENTS Widgets QUIET)
+if(Qt6_FOUND)
+    set(CMAKE_AUTOMOC ON)
+    add_executable(Vayu-IDE
+        ../tools/vayu_ide_qt/main.cpp
+    )
+    target_link_libraries(Vayu-IDE PRIVATE Qt6::Widgets)
+    set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
+    message(STATUS "Vayu-IDE: Qt6 Widgets")
+elseif(WIN32)
     add_executable(Vayu-IDE WIN32
         ../tools/vayu_ide/main.cpp
         ../tools/vayu_ide/vayu_ide.rc
     )
     target_link_libraries(Vayu-IDE PRIVATE comdlg32 user32 gdi32)
     set_target_properties(Vayu-IDE PROPERTIES OUTPUT_NAME "Vayu-IDE")
+    message(STATUS "Vayu-IDE: Win32 fallback (install Qt6 for professional UI)")
 endif()

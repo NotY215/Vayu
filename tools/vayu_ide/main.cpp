@@ -276,6 +276,19 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case 6: SendMessageW(gEdit, EM_UNDO, 0, 0); break;
         case 7: PostMessageW(hwnd, WM_CLOSE, 0, 0); break;
         case 8: ClearOut(); break;
+        case 9: {
+            MessageBoxW(hwnd,
+                L"Vayu Integrator quick reference\r\n\r\n"
+                L"print / input / read_int / len / str / int / float / bool\r\n"
+                L"if/elif/else while for-in-range for-in-list break continue\r\n"
+                L"+ - * / // % **  & | ^ << >> ~  and or not\r\n"
+                L"list map tuple set  import\r\n\r\n"
+                L"Full notes: VIB/Docs/Implementation.md\r\n"
+                L"Syntax: https://github.com/NotY215/Vayu/blob/master/docs/syntax.md",
+                L"Vayu Help", MB_OK | MB_ICONINFORMATION);
+            break;
+        }
+
         }
         if (HIWORD(wp) == EN_CHANGE && (HWND)lp == gEdit) gDirty = true;
         return 0;
@@ -328,6 +341,9 @@ int WINAPI wWinMain(HINSTANCE hi, HINSTANCE, PWSTR, int show) {
     AppendMenuW(menu, MF_POPUP, (UINT_PTR)file, L"&File");
     AppendMenuW(menu, MF_POPUP, (UINT_PTR)edit, L"&Edit");
     AppendMenuW(menu, MF_POPUP, (UINT_PTR)run, L"&Build");
+    HMENU help = CreatePopupMenu();
+    AppendMenuW(help, MF_STRING, 9, L"&Syntax && Functions...");
+    AppendMenuW(menu, MF_POPUP, (UINT_PTR)help, L"&Help");
 
     HWND hwnd = CreateWindowExW(0, CLS, L"Vayu-IDE",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1100, 750,
