@@ -1218,24 +1218,13 @@ namespace vib {
 
             if (c->callee->kind == EK::Attr) {
                 const auto* attr = static_cast<const vayu::AttrExpr*>(c->callee.get());
-                if (attr->target->kind != EK::NameRef) {
+                // Receiver may be name, literal, or expression (e.g. "a,b".split(","))
+                VirTypeKind recvType = inferType(attr->target.get());
+                if (recvType != VirTypeKind::Str && recvType != VirTypeKind::Any) {
                     result.plannedPhase = 10;
                     result.failedFeatureName = "Classes";
-                    result.message = "lowering for method call on non-name receiver is not "
+                    result.message = "lowering for method call on non-str receiver is not "
                         "implemented yet (planned Phase 10)";
-                    return -1;
-                }
-                const auto* recvName =
-                    static_cast<const vayu::NameRefExpr*>(attr->target.get());
-                VirTypeKind recvType = VirTypeKind::Any;
-                auto tit = varTypes.find(recvName->name);
-                if (tit != varTypes.end()) recvType = tit->second;
-
-                if (recvType != VirTypeKind::Str) {
-                    result.plannedPhase = 10;
-                    result.failedFeatureName = "Classes";
-                    result.message = "lowering for method call on non-str variable \"" +
-                        recvName->name + "\" is not implemented yet (planned Phase 10)";
                     return -1;
                 }
 

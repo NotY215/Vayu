@@ -1,10 +1,12 @@
-// Vayu-IDE (Qt6) — no foreground console, input/read_int via dialogs, loadable examples
+// Vayu-IDE V0.2-Alpha — IDLE-style UI, Tools/Compile, AppData recents, no dialogs for input
 #include <QApplication>
 #include <QMainWindow>
 #include <QSplitter>
 #include <QPlainTextEdit>
 #include <QTextEdit>
 #include <QToolBar>
+#include <QMenuBar>
+#include <QMenu>
 #include <QAction>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -19,364 +21,403 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
-#include <QInputDialog>
 #include <QFile>
 #include <QIcon>
 #include <QDir>
 #include <QCoreApplication>
 #include <QKeySequence>
-#include <QRegularExpression>
+#include <QSettings>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QWheelEvent>
+#include <QShortcut>
+#include <QTextCursor>
+#include <QFileInfo>
+#include <QInputDialog>
 #ifdef Q_OS_WIN
 #  include <windows.h>
 #endif
 
-struct Example {
-    QString title;
-    QString code;
-};
+static const char* kVersion = "V0.2-Alpha";
+static const char* kRepo = "https://github.com/NotY215/Vayu";
 
+struct Example { QString title; QString code; };
 static QList<Example> builtinExamples() {
     return {
-        {QStringLiteral("Hello + input"),
-         QStringLiteral(
-             "print(\"Hello World\")\n"
-             "c = input(\"say my name: \")\n"
-             "if c == \"heisenberg\":\n"
-             "    print(\"You are God damn Right\")\n"
-             "else:\n"
-             "    print(\"try again\")\n")},
-        {QStringLiteral("Age (read_int)"),
-         QStringLiteral(
-             "name = input(\"Name: \")\n"
-             "print(\"Hello, \" + name)\n"
-             "print(\"Enter an integer:\")\n"
-             "age = read_int()\n"
-             "print(\"Your age is:\")\n"
-             "print(age)\n"
-             "print(\"Next year you will be:\")\n"
-             "print(age + 1)\n")},
-        {QStringLiteral("Loops range / list"),
-         QStringLiteral(
-             "print(\"range:\")\n"
-             "for i in range(5):\n"
-             "    print(i)\n"
-             "print(\"range(2,6):\")\n"
-             "for i in range(2, 6):\n"
-             "    print(i)\n"
-             "print(\"list:\")\n"
-             "for x in [10, 20, 30]:\n"
-             "    print(x)\n")},
-        {QStringLiteral("Strings split / join"),
-         QStringLiteral(
-             "s = \"a,b,c\"\n"
-             "parts = s.split(\",\")\n"
-             "print(parts)\n"
-             "print(\",\".join(parts))\n"
-             "print(\"Hello\".upper())\n"
-             "print(\"  x  \".strip())\n")},
-        {QStringLiteral("Functions + arithmetic"),
-         QStringLiteral(
-             "def add(a, b):\n"
-             "    return a + b\n"
-             "print(add(2, 3))\n"
-             "print(2 ** 8)\n"
-             "print(10 // 3)\n"
-             "print(12 & 10)\n")},
-        {QStringLiteral("While + break"),
-         QStringLiteral(
-             "n = 5\n"
-             "while n > 0:\n"
-             "    print(n)\n"
-             "    n = n - 1\n"
-             "    if n == 2:\n"
-             "        break\n"
-             "print(\"done\")\n")},
+        {"Hello + input",
+         "print(\"Hello World\")\n"
+         "c = input(\"say my name: \")\n"
+         "if c == \"heisenberg\":\n"
+         "    print(\"You are God damn Right\")\n"
+         "else:\n"
+         "    print(\"try again\")\n"},
+        {"Strings split / join",
+         "s = \"a,b,c\"\n"
+         "parts = s.split(\",\")\n"
+         "print(parts)\n"
+         "print(\",\".join(parts))\n"
+         "print(\"Hello\".upper())\n"
+         "print(\"  x  \".strip())\n"},
+        {"Loops range / list",
+         "for i in range(5):\n"
+         "    print(i)\n"
+         "for i in range(2, 6):\n"
+         "    print(i)\n"
+         "for x in [10, 20, 30]:\n"
+         "    print(x)\n"},
+        {"Functions",
+         "def add(a, b):\n"
+         "    return a + b\n"
+         "print(add(2, 3))\n"
+         "print(2 ** 10)\n"},
+        {"While break",
+         "n = 5\n"
+         "while n > 0:\n"
+         "    print(n)\n"
+         "    n = n - 1\n"
+         "    if n == 2:\n"
+         "        break\n"},
     };
 }
 
-static const char* kHelpSyntax = R"MD(
-# Syntax (with examples)
-
-Compare with `==`. Strings need quotes. Indent bodies.
-
-```
-print("Hello World")
-c = input("say my name: ")
-if c == "heisenberg":
-    print("You are God damn Right")
-else:
-    print("try again")
-```
-
-Use **Help → Load example…** to paste a known-good program into the editor.
-)MD";
-
-static const char* kHelpFunctions = R"MD(
-# Functions
-
-| Name | Example |
-|------|---------|
-| print | `print("hi")` |
-| input | `n = input("Name: ")` |
-| read_int | `a = read_int()` |
-| len | `len("ab")` / `len([1,2])` |
-| str/int/float/bool | `int("10")+1` |
-| range | `for i in range(5):` or `range(2,6)` |
-)MD";
-
-static const char* kHelpStrings = R"MD(
-# Strings
-
-```
-s = "a,b,c"
-print(s.split(","))
-print("-".join(["x","y"]))
-print("Hi".upper())
-print("  z  ".strip())
-print(s.contains("b"))
-```
-)MD";
-
-class HelpDialog : public QDialog {
-    QPlainTextEdit* editorTarget_ = nullptr;
+class ZoomPlainText : public QPlainTextEdit {
 public:
-    HelpDialog(QPlainTextEdit* editor, QWidget* parent = nullptr)
-        : QDialog(parent), editorTarget_(editor) {
-        setWindowTitle(QStringLiteral("Vayu Help"));
-        resize(820, 560);
-        auto* tabs = new QTabWidget(this);
-        auto make = [](const char* md) {
-            auto* w = new QTextEdit;
-            w->setReadOnly(true);
-            w->setMarkdown(QString::fromUtf8(md));
-            return w;
-        };
-        tabs->addTab(make(kHelpSyntax), QStringLiteral("Syntax"));
-        tabs->addTab(make(kHelpFunctions), QStringLiteral("Functions"));
-        tabs->addTab(make(kHelpStrings), QStringLiteral("Strings"));
-
-        auto* exPage = new QWidget;
-        auto* layEx = new QVBoxLayout(exPage);
-        auto* list = new QListWidget;
-        for (const Example& e : builtinExamples())
-            list->addItem(e.title);
-        auto* btnLoad = new QPushButton(QStringLiteral("Load selected example into editor"));
-        layEx->addWidget(new QLabel(QStringLiteral("Prebuilt programs (run error-free on Integrator):")));
-        layEx->addWidget(list);
-        layEx->addWidget(btnLoad);
-        tabs->addTab(exPage, QStringLiteral("Examples"));
-
-        connect(btnLoad, &QPushButton::clicked, this, [this, list]{
-            int row = list->currentRow();
-            if (row < 0) return;
-            const auto examples = builtinExamples();
-            if (row >= examples.size()) return;
-            if (editorTarget_) {
-                editorTarget_->setPlainText(examples[row].code);
-            }
-            accept();
-        });
-        connect(list, &QListWidget::itemDoubleClicked, btnLoad, &QPushButton::click);
-
-        auto* lay = new QVBoxLayout(this);
-        lay->addWidget(tabs);
+    explicit ZoomPlainText(QWidget* p = nullptr) : QPlainTextEdit(p) {}
+protected:
+    void wheelEvent(QWheelEvent* e) override {
+        if (e->modifiers() & Qt::ControlModifier) {
+            QFont f = font();
+            int pt = f.pointSize();
+            if (e->angleDelta().y() > 0) f.setPointSize(pt + 1);
+            else if (pt > 6) f.setPointSize(pt - 1);
+            setFont(f);
+            e->accept();
+            return;
+        }
+        QPlainTextEdit::wheelEvent(e);
     }
 };
 
-// Collect stdin lines for each input()/read_int() in source order
-static QByteArray collectStdinForSource(const QString& src, QWidget* parent) {
-    QStringList linesOut;
-    QRegularExpression re(
-        QStringLiteral("\\b(input|read_int)\\s*\\("),
-        QRegularExpression::MultilineOption);
-    auto it = re.globalMatch(src);
-    int n = 0;
-    while (it.hasNext()) {
-        auto m = it.next();
-        QString kind = m.captured(1);
-        ++n;
-        bool ok = false;
-        if (kind == QStringLiteral("read_int")) {
-            int v = QInputDialog::getInt(parent, QStringLiteral("read_int()"),
-                QStringLiteral("Integer input #%1:").arg(n), 0, -2147483647, 2147483647, 1, &ok);
-            if (!ok) return {};
-            linesOut << QString::number(v);
-        } else {
-            // try extract prompt string roughly
-            QString prompt = QStringLiteral("input #%1:").arg(n);
-            int pos = m.capturedEnd();
-            if (pos < src.size() && src[pos] == QLatin1Char('"')) {
-                int end = src.indexOf(QLatin1Char('"'), pos + 1);
-                if (end > pos)
-                    prompt = src.mid(pos + 1, end - pos - 1);
-            }
-            QString v = QInputDialog::getText(parent, QStringLiteral("input()"),
-                prompt, QLineEdit::Normal, QString(), &ok);
-            if (!ok) return {};
-            linesOut << v;
-        }
+class HelpDialog : public QDialog {
+    ZoomPlainText* editor_ = nullptr;
+public:
+    HelpDialog(ZoomPlainText* ed, QWidget* parent = nullptr) : QDialog(parent), editor_(ed) {
+        setWindowTitle(QString("Vayu-IDE %1 — Help").arg(kVersion));
+        resize(860, 580);
+        auto* tabs = new QTabWidget(this);
+        auto md = [](const QString& s) {
+            auto* w = new QTextEdit; w->setReadOnly(true); w->setMarkdown(s); return w;
+        };
+        tabs->addTab(md(QString(
+            "# Syntax (brief)\n\n"
+            "- Compare with `==`; strings need quotes.\n"
+            "- Indent if/else/while/for bodies.\n"
+            "- Methods on literals OK: `\"a,b\".split(\",\")`, `\",\".join(list)`.\n"
+            "- `for i in range(N)` and `range(start,end)`.\n\n"
+            "Repo: %1").arg(kRepo)), "Syntax");
+        tabs->addTab(md(
+            "# Functions\n\n"
+            "`print` `input` `read_int` `len` `str` `int` `float` `bool` `range`\n"), "Functions");
+        tabs->addTab(md(
+            "# Strings\n\n"
+            "concat `+`, methods: upper lower strip split join contains find "
+            "starts_with ends_with replace char_at to_int is_digit is_alpha is_space\n"), "Strings");
+
+        auto* exPage = new QWidget;
+        auto* lay = new QVBoxLayout(exPage);
+        auto* list = new QListWidget;
+        for (const auto& e : builtinExamples()) list->addItem(e.title);
+        auto* btn = new QPushButton("Load selected example into editor");
+        lay->addWidget(new QLabel("Prebuilt examples (Integrator-safe):"));
+        lay->addWidget(list);
+        lay->addWidget(btn);
+        tabs->addTab(exPage, "Examples");
+        connect(btn, &QPushButton::clicked, this, [this, list]{
+            int r = list->currentRow();
+            if (r < 0 || !editor_) return;
+            editor_->setPlainText(builtinExamples()[r].code);
+            accept();
+        });
+        connect(list, &QListWidget::itemDoubleClicked, btn, &QPushButton::click);
+
+        auto* outer = new QVBoxLayout(this);
+        outer->addWidget(tabs);
+        auto* link = new QPushButton("Open Vayu GitHub repo");
+        connect(link, &QPushButton::clicked, this, []{ QDesktopServices::openUrl(QUrl(kRepo)); });
+        outer->addWidget(link);
     }
-    QByteArray data;
-    for (const QString& s : linesOut) {
-        data += s.toUtf8();
-        data += '\n';
-    }
-    return data;
-}
+};
 
 class MainWindow : public QMainWindow {
-    QPlainTextEdit* editor_ = nullptr;
-    QPlainTextEdit* output_ = nullptr;
+    ZoomPlainText* editor_ = nullptr;
+    ZoomPlainText* output_ = nullptr;
+    QLineEdit* termIn_ = nullptr;
     QString path_;
     bool dirty_ = false;
+    bool wrap_ = false;
     QProcess* running_ = nullptr;
+    QSettings settings_;
+    QMenu* recentMenu_ = nullptr;
 
 public:
-    MainWindow() {
-        setWindowTitle(QStringLiteral("Vayu-IDE"));
+    MainWindow()
+        : settings_(QSettings::IniFormat, QSettings::UserScope,
+                    QStringLiteral("VayuIDE"), QStringLiteral("VayuIDE")) {
+        setWindowTitle(QString("Vayu-IDE %1").arg(kVersion));
         resize(1100, 750);
         QIcon appIcon(QStringLiteral(":/IDE.ico"));
         if (!appIcon.isNull()) setWindowIcon(appIcon);
 
-        editor_ = new QPlainTextEdit;
-        output_ = new QPlainTextEdit;
+        editor_ = new ZoomPlainText;
+        output_ = new ZoomPlainText;
         output_->setReadOnly(true);
-        QFont mono(QStringLiteral("Cascadia Mono"), 11);
-        if (!mono.exactMatch()) mono = QFont(QStringLiteral("Consolas"), 11);
+        termIn_ = new QLineEdit;
+        termIn_->setPlaceholderText(QStringLiteral("Program input (stdin) — type line, Enter to send"));
+        QFont mono("Cascadia Mono", 11);
+        if (!mono.exactMatch()) mono = QFont("Consolas", 11);
         editor_->setFont(mono);
         output_->setFont(mono);
 
+        auto* bottom = new QWidget;
+        auto* bl = new QVBoxLayout(bottom);
+        bl->setContentsMargins(0, 0, 0, 0);
+        bl->addWidget(new QLabel("  OUTPUT / TERMINAL"));
+        bl->addWidget(output_);
+        bl->addWidget(termIn_);
+
         auto* split = new QSplitter(Qt::Vertical);
         split->addWidget(editor_);
-        split->addWidget(output_);
+        split->addWidget(bottom);
         split->setStretchFactor(0, 3);
         split->setStretchFactor(1, 1);
         setCentralWidget(split);
 
-        auto* tb = addToolBar(QStringLiteral("Main"));
-        tb->setMovable(false);
-        auto* actOpen = tb->addAction(QStringLiteral("Open"));
-        auto* actSave = tb->addAction(QStringLiteral("Save"));
-        tb->addSeparator();
-        auto* actRun = tb->addAction(QStringLiteral("Run"));
-        auto* actCompile = tb->addAction(QStringLiteral("Compile .vye"));
-        auto* actStop = tb->addAction(QStringLiteral("Stop"));
-        tb->addSeparator();
-        auto* actHelp = tb->addAction(QStringLiteral("Help"));
-        actRun->setShortcut(QKeySequence(Qt::Key_F5));
-        actCompile->setShortcut(QKeySequence(Qt::Key_F7));
-        actOpen->setShortcut(QKeySequence::Open);
-        actSave->setShortcut(QKeySequence::Save);
-
-        connect(actOpen, &QAction::triggered, this, &MainWindow::openFile);
-        connect(actSave, &QAction::triggered, this, &MainWindow::saveFile);
-        connect(actRun, &QAction::triggered, this, [this]{ run(false); });
-        connect(actCompile, &QAction::triggered, this, [this]{ run(true); });
-        connect(actStop, &QAction::triggered, this, [this]{
-            if (running_) running_->kill();
-        });
-        connect(actHelp, &QAction::triggered, this, [this]{
-            HelpDialog dlg(editor_, this);
-            dlg.exec();
-        });
+        buildMenus();
         connect(editor_, &QPlainTextEdit::textChanged, this, [this]{ dirty_ = true; });
+        connect(termIn_, &QLineEdit::returnPressed, this, [this]{
+            if (!running_) return;
+            QString line = termIn_->text() + "\n";
+            running_->write(line.toUtf8());
+            termIn_->clear();
+            output_->appendPlainText(QStringLiteral("> ") + line.trimmed());
+        });
 
-        qApp->setStyleSheet(QStringLiteral(
-            "QMainWindow, QWidget { background-color: #1e1e1e; color: #d4d4d4; }"
-            "QPlainTextEdit, QTextEdit, QListWidget { background-color: #252526; color: #d4d4d4; border: 1px solid #3c3c3c; }"
-            "QToolBar { background: #2d2d2d; spacing: 6px; padding: 4px; border: none; }"
-            "QToolButton, QPushButton { background: #0e639c; color: white; padding: 6px 12px; border: none; border-radius: 4px; }"
-            "QToolButton:hover, QPushButton:hover { background: #1177bb; }"
-            "QStatusBar { background: #007acc; color: white; }"
-            "QTabBar::tab { background: #2d2d2d; color: #d4d4d4; padding: 8px 14px; }"
-            "QTabBar::tab:selected { background: #0e639c; }"
-        ));
-        statusBar()->showMessage(QStringLiteral("Ready · F5 Run (no console window) · Help → Examples"));
+        qApp->setStyleSheet(
+            "QMainWindow,QWidget{background:#1e1e1e;color:#d4d4d4;}"
+            "QPlainTextEdit,QLineEdit,QListWidget,QTextEdit{background:#252526;color:#d4d4d4;border:1px solid #3c3c3c;}"
+            "QMenuBar{background:#2d2d2d;} QMenu{background:#2d2d2d;}"
+            "QStatusBar{background:#007acc;color:white;}"
+            "QPushButton{background:#0e639c;color:white;padding:6px 12px;border:none;}");
+
+        // Restore last file
+        QString last = settings_.value("lastFile").toString();
+        if (!last.isEmpty() && QFile::exists(last)) {
+            QFile f(last);
+            if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                editor_->setPlainText(QString::fromUtf8(f.readAll()));
+                path_ = last;
+                dirty_ = false;
+                statusBar()->showMessage(QString("Opened last file: %1").arg(last));
+            }
+        } else {
+            statusBar()->showMessage(QString("Vayu-IDE %1 — ready").arg(kVersion));
+        }
+        rebuildRecentMenu();
+
+        // Alt+Z wrap
+        auto* scWrap = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Z), this);
+        connect(scWrap, &QShortcut::activated, this, [this]{
+            wrap_ = !wrap_;
+            auto mode = wrap_ ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap;
+            editor_->setLineWrapMode(mode);
+            output_->setLineWrapMode(mode);
+            statusBar()->showMessage(wrap_ ? "Word wrap ON" : "Word wrap OFF");
+        });
     }
 
     ~MainWindow() override {
-        if (running_) {
-            running_->kill();
-            running_->waitForFinished(1000);
-        }
+        if (running_) { running_->kill(); running_->waitForFinished(500); }
     }
 
 private:
-    QString vayucPath() const {
+    void buildMenus() {
+        auto* mb = menuBar();
+        // File
+        auto* file = mb->addMenu("&File");
+        auto add = [this](QMenu* m, const QString& t, const QKeySequence& ks, auto fn) {
+            QAction* a = m->addAction(t); a->setShortcut(ks); connect(a, &QAction::triggered, this, fn); return a;
+        };
+        add(file, "&New", QKeySequence::New, [this]{ path_.clear(); editor_->clear(); dirty_=false; });
+        add(file, "&Open...", QKeySequence::Open, [this]{ openFile(); });
+        recentMenu_ = file->addMenu("Open &Recent");
+        add(file, "&Save", QKeySequence::Save, [this]{ saveFile(); });
+        add(file, "Save &As...", QKeySequence(), [this]{ path_.clear(); saveFile(); });
+        file->addSeparator();
+        add(file, "E&xit", QKeySequence::Quit, [this]{ close(); });
+
+        // Edit (IDLE-like)
+        auto* edit = mb->addMenu("&Edit");
+        add(edit, "&Undo", QKeySequence::Undo, [this]{ editor_->undo(); });
+        add(edit, "&Redo", QKeySequence::Redo, [this]{ editor_->redo(); });
+        edit->addSeparator();
+        add(edit, "Select &All", QKeySequence::SelectAll, [this]{ editor_->selectAll(); });
+        add(edit, "Cu&t", QKeySequence::Cut, [this]{ editor_->cut(); });
+        add(edit, "&Copy", QKeySequence::Copy, [this]{ editor_->copy(); });
+        add(edit, "&Paste", QKeySequence::Paste, [this]{ editor_->paste(); });
+        edit->addSeparator();
+        add(edit, "&Find...", QKeySequence::Find, [this]{ findText(); });
+        add(edit, "Find A&gain", QKeySequence(Qt::CTRL | Qt::Key_G), [this]{ findAgain(); });
+        add(edit, "&Replace...", QKeySequence(Qt::CTRL | Qt::Key_H), [this]{ replaceText(); });
+        add(edit, "Go to &Line...", QKeySequence(Qt::ALT | Qt::Key_G), [this]{ gotoLine(); });
+        edit->addSeparator();
+        add(edit, "Word wrap (Alt+Z)", QKeySequence(), [this]{
+            wrap_ = !wrap_;
+            auto mode = wrap_ ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap;
+            editor_->setLineWrapMode(mode); output_->setLineWrapMode(mode);
+        });
+
+        // Tools
+        auto* tools = mb->addMenu("&Tools");
+        add(tools, "Run (&native)", QKeySequence(Qt::Key_F5), [this]{ runArgs({"--native"}); });
+        add(tools, "Run (interpreter)", QKeySequence(), [this]{ runArgs({}); });
+        add(tools, "Run (VM)", QKeySequence(), [this]{ runArgs({"--vm"}); });
+        add(tools, "Dump IR", QKeySequence(), [this]{ runArgs({"--dump-ir"}); });
+        add(tools, "Stop process", QKeySequence(), [this]{ if (running_) running_->kill(); });
+
+        // Compile
+        auto* compile = mb->addMenu("&Compile");
+        add(compile, "Emit &.vye", QKeySequence(Qt::Key_F7), [this]{ emitVye(); });
+        add(compile, "Run existing .vye...", QKeySequence(), [this]{ runVye(); });
+        add(compile, "Create host .exe launcher...", QKeySequence(), [this]{ emitExeLauncher(); });
+
+        // Help
+        auto* help = mb->addMenu("&Help");
+        add(help, "&Help / Syntax...", QKeySequence(), [this]{
+            HelpDialog dlg(editor_, this); dlg.exec();
+        });
+        add(help, "&Load Examples...", QKeySequence(), [this]{
+            HelpDialog dlg(editor_, this); dlg.exec();
+        });
+        add(help, "&Version", QKeySequence(), [this]{
+            QMessageBox::information(this, "Version",
+                QString("Vayu-IDE %1\nVayu compiler %1 Release\n%2").arg(kVersion).arg(kRepo));
+        });
+        add(help, "Open &Repo", QKeySequence(), []{ QDesktopServices::openUrl(QUrl(kRepo)); });
+    }
+
+    QString lastFind_;
+    void findText() {
+        bool ok = false;
+        QString s = QInputDialog::getText(this, "Find", "Find:", QLineEdit::Normal, lastFind_, &ok);
+        if (!ok || s.isEmpty()) return;
+        lastFind_ = s;
+        if (!editor_->find(s))
+            statusBar()->showMessage("Not found");
+    }
+    void findAgain() {
+        if (lastFind_.isEmpty()) { findText(); return; }
+        if (!editor_->find(lastFind_)) {
+            // wrap
+            QTextCursor c = editor_->textCursor(); c.movePosition(QTextCursor::Start);
+            editor_->setTextCursor(c);
+            editor_->find(lastFind_);
+        }
+    }
+    void replaceText() {
+        bool ok = false;
+        QString a = QInputDialog::getText(this, "Replace", "Find:", QLineEdit::Normal, lastFind_, &ok);
+        if (!ok) return;
+        QString b = QInputDialog::getText(this, "Replace", "Replace with:", QLineEdit::Normal, QString(), &ok);
+        if (!ok) return;
+        lastFind_ = a;
+        QString t = editor_->toPlainText();
+        t.replace(a, b);
+        editor_->setPlainText(t);
+    }
+    void gotoLine() {
+        bool ok = false;
+        int line = QInputDialog::getInt(this, "Go to Line", "Line:", 1, 1, 1000000, 1, &ok);
+        if (!ok) return;
+        QTextCursor c = editor_->textCursor();
+        c.movePosition(QTextCursor::Start);
+        c.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, line - 1);
+        editor_->setTextCursor(c);
+        editor_->setFocus();
+    }
+
+    QString vayuBin() const {
         QDir d(QCoreApplication::applicationDirPath());
-        QString p = d.filePath(QStringLiteral("vayuc.exe"));
-        if (QFile::exists(p)) return p;
-        return QStringLiteral("vayuc.exe");
+        for (const char* n : {"vayu.exe", "vayuc.exe"}) {
+            QString p = d.filePath(n);
+            if (QFile::exists(p)) return p;
+        }
+        return QStringLiteral("vayu.exe");
+    }
+
+    void rememberFile(const QString& p) {
+        path_ = p;
+        settings_.setValue("lastFile", p);
+        QStringList rec = settings_.value("recent").toStringList();
+        rec.removeAll(p);
+        rec.prepend(p);
+        while (rec.size() > 12) rec.removeLast();
+        settings_.setValue("recent", rec);
+        rebuildRecentMenu();
+    }
+    void rebuildRecentMenu() {
+        if (!recentMenu_) return;
+        recentMenu_->clear();
+        for (const QString& p : settings_.value("recent").toStringList()) {
+            QAction* a = recentMenu_->addAction(p);
+            connect(a, &QAction::triggered, this, [this, p]{
+                QFile f(p);
+                if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+                editor_->setPlainText(QString::fromUtf8(f.readAll()));
+                rememberFile(p);
+                dirty_ = false;
+            });
+        }
     }
 
     void openFile() {
-        QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Open"),
-            QString(), QStringLiteral("Vayu (*.vyu);;All (*.*)"));
+        QString f = QFileDialog::getOpenFileName(this, "Open", path_, "Vayu (*.vyu);;All (*.*)");
         if (f.isEmpty()) return;
         QFile file(f);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
         editor_->setPlainText(QString::fromUtf8(file.readAll()));
-        path_ = f;
+        rememberFile(f);
         dirty_ = false;
-        statusBar()->showMessage(path_);
     }
-
     bool saveFile() {
         if (path_.isEmpty()) {
-            path_ = QFileDialog::getSaveFileName(this, QStringLiteral("Save"),
-                QString(), QStringLiteral("Vayu (*.vyu)"));
+            path_ = QFileDialog::getSaveFileName(this, "Save", QString(), "Vayu (*.vyu)");
             if (path_.isEmpty()) return false;
         }
         QFile file(path_);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
         file.write(editor_->toPlainText().toUtf8());
         dirty_ = false;
-        statusBar()->showMessage(QStringLiteral("Saved"));
+        rememberFile(path_);
+        statusBar()->showMessage("Saved");
         return true;
     }
 
-    void run(bool compileVye) {
+    void runArgs(const QStringList& extra) {
         if (running_) {
-            QMessageBox::information(this, QStringLiteral("Busy"),
-                QStringLiteral("A run is already in progress. Press Stop first."));
+            QMessageBox::information(this, "Busy", "Already running — use Tools → Stop.");
             return;
         }
         if (path_.isEmpty() && !saveFile()) return;
         if (dirty_ && !saveFile()) return;
         output_->clear();
-
         QStringList args;
-        args << path_;
-        if (compileVye) {
-            QString out = path_;
-            if (out.endsWith(QStringLiteral(".vyu")))
-                out = out.left(out.size() - 4) + QStringLiteral(".vye");
-            else
-                out += QStringLiteral(".vye");
-            args << QStringLiteral("--output") << out;
-            output_->appendPlainText(QStringLiteral("[compile .vye]"));
-        } else {
-            // Prefer Integrator so input/print match CLI --native behaviour
-            args << QStringLiteral("--native");
-            output_->appendPlainText(QStringLiteral("[run --native]"));
-        }
-
-        QByteArray stdinData;
-        if (!compileVye) {
-            stdinData = collectStdinForSource(editor_->toPlainText(), this);
-            // empty with cancelled dialog → abort
-            QRegularExpression re(QStringLiteral("\\b(input|read_int)\\s*\\("));
-            if (re.match(editor_->toPlainText()).hasMatch() && stdinData.isNull()) {
-                output_->appendPlainText(QStringLiteral("[cancelled]"));
-                return;
-            }
-        }
+        args << path_ << extra;
+        output_->appendPlainText(QString("[run %1]").arg(extra.join(' ')));
 
         auto* proc = new QProcess(this);
         running_ = proc;
         proc->setProcessChannelMode(QProcess::MergedChannels);
 #ifdef Q_OS_WIN
-        // Prevent Windows from opening a foreground console for vayuc.exe
         proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
             cpa->flags |= CREATE_NO_WINDOW;
         });
@@ -387,35 +428,104 @@ private:
         connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [this, proc](int code, QProcess::ExitStatus) {
                 QByteArray rest = proc->readAll();
-                if (!rest.isEmpty())
-                    output_->appendPlainText(QString::fromUtf8(rest));
-                output_->appendPlainText(QStringLiteral("—— exit %1 ——").arg(code));
-                statusBar()->showMessage(code == 0
-                    ? QStringLiteral("Finished") : QStringLiteral("Finished with errors"));
+                if (!rest.isEmpty()) output_->appendPlainText(QString::fromUtf8(rest));
+                output_->appendPlainText(QString("—— exit %1 ——").arg(code));
                 if (running_ == proc) running_ = nullptr;
                 proc->deleteLater();
+                statusBar()->showMessage(code == 0 ? "Finished" : "Finished with errors");
             });
-
-        proc->start(vayucPath(), args);
+        proc->start(vayuBin(), args);
         if (!proc->waitForStarted(5000)) {
-            output_->appendPlainText(QStringLiteral("[error] could not start vayuc.exe"));
+            output_->appendPlainText("[error] could not start vayu.exe / vayuc.exe");
             running_ = nullptr;
             proc->deleteLater();
             return;
         }
-        if (!stdinData.isEmpty()) {
-            proc->write(stdinData);
-            proc->closeWriteChannel();
-        } else {
-            proc->closeWriteChannel();
+        // Keep stdin open for Terminal line (input/read_int)
+        statusBar()->showMessage("Running in background — use Terminal input for input()/read_int()");
+    }
+
+    void emitVye() {
+        if (path_.isEmpty() && !saveFile()) return;
+        if (dirty_ && !saveFile()) return;
+        QString out = path_;
+        if (out.endsWith(".vyu")) out = out.left(out.size() - 4) + ".vye";
+        else out += ".vye";
+        runArgs({"--output", out});
+    }
+    void runVye() {
+        QString f = QFileDialog::getOpenFileName(this, "Run .vye", path_, "Vaye (*.vye)");
+        if (f.isEmpty()) return;
+        output_->clear();
+        output_->appendPlainText("[run-vye]");
+        auto* proc = new QProcess(this);
+        running_ = proc;
+        proc->setProcessChannelMode(QProcess::MergedChannels);
+#ifdef Q_OS_WIN
+        proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+            cpa->flags |= CREATE_NO_WINDOW;
+        });
+#endif
+        connect(proc, &QProcess::readyRead, this, [this, proc]{
+            output_->appendPlainText(QString::fromUtf8(proc->readAll()));
+        });
+        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc](int code, QProcess::ExitStatus) {
+                if (running_ == proc) running_ = nullptr;
+                output_->appendPlainText(QString("—— exit %1 ——").arg(code));
+                proc->deleteLater();
+            });
+        proc->start(vayuBin(), QStringList{f});
+        if (!proc->waitForStarted(3000)) {
+            output_->appendPlainText("[error] start failed");
+            running_ = nullptr;
+            proc->deleteLater();
         }
-        statusBar()->showMessage(QStringLiteral("Running in background…"));
+    }
+    void emitExeLauncher() {
+        // Host-arch launcher: .cmd next to .vye that invokes matching vayu.exe
+        if (path_.isEmpty() && !saveFile()) return;
+        if (dirty_ && !saveFile()) return;
+        QString vye = path_;
+        if (vye.endsWith(".vyu")) vye = vye.left(vye.size() - 4) + ".vye";
+        else vye += ".vye";
+        // First emit vye synchronously-ish via one-shot process
+        QProcess emitProc;
+#ifdef Q_OS_WIN
+        emitProc.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* cpa) {
+            cpa->flags |= CREATE_NO_WINDOW;
+        });
+#endif
+        emitProc.start(vayuBin(), QStringList{path_, "--output", vye});
+        emitProc.waitForFinished(60000);
+        output_->appendPlainText(QString::fromUtf8(emitProc.readAllStandardOutput()));
+        output_->appendPlainText(QString::fromUtf8(emitProc.readAllStandardError()));
+        if (emitProc.exitCode() != 0) {
+            output_->appendPlainText("[emit-vye failed]");
+            return;
+        }
+        QString launcher = vye;
+        if (launcher.endsWith(".vye")) launcher = launcher.left(launcher.size() - 4) + ".cmd";
+        else launcher += ".cmd";
+        QString bin = vayuBin();
+        QString body = QString("@echo off\r\n"
+            "REM Vayu host launcher %1 — same arch as this PC\r\n"
+            "\"%2\" \"%~dp0%3\"\r\n")
+            .arg(kVersion).arg(bin).arg(QFileInfo(vye).fileName());
+        QFile f(launcher);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            f.write(body.toUtf8());
+            output_->appendPlainText(QString("[launcher] wrote %1 (host arch via local vayu)").arg(launcher));
+            statusBar()->showMessage("Host launcher created (architecture-matched via local runtime)");
+        }
     }
 };
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("Vayu-IDE"));
+    QApplication::setApplicationName("Vayu-IDE");
+    QApplication::setApplicationVersion(kVersion);
+    QApplication::setOrganizationName("VayuIDE");
     QIcon appIcon(QStringLiteral(":/IDE.ico"));
     if (!appIcon.isNull()) app.setWindowIcon(appIcon);
     MainWindow w;

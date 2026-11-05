@@ -1,3 +1,6 @@
+#ifndef VAYU_VERSION
+#define VAYU_VERSION "V0.2-Alpha"
+#endif
 #include "lexer/Lexer.hpp"
 #include "parser/Parser.hpp"
 #include "ast/Ast.hpp"
@@ -191,6 +194,15 @@ static int runRepl() {
 }
 
 int main(int argc, char** argv) {
+    for (int ai = 1; ai < argc; ++ai) {
+        std::string a = argv[ai] ? argv[ai] : "";
+        if (a == "--version" || a == "-version" || a == "-V") {
+            std::printf("Vayu %s Release\n", VAYU_VERSION);
+            std::printf("Repo: https://github.com/NotY215/Vayu\n");
+            return 0;
+        }
+    }
+
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
 #endif

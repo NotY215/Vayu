@@ -1,50 +1,33 @@
-# VIB / VIR Implementation Status
+# VIB / VIR Implementation — V0.2-Alpha
 
-**Last updated:** 2026-11-05
-
-Integrator path: `vayuc file.vyu --native`, `--dump-ir`, `--emit-vye` / `--run-vye`.
-
-## Supported
-
-| Area | Details |
-|------|---------|
-| Literals | int, float, bool, str, None |
-| Arithmetic | `+ - * / // % **`, unary `-` |
-| Bitwise | `& \| ^ << >> ~` |
-| Logic / compare | `and or not`, `== != < <= > >=` |
-| Strings | concat, repeat, methods: upper lower strip contains find starts_with ends_with is_digit is_alpha is_space replace char_at to_int **split join** |
-| Functions | def, call, return, print, input, read_int, len, str/int/float/bool |
-| Control | if/elif/else, while, break, continue |
-| Loops | `for i in range(N)`, **`for i in range(start, end)`**, `for x in list` |
-| Collections | list, map, tuple, set; index get/set; len |
-| Modules | flat import merge |
-| Packages | .vye emit/run, cache |
-
-## IDE notes
-
-- Run uses `--native` in a **background process** (`CREATE_NO_WINDOW` on Windows — no foreground cmd).
-- `input` / `read_int` values are collected via dialogs and fed on stdin.
-- Help → **Examples** loads prebuilt programs that run cleanly.
-
-## Not on Integrator yet
-
-Exceptions, classes, full generics, generators, lambdas, pointers, PE native codegen (Phase 10–12).
-
-## Common mistakes
-
-| Wrong | Right |
-|-------|--------|
-| `if c = x:` | `if c == x:` |
-| `if c == heisenberg:` | `if c == "heisenberg":` |
-| no indent under if | 4-space body |
-| `print(try again)` | `print("try again")` |
-
-### Working example
+## Method calls
+String methods work on **any** string expression (literal, variable, call):
 ```
-print("Hello World")
-c = input("say my name: ")
-if c == "heisenberg":
-    print("You are God damn Right")
-else:
-    print("try again")
+print("a,b,c".split(","))
+print(",".join(["a","b"]))
 ```
+
+## Supported (Integrator `--native`)
+Arithmetic, bitwise, logic, strings (+ split/join), functions, input/read_int/print,
+if/while/for range(N)|range(a,b)|list, collections, modules, .vye.
+
+## CLI
+```
+vayu file.vyu --native
+vayu --version          # V0.2-Alpha + repo link
+vayu file.vyu --output out.vye
+vayu out.vye
+```
+(`vayuc.exe` still produced as a copy of `vayu.exe` for tests.)
+
+## IDE V0.2-Alpha
+- Title: **Vayu-IDE V0.2-Alpha**
+- File / Edit (IDLE-style) / Tools / Compile / Help
+- Ctrl+Wheel zoom, Alt+Z wrap
+- Recents + last file in `%AppData%/VayuIDE`
+- Run with **CREATE_NO_WINDOW** + **WIN32 GUI subsystem** (no host cmd)
+- Terminal line at bottom for `input`/`read_int` (no popup boxes)
+- Compile: emit .vye, run .vye, host-arch .cmd launcher
+
+## Not yet
+Classes, exceptions, generators, PE native codegen (Phase 10–12).
