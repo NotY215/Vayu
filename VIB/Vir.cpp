@@ -1332,7 +1332,7 @@ namespace vib {
             else if (name == "float") builtinOp = VirBuiltin::ToFloat;
             else if (name == "bool")  builtinOp = VirBuiltin::ToBool;
             else if (name == "len")   builtinOp = VirBuiltin::LenStr;
-            else if (name == "shell" || name == "system") builtinOp = VirBuiltin::Shell;
+            else if (name == "shell" || name == "system" || name == "run_command") builtinOp = VirBuiltin::Shell;
             else                      isBuiltin = false;
 
             if (isBuiltin) {

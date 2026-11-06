@@ -121,6 +121,8 @@ namespace vayu {
 
         B("args", Types::Function({}, Types::List(Types::Str())));
         B("run_command", Types::Function({ Types::Str() }, Types::Int()));
+        B("shell", Types::Function({ Types::Str() }, Types::Int()));
+        B("system", Types::Function({ Types::Str() }, Types::Int()));
         B("exit", Types::Function({ Types::Int() }, Types::None()));
         B("join", Types::Function({ Types::Str(), listStr }, Types::Str()));
 
@@ -1722,7 +1724,8 @@ namespace vayu {
             if (nm && (nm->name == "print" || nm->name == "min" ||
                 nm->name == "max" || nm->name == "range" ||
                 nm->name == "list" || nm->name == "sorted" ||
-                nm->name == "input" || nm->name == "next" ||
+                nm->name == "input" || nm->name == "shell" || nm->name == "system" ||
+                nm->name == "run_command" || nm->name == "next" ||
                 nm->name == "round" || nm->name == "pow" ||
                 nm->name == "divmod"))
                 return callee->returnType ? callee->returnType : Types::None();
