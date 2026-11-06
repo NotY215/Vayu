@@ -1,4 +1,4 @@
-// Vayu-IDE V0.2-Alpha — VS Code–style, interactive Terminal, Ctrl+C copy
+// Vayu-IDE V0.2-Alpha — VS Code–style, pure PE host exe (no MSVC), interactive terminal
 #include <QApplication>
 #include <QMainWindow>
 #include <QSplitter>
@@ -41,9 +41,12 @@
 #include <QScrollBar>
 #include <QKeyEvent>
 #include <QTimer>
+#include <QToolBar>
+#include <QStyle>
 #ifdef Q_OS_WIN
 #  include <windows.h>
 #endif
+#include "../emit_exe/PeLauncher.hpp"
 
 static const char* kVer = "V0.2-Alpha";
 static const char* kRepo = "https://github.com/NotY215/Vayu";
@@ -51,20 +54,12 @@ static const char* kRepo = "https://github.com/NotY215/Vayu";
 struct Example { QString title, code; };
 static QList<Example> examples() {
     return {
-        {"Hello + if",
-         "print(\"Hello World\")\nc = input(\"name: \")\nif c == \"heisenberg\":\n    print(\"You are God damn Right\")\nelse:\n    print(\"try again\")\n"},
-        {"Split / join",
-         "print(\"a,b,c\".split(\",\"))\nprint(\",\".join([\"x\",\"y\"]))\n"},
-        {"in + append",
-         "print(2 in [1,2,3])\nxs = [1]\nxs.append(9)\nprint(xs)\n"},
-        {"Loops",
-         "for i in range(5):\n    print(i)\nfor x in [10, 20, 30]:\n    print(x)\n"},
-        {"shell / system",
-         "print(shell(\"cmd /c echo hello-from-cmd\"))\nprint(system(\"cmd /c echo via-system\"))\n"},
-        {"shell PowerShell",
-         "shell(\"powershell -NoProfile -Command \\\"Write-Host 'hi from pwsh'\\\"\")\n"},
-        {"functions",
-         "def add(a, b):\n    return a + b\nprint(add(2, 40))\n"},
+        {"Loops", "for i in range(5):\n    print(i)\nfor x in [10, 20, 30]:\n    print(x)\n"},
+        {"shell", "print(shell(\"cmd /c echo hello\"))\n"},
+        {"strings", "print(\"a,b\".split(\",\"))\nprint(\",\".join([\"x\",\"y\"]))\nprint(\"Hi\".upper())\n"},
+        {"in + append", "print(2 in [1,2,3])\nxs=[1]\nxs.append(7)\nprint(xs)\n"},
+        {"functions", "def add(a,b):\n    return a+b\nprint(add(20,22))\n"},
+        {"if input", "n = input(\"name: \")\nif n == \"vayu\":\n    print(\"hi\")\nelse:\n    print(\"ok\")\n"},
     };
 }
 
@@ -78,28 +73,20 @@ protected:
             int p = f.pointSize();
             if (e->angleDelta().y() > 0) f.setPointSize(p + 1);
             else if (p > 6) f.setPointSize(p - 1);
-            setFont(f);
-            e->accept();
-            return;
+            setFont(f); e->accept(); return;
         }
         QPlainTextEdit::wheelEvent(e);
     }
     void keyPressEvent(QKeyEvent* e) override {
-        // Ctrl+C with selection → copy (VS Code behavior in read-only panes)
-        if (e->matches(QKeySequence::Copy)) {
-            if (textCursor().hasSelection()) {
-                copy();
-                e->accept();
-                return;
-            }
+        if (e->matches(QKeySequence::Copy) && textCursor().hasSelection()) {
+            copy(); e->accept(); return;
         }
         QPlainTextEdit::keyPressEvent(e);
     }
     void contextMenuEvent(QContextMenuEvent* e) override {
         QMenu* m = createStandardContextMenu();
         m->addSeparator();
-        QAction* a = m->addAction("Copy All");
-        connect(a, &QAction::triggered, this, [this]{
+        connect(m->addAction("Copy All"), &QAction::triggered, this, [this]{
             QGuiApplication::clipboard()->setText(toPlainText());
         });
         m->exec(e->globalPos());
@@ -115,6 +102,7 @@ class MainWindow : public QMainWindow {
     QLineEdit* termIn_ = nullptr;
     QStackedWidget* sideStack_ = nullptr;
     QWidget* welcome_ = nullptr;
+    QToolButton* runBtn_ = nullptr;
     QString folder_;
     QSettings settings_;
     QProcess* runProc_ = nullptr;
@@ -126,43 +114,45 @@ public:
     MainWindow()
         : settings_(QSettings::IniFormat, QSettings::UserScope, "VayuIDE", "VayuIDE") {
         setWindowTitle(QString("Vayu-IDE %1").arg(kVer));
-        resize(1400, 900);
+        resize(1440, 900);
         QIcon ic(":/IDE.ico");
         if (!ic.isNull()) setWindowIcon(ic);
 
+        // --- Activity bar (VS Code left) ---
         auto* activity = new QFrame;
         activity->setObjectName("activity");
         activity->setFixedWidth(48);
         auto* actLay = new QVBoxLayout(activity);
         actLay->setContentsMargins(4, 8, 4, 8);
-        actLay->setSpacing(6);
-        auto mkAct = [&](const QString& text, const QString& tip, auto fn) {
+        actLay->setSpacing(4);
+        auto mkAct = [&](const QString& glyph, const QString& tip, auto fn) {
             auto* b = new QToolButton;
-            b->setText(text);
+            b->setText(glyph);
             b->setToolTip(tip);
             b->setFixedSize(40, 40);
+            b->setCursor(Qt::PointingHandCursor);
             b->setStyleSheet(
-                "QToolButton{color:#cccccc;border:none;border-radius:6px;font-size:16px;font-weight:bold;}"
-                "QToolButton:hover{background:#2a2d2e;color:#ffffff;}");
+                "QToolButton{color:#cbd5e1;border:none;border-radius:6px;font-size:18px;}"
+                "QToolButton:hover{background:#2a2a2a;color:#fff;}");
             connect(b, &QToolButton::clicked, this, fn);
             actLay->addWidget(b);
             return b;
         };
-        mkAct("📁", "Explorer", [this]{ sideStack_->setCurrentIndex(0); });
-        mkAct("🔍", "Search", [this]{ sideStack_->setCurrentIndex(1); });
-        mkAct("⌥", "Source Control (GitHub) — Coming soon", [this]{
+        mkAct(QStringLiteral("📂"), "Explorer (Ctrl+Shift+E)", [this]{ sideStack_->setCurrentIndex(0); });
+        mkAct(QStringLiteral("🔎"), "Search (Ctrl+Shift+F)", [this]{ sideStack_->setCurrentIndex(1); });
+        mkAct(QStringLiteral("⎇"), "Source Control — GitHub Coming soon", [this]{
             QMessageBox::information(this, "GitHub",
-                "Source Control integration: Coming soon.\n\n"
-                "Repo: " + QString(kRepo));
+                QString("Source Control: Coming soon.\n\n%1").arg(kRepo));
         });
         actLay->addStretch();
-        mkAct("⚙", "Settings", [this]{
+        mkAct(QStringLiteral("⚙"), "Settings", [this]{
             QMessageBox::information(this, "Settings",
-                QString("Vayu-IDE %1\nData: %%AppData%%/VayuIDE\n%2").arg(kVer).arg(kRepo));
+                QString("Vayu-IDE %1\n%2").arg(kVer).arg(kRepo));
         });
 
         explorer_ = new QTreeWidget;
         explorer_->setHeaderLabel("EXPLORER");
+        explorer_->setCursor(Qt::PointingHandCursor);
         connect(explorer_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* it, int){
             QString p = it->data(0, Qt::UserRole).toString();
             if (QFileInfo(p).isFile()) openFilePath(p);
@@ -171,7 +161,7 @@ public:
         auto* searchPane = new QWidget;
         auto* sp = new QVBoxLayout(searchPane);
         auto* findBox = new QLineEdit;
-        findBox->setPlaceholderText("Search in current file");
+        findBox->setPlaceholderText("Search");
         sp->addWidget(findBox);
         connect(findBox, &QLineEdit::returnPressed, this, [this, findBox]{
             lastFind_ = findBox->text();
@@ -181,6 +171,28 @@ public:
         sideStack_ = new QStackedWidget;
         sideStack_->addWidget(explorer_);
         sideStack_->addWidget(searchPane);
+
+        // --- Editor tabs + top run toolbar (VS Code style) ---
+        auto* editorCol = new QWidget;
+        auto* editorLay = new QVBoxLayout(editorCol);
+        editorLay->setContentsMargins(0, 0, 0, 0);
+        editorLay->setSpacing(0);
+
+        auto* topBar = new QFrame;
+        topBar->setObjectName("topBar");
+        topBar->setFixedHeight(36);
+        auto* topLay = new QHBoxLayout(topBar);
+        topLay->setContentsMargins(8, 2, 8, 2);
+        topLay->addStretch();
+        runBtn_ = new QToolButton;
+        runBtn_->setText(QStringLiteral("▶ Run"));
+        runBtn_->setToolTip("Run --native (F5)");
+        runBtn_->setCursor(Qt::PointingHandCursor);
+        runBtn_->setStyleSheet(
+            "QToolButton{background:#0e639c;color:white;padding:4px 12px;border:none;border-radius:4px;font-weight:bold;}"
+            "QToolButton:hover{background:#1177bb;}");
+        connect(runBtn_, &QToolButton::clicked, this, [this]{ runArgs({"--native"}); });
+        topLay->addWidget(runBtn_);
 
         tabs_ = new QTabWidget;
         tabs_->setTabsClosable(true);
@@ -194,7 +206,10 @@ public:
         });
         welcome_ = buildWelcome();
         tabs_->addTab(welcome_, "Welcome");
+        editorLay->addWidget(topBar);
+        editorLay->addWidget(tabs_, 1);
 
+        // --- Bottom: Output + Terminal ---
         auto* botTabs = new QTabWidget;
         output_ = new ZoomEdit;
         output_->setReadOnly(true);
@@ -210,36 +225,25 @@ public:
         terminal_->setReadOnly(true);
         terminal_->setUndoRedoEnabled(false);
         terminal_->setFocusPolicy(Qt::StrongFocus);
+        terminal_->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
         termIn_ = new QLineEdit;
-        termIn_->setPlaceholderText("Terminal command (PowerShell) — Enter to run · select output then Ctrl+C to copy");
+        termIn_->setPlaceholderText("Run command here (like VS Code terminal) — Enter · Select text above + Ctrl+C to copy");
         tl->addWidget(terminal_, 1);
         tl->addWidget(termIn_);
         botTabs->addTab(termPage, "Terminal");
         connect(termIn_, &QLineEdit::returnPressed, this, [this]{ terminalSubmit(); });
 
-        // Global Ctrl+C: if Output/Terminal focused with selection → copy
+        // Application-wide copy
         auto* copySc = new QShortcut(QKeySequence::Copy, this);
-        connect(copySc, &QShortcut::activated, this, [this]{
-            QWidget* f = QApplication::focusWidget();
-            auto hasSel = [](ZoomEdit* ed) {
-                return ed && ed->textCursor().hasSelection();
-            };
-            if (f == output_ && hasSel(output_)) { output_->copy(); return; }
-            if ((f == terminal_ || f == termIn_) && hasSel(terminal_)) { terminal_->copy(); return; }
-            if (auto* ed = currentEditor()) {
-                if (ed->textCursor().hasSelection()) { ed->copy(); return; }
-            }
-            // Fallback: prefer terminal, then output
-            if (hasSel(terminal_)) { terminal_->copy(); return; }
-            if (hasSel(output_)) { output_->copy(); return; }
-        });
+        copySc->setContext(Qt::ApplicationShortcut);
+        connect(copySc, &QShortcut::activated, this, [this]{ copySelection(); });
 
         auto* centerSplit = new QSplitter(Qt::Vertical);
-        centerSplit->addWidget(tabs_);
+        centerSplit->addWidget(editorCol);
         centerSplit->addWidget(botTabs);
         centerSplit->setStretchFactor(0, 3);
         centerSplit->setStretchFactor(1, 1);
-        centerSplit->setSizes({600, 280});
+        centerSplit->setSizes({620, 260});
 
         auto* midSplit = new QSplitter(Qt::Horizontal);
         midSplit->addWidget(sideStack_);
@@ -257,14 +261,30 @@ public:
         buildMenus();
         applyTheme();
         startShell();
-        statusBar()->showMessage(QString("Vayu-IDE %1 · Terminal ready · Ctrl+C copies selection").arg(kVer));
+        statusBar()->showMessage(QString("Vayu-IDE %1  |  F5 Run  |  Ctrl+C copy  |  Terminal ready").arg(kVer));
 
         QString lastFolder = settings_.value("lastFolder").toString();
         if (!lastFolder.isEmpty() && QDir(lastFolder).exists())
             openFolderPath(lastFolder);
 
-        auto* scWrap = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Z), this);
-        connect(scWrap, &QShortcut::activated, this, [this]{ toggleWrap(); });
+        // VS Code-ish shortcuts
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), [this]{ sideStack_->setCurrentIndex(0); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), [this]{ sideStack_->setCurrentIndex(1); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_S), [this]{ saveCurrent(); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_N), [this]{ newFile(); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_O), [this]{ openFile(); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_P), [this]{ openFile(); }); // quick open ≈ open
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), [this]{
+            int i = tabs_->currentIndex();
+            if (i >= 0) tabs_->tabCloseRequested(i);
+        });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_F), [this]{ findInEditor(); });
+        bindShortcut(QKeySequence(Qt::Key_F5), [this]{ runArgs({"--native"}); });
+        bindShortcut(QKeySequence(Qt::ALT | Qt::Key_Z), [this]{ toggleWrap(); });
+        bindShortcut(QKeySequence(Qt::CTRL | Qt::Key_Grave), [this]{ // Ctrl+`
+            botTabs->setCurrentIndex(1);
+            termIn_->setFocus();
+        });
     }
 
     ~MainWindow() override {
@@ -273,24 +293,47 @@ public:
     }
 
 private:
+    template <typename Fn>
+    void bindShortcut(const QKeySequence& ks, Fn fn) {
+        auto* sc = new QShortcut(ks, this);
+        sc->setContext(Qt::ApplicationShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    }
+
+    void copySelection() {
+        auto take = [](ZoomEdit* ed) -> bool {
+            if (!ed) return false;
+            if (ed->textCursor().hasSelection()) { ed->copy(); return true; }
+            return false;
+        };
+        QWidget* f = QApplication::focusWidget();
+        if (f == output_ && take(output_)) return;
+        if ((f == terminal_ || f == termIn_) && take(terminal_)) return;
+        if (auto* ed = currentEditor()) if (take(ed)) return;
+        if (take(terminal_)) return;
+        if (take(output_)) return;
+        // No selection: copy nothing (VS Code does nothing / interrupt — we no-op)
+    }
+
     void applyTheme() {
         qApp->setStyleSheet(
             "QMainWindow,QWidget{background:#1e1e1e;color:#d4d4d4;}"
             "#activity{background:#333333;}"
+            "#topBar{background:#252526;border-bottom:1px solid #3c3c3c;}"
             "QTreeWidget,QPlainTextEdit,QLineEdit,QListWidget,QTextEdit{"
             " background:#1e1e1e;color:#d4d4d4;border:none;"
             " selection-background-color:#264f78;selection-color:#ffffff;}"
-            "QTabWidget::pane{border-top:1px solid #252526;}"
+            "QTabWidget::pane{border-top:1px solid #3c3c3c;}"
             "QTabBar::tab{background:#2d2d2d;color:#969696;padding:8px 14px;}"
-            "QTabBar::tab:selected{background:#1e1e1e;color:#ffffff;}"
-            "QMenuBar{background:#3c3c3c;color:#cccccc;}"
-            "QMenu{background:#252526;color:#cccccc;}"
+            "QTabBar::tab:selected{background:#1e1e1e;color:#fff;}"
+            "QMenuBar{background:#3c3c3c;color:#ccc;}"
+            "QMenu{background:#252526;color:#ccc;}"
             "QMenu::item:selected{background:#094771;}"
-            "QStatusBar{background:#007acc;color:#ffffff;}"
-            "QPushButton{background:#0e639c;color:#ffffff;border:none;padding:8px 14px;}"
+            "QStatusBar{background:#007acc;color:#fff;}"
+            "QPushButton{background:#0e639c;color:#fff;border:none;padding:8px 14px;}"
             "QPushButton:hover{background:#1177bb;}"
-            "QSplitter::handle{background:#252526;}"
-            "QHeaderView::section{background:#252526;color:#bbbbbb;border:none;padding:4px;}");
+            "QSplitter::handle{background:#3c3c3c;}"
+            "QHeaderView::section{background:#252526;color:#bbb;border:none;padding:4px;}");
         QFont mono("Cascadia Mono", 12);
         if (!mono.exactMatch()) mono = QFont("Consolas", 12);
         output_->setFont(mono);
@@ -303,16 +346,19 @@ private:
         shellProc_ = new QProcess(this);
         shellProc_->setProcessChannelMode(QProcess::MergedChannels);
 #ifdef Q_OS_WIN
+        // Interactive cmd is more reliable with redirected pipes than PowerShell -NoExit
+        shellProc_->setProgram("cmd.exe");
+        shellProc_->setArguments({"/Q", "/K", "prompt $P$G"});
+        // Do NOT use CREATE_NO_WINDOW with interactive cmd on some hosts — keep hidden via no window + pipes
         shellProc_->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
             a->flags |= CREATE_NO_WINDOW;
         });
-        shellProc_->setProgram("powershell.exe");
-        shellProc_->setArguments({"-NoLogo", "-NoExit"});
 #else
         shellProc_->setProgram("/bin/bash");
 #endif
         connect(shellProc_, &QProcess::readyRead, this, [this]{
-            QString chunk = QString::fromLocal8Bit(shellProc_->readAll());
+            QByteArray data = shellProc_->readAll();
+            QString chunk = QString::fromLocal8Bit(data);
             terminal_->moveCursor(QTextCursor::End);
             terminal_->insertPlainText(chunk);
             terminal_->moveCursor(QTextCursor::End);
@@ -322,15 +368,16 @@ private:
                 terminal_->appendPlainText("\n[shell exited — restarting]\n");
                 shellProc_->deleteLater();
                 shellProc_ = nullptr;
-                QTimer::singleShot(200, this, [this]{ startShell(); });
+                QTimer::singleShot(150, this, [this]{ startShell(); });
             });
+        if (!folder_.isEmpty()) shellProc_->setWorkingDirectory(folder_);
         shellProc_->start();
-        if (!shellProc_->waitForStarted(3000)) {
-            terminal_->appendPlainText("[error] could not start PowerShell/shell\n");
+        if (!shellProc_->waitForStarted(4000)) {
+            terminal_->appendPlainText("[error] could not start shell\n");
             shellProc_->deleteLater();
             shellProc_ = nullptr;
         } else {
-            terminal_->appendPlainText("Vayu-IDE Terminal (PowerShell)\n");
+            terminal_->appendPlainText("Vayu-IDE Terminal\nType commands below and press Enter.\n");
         }
     }
 
@@ -339,12 +386,14 @@ private:
         termIn_->clear();
         terminal_->moveCursor(QTextCursor::End);
         terminal_->insertPlainText(line + "\n");
-        if (shellProc_ && shellProc_->state() == QProcess::Running) {
-            shellProc_->write((line + "\n").toUtf8());
-        } else {
+        terminal_->moveCursor(QTextCursor::End);
+        if (!shellProc_ || shellProc_->state() != QProcess::Running) {
             startShell();
-            if (shellProc_ && shellProc_->state() == QProcess::Running)
-                shellProc_->write((line + "\n").toUtf8());
+        }
+        if (shellProc_ && shellProc_->state() == QProcess::Running) {
+            QByteArray payload = (line + "\r\n").toLocal8Bit();
+            shellProc_->write(payload);
+            shellProc_->waitForBytesWritten(1000);
         }
     }
 
@@ -356,15 +405,15 @@ private:
                     "<p style='color:#989898'>Code · Build · Create · %1</p>").arg(kVer)));
         auto* row = new QHBoxLayout;
         auto* qs = new QVBoxLayout;
-        qs->addWidget(new QLabel("<b>Quick Start</b>"));
+        qs->addWidget(new QLabel("<b>Start</b>"));
         auto* b1 = new QPushButton("New File…");
         auto* b2 = new QPushButton("Open Folder…");
-        auto* b3 = new QPushButton("GitHub Repository");
+        auto* b3 = new QPushButton("GitHub");
         qs->addWidget(b1); qs->addWidget(b2); qs->addWidget(b3);
         auto* doc = new QVBoxLayout;
         doc->addWidget(new QLabel("<b>Help</b>"));
-        auto* b4 = new QPushButton("Syntax (detailed)");
-        auto* b5 = new QPushButton("Load Examples");
+        auto* b4 = new QPushButton("Syntax");
+        auto* b5 = new QPushButton("Examples");
         doc->addWidget(b4); doc->addWidget(b5);
         row->addLayout(qs); row->addLayout(doc);
         lay->addLayout(row);
@@ -398,17 +447,17 @@ private:
         edit->addSeparator();
         add(edit, "Select &All", QKeySequence::SelectAll, [this]{
             if (auto* e = currentEditor()) e->selectAll();
-            else if (QApplication::focusWidget() == output_) output_->selectAll();
-            else if (QApplication::focusWidget() == terminal_ ||
-                     QApplication::focusWidget() == termIn_) terminal_->selectAll();
+            else if (QApplication::focusWidget() == terminal_ || QApplication::focusWidget() == termIn_)
+                terminal_->selectAll();
+            else if (QApplication::focusWidget() == output_)
+                output_->selectAll();
         });
         add(edit, "Cu&t", QKeySequence::Cut, [this]{ if (auto* e=currentEditor()) e->cut(); });
-        add(edit, "&Copy", QKeySequence::Copy, [this]{
-            if (auto* e = currentEditor()) { if (e->textCursor().hasSelection()) { e->copy(); return; } }
-            if (output_->textCursor().hasSelection()) { output_->copy(); return; }
-            if (terminal_->textCursor().hasSelection()) { terminal_->copy(); return; }
+        add(edit, "&Copy", QKeySequence::Copy, [this]{ copySelection(); });
+        add(edit, "&Paste", QKeySequence::Paste, [this]{
+            if (auto* e = currentEditor()) e->paste();
+            else if (QApplication::focusWidget() == termIn_) termIn_->paste();
         });
-        add(edit, "&Paste", QKeySequence::Paste, [this]{ if (auto* e=currentEditor()) e->paste(); });
         edit->addSeparator();
         add(edit, "&Find…", QKeySequence::Find, [this]{ findInEditor(); });
         add(edit, "Word wrap (Alt+Z)", QKeySequence(), [this]{ toggleWrap(); });
@@ -418,21 +467,20 @@ private:
         add(run, "Run interpreter", QKeySequence(), [this]{ runArgs({}); });
         add(run, "Run --vm", QKeySequence(), [this]{ runArgs({"--vm"}); });
         add(run, "Dump IR", QKeySequence(), [this]{ runArgs({"--dump-ir"}); });
-        add(run, "Stop run", QKeySequence(), [this]{ if (runProc_) runProc_->kill(); });
+        add(run, "Stop", QKeySequence(), [this]{ if (runProc_) runProc_->kill(); });
 
         auto* compile = m->addMenu("&Compile");
         add(compile, "Emit .vye", QKeySequence(Qt::Key_F7), [this]{ emitVye(); });
         add(compile, "Run .vye…", QKeySequence(), [this]{ runVye(); });
-        add(compile, "Create host .exe…", QKeySequence(), [this]{ emitHostExe(); });
+        add(compile, "Create host .exe (no MSVC)…", QKeySequence(), [this]{ emitHostExe(); });
 
         auto* help = m->addMenu("&Help");
-        add(help, "&Syntax (detailed)…", QKeySequence(), [this]{ showHelpSyntax(); });
+        add(help, "&Syntax…", QKeySequence(), [this]{ showHelpSyntax(); });
         add(help, "Load &Examples…", QKeySequence(), [this]{ showHelpExamples(); });
         add(help, "&Version", QKeySequence(), [this]{
-            QMessageBox::information(this, "Version",
-                QString("Vayu-IDE %1\n%2").arg(kVer).arg(kRepo));
+            QMessageBox::information(this, "Version", QString("Vayu-IDE %1\n%2").arg(kVer).arg(kRepo));
         });
-        add(help, "Open GitHub Repo", QKeySequence(), []{ QDesktopServices::openUrl(QUrl(kRepo)); });
+        add(help, "Open GitHub", QKeySequence(), []{ QDesktopServices::openUrl(QUrl(kRepo)); });
     }
 
     ZoomEdit* currentEditor() {
@@ -497,7 +545,7 @@ private:
             populateTree(it, fi.absoluteFilePath());
         }
         for (const QFileInfo& fi : d.entryInfoList(
-                 QStringList{"*.vyu", "*.md", "*.txt", "*.ps1", "*.cmd", "*.sh", "*.vye"},
+                 QStringList{"*.vyu","*.md","*.txt","*.ps1","*.cmd","*.sh","*.vye","*.exe"},
                  QDir::Files, QDir::Name)) {
             auto* it = new QTreeWidgetItem(parent, QStringList{fi.fileName()});
             it->setData(0, Qt::UserRole, fi.absoluteFilePath());
@@ -536,7 +584,7 @@ private:
 
     void runArgs(const QStringList& extra) {
         if (runProc_) {
-            QMessageBox::information(this, "Busy", "A program is already running.");
+            QMessageBox::information(this, "Busy", "Already running.");
             return;
         }
         if (!saveCurrent()) return;
@@ -597,6 +645,7 @@ private:
         runProc_->start(vayuBin(), QStringList{f});
     }
 
+    // Pure PE — no MSVC, no .c file
     void emitHostExe() {
         if (!saveCurrent()) return;
         QString path = currentPath();
@@ -604,7 +653,6 @@ private:
         QString base = QFileInfo(path).completeBaseName();
         QString vye = dir + "/" + base + ".vye";
         QString exe = dir + "/" + base + ".exe";
-        QString cfile = dir + "/" + base + "_launch.c";
 
         QProcess emitP;
 #ifdef Q_OS_WIN
@@ -619,81 +667,18 @@ private:
             appendOut("[emit-vye failed]\n");
             return;
         }
-        QString vyeName = base + ".vye";
-        QString src = QString(
-            "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n"
-            "#ifdef _WIN32\n#include <windows.h>\n#endif\n"
-            "int main(void){\n"
-            "  const char* vye=\"%1\";\n"
-            "  char cmd[1024];\n"
-            "#ifdef _WIN32\n"
-            "  char self[MAX_PATH]; GetModuleFileNameA(NULL,self,MAX_PATH);\n"
-            "  char* s=strrchr(self,'\\\\'); if(s) *(s+1)=0; else self[0]=0;\n"
-            "  snprintf(cmd,sizeof(cmd),\"\\\"%%svayu.exe\\\" \\\"%%s%%s\\\"\",self,self,vye);\n"
-            "#else\n"
-            "  snprintf(cmd,sizeof(cmd),\"vayu \\\"%%s\\\"\",vye);\n"
-            "#endif\n"
-            "  return system(cmd);\n}\n").arg(vyeName);
-        QFile cf(cfile);
-        if (!cf.open(QIODevice::WriteOnly | QIODevice::Text)) return;
-        cf.write(src.toUtf8());
-        cf.close();
 
-#ifdef Q_OS_WIN
-        QString vswhere = QString(qEnvironmentVariable("ProgramFiles(x86)"))
-            + "/Microsoft Visual Studio/Installer/vswhere.exe";
-        QString clCmd;
-        if (QFile::exists(vswhere)) {
-            QProcess vw;
-            vw.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
-                a->flags |= CREATE_NO_WINDOW;
-            });
-            vw.start(vswhere, QStringList{"-latest","-products","*",
-                "-requires","Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-                "-property","installationPath"});
-            vw.waitForFinished(15000);
-            QString install = QString::fromUtf8(vw.readAllStandardOutput()).trimmed();
-            if (!install.isEmpty()) {
-                QString vcvars = install + "/VC/Auxiliary/Build/vcvars64.bat";
-                if (QFile::exists(vcvars))
-                    clCmd = QString("call \"%1\" && cd /d \"%2\" && cl /nologo /O2 /Fe:%3.exe %3_launch.c")
-                        .arg(vcvars, dir, base);
-            }
-        }
-        if (clCmd.isEmpty()) {
-            for (const char* cc : {"gcc", "clang"}) {
-                QProcess which;
-                which.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
-                    a->flags |= CREATE_NO_WINDOW;
-                });
-                which.start("where", QStringList{cc});
-                which.waitForFinished(3000);
-                if (which.exitCode() == 0) {
-                    clCmd = QString("cd /d \"%1\" && %2 -O2 -o %3.exe %3_launch.c")
-                        .arg(dir).arg(cc).arg(base);
-                    break;
-                }
-            }
-        }
-        if (clCmd.isEmpty()) {
-            appendOut("[exe] No C compiler auto-detected. Left " + cfile + " + " + vye + "\n");
+        // WinExec command: run vayu.exe with the .vye in the same folder
+        // Use cmd /c so relative path works when user double-clicks the exe
+        QString cmd = QString("cmd.exe /c vayu.exe \"%1.vye\"").arg(base);
+        std::string cmdStd = cmd.toStdString();
+        std::string exeStd = exe.toStdString();
+        if (!vayu_pe::writeHostLauncherExe(exeStd, cmdStd)) {
+            appendOut("[exe] failed to write PE\n");
             return;
         }
-        QProcess build;
-        build.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) {
-            a->flags |= CREATE_NO_WINDOW;
-        });
-        build.start("cmd.exe", QStringList{"/C", clCmd});
-        build.waitForFinished(180000);
-        appendOut(QString::fromLocal8Bit(build.readAllStandardOutput()));
-        appendOut(QString::fromLocal8Bit(build.readAllStandardError()));
-        if (build.exitCode() == 0 && QFile::exists(exe))
-            appendOut("[exe] " + exe + " (keep vayu.exe beside it)\n");
-        else
-            appendOut("[exe] build failed\n");
-#else
-        Q_UNUSED(exe);
-#endif
+        appendOut("[exe] Wrote native PE (no MSVC): " + exe + "\n");
+        appendOut("Keep vayu.exe and " + base + ".vye next to it, then double-click the .exe\n");
     }
 
     void toggleWrap() {
@@ -713,118 +698,37 @@ private:
 
     void showHelpSyntax() {
         QDialog dlg(this);
-        dlg.setWindowTitle("Vayu Syntax — detailed brief");
-        dlg.resize(820, 620);
+        dlg.setWindowTitle("Vayu Syntax");
+        dlg.resize(840, 640);
         auto* t = new QTextEdit(&dlg);
         t->setReadOnly(true);
-        t->setMarkdown(QString::fromUtf8(u8R"MD(
-# Vayu language brief (Integrator `--native`)
-
-## How execution works
-1. Parse `.vyu` → AST  
-2. Type-check (sema)  
-3. Lower to **VIR** (VIB)  
-4. Interpret VIR in-process  
-
-Use: `vayu file.vyu --native`
-
-## Variables & types
-```
-x = 1
-s = "text"
-b = true
-```
-Optional annotations: `x: int = 1`
-
-## Compare & if
-Use **`==`** for equality (not `=`). Strings need quotes. Indent bodies.
-```
-if c == "heisenberg":
-    print("ok")
-elif c == "other":
-    print("elif")
-else:
-    print("no")
-```
-
-## Strings
-| Feature | Example |
-|--------|---------|
-| Concat / repeat | `"a"+"b"`, `"ab"*2` |
-| split / join | `"a,b".split(",")`, `",".join(["a","b"])` |
-| Case / trim | `.upper()` `.lower()` `.strip()` |
-| Search | `.contains("x")` `.find("x")` `.starts_with` `.ends_with` |
-| Other | `.replace(a,b)` `.char_at(i)` `.to_int()` `.is_digit()` |
-
-Methods work on **literals and variables**.
-
-## Membership & lists
-```
-print(2 in [1, 2, 3])
-print("ab" in "xabz")
-xs = [1]
-xs.append(9)
-print(len(xs))
-print(xs[0])
-```
-
-## Loops
-```
-for i in range(5):      # 0..4
-    print(i)
-for i in range(2, 6):   # 2..5
-    print(i)
-for x in [10, 20]:
-    print(x)
-while n > 0:
-    n = n - 1
-    break  # / continue
-```
-
-## Functions
-```
-def add(a, b):
-    return a + b
-print(add(2, 3))
-```
-
-Builtins: `print`, `input(prompt?)`, `read_int`, `len`, `str`/`int`/`float`/`bool`,
-`range`, **`shell` / `system` / `run_command`** (host command, returns exit code).
-
-## Host shell from Vayu
-```
-shell("cmd /c echo hello")
-system("cmd /c dir")
-shell("powershell -NoProfile -Command \"Write-Host hi\"")
-```
-These call the OS shell (`std::system`). Prefer simple one-liners.
-
-## Packages
-```
-vayu file.vyu --output out.vye
-vayu out.vye
-```
-
-## Not on Integrator yet
-Exceptions, classes, full generics, generators, lambdas, PE AOT (Phase 10–12).
-
-Repo: %1
-)MD").arg(kRepo));
+        t->setMarkdown(QString(
+            "# Vayu brief (`--native` / Integrator)\n\n"
+            "## Run\n`vayu file.vyu --native` · IDE **▶ Run** / **F5**\n\n"
+            "## if\n`if x == \"a\":` — use `==` and quotes; indent.\n\n"
+            "## Strings\n`split` `join` `upper` `lower` `strip` `contains` `find` "
+            "`starts_with` `ends_with` `replace` `char_at` `to_int` — works on literals.\n\n"
+            "## Lists / in\n`xs.append(v)` · `2 in [1,2]` · `\"ab\" in \"xabz\"` · `len`\n\n"
+            "## Loops\n`for i in range(5):` · `range(2,6)` · `for x in list:` · `while` · `break`\n\n"
+            "## Functions\n`def f(a,b): return a+b`\n\n"
+            "## Shell\n`shell(\"cmd /c echo hi\")` · `system(...)` · `run_command(...)`\n\n"
+            "## Packages / host exe\n"
+            "`--output file.vye` · **Compile → Create host .exe** writes a **real PE** "
+            "(no MSVC). Place `vayu.exe` + `.vye` beside the `.exe`.\n\n"
+            "Repo: %1").arg(kRepo));
         auto* lay = new QVBoxLayout(&dlg);
         lay->addWidget(t);
         dlg.exec();
     }
-
     void showHelpExamples() {
         QDialog dlg(this);
-        dlg.setWindowTitle("Load example");
-        dlg.resize(440, 360);
+        dlg.setWindowTitle("Examples");
+        dlg.resize(420, 340);
         auto* list = new QListWidget(&dlg);
         for (const auto& e : examples()) list->addItem(e.title);
-        auto* btn = new QPushButton("Load into new tab");
+        auto* btn = new QPushButton("Load");
         auto* lay = new QVBoxLayout(&dlg);
-        lay->addWidget(list);
-        lay->addWidget(btn);
+        lay->addWidget(list); lay->addWidget(btn);
         connect(btn, &QPushButton::clicked, this, [this, list, &dlg]{
             int r = list->currentRow();
             if (r < 0) return;
