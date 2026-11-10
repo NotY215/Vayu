@@ -3,7 +3,7 @@
   "displayName": "Vayu",
   "description": "Language support for Vayu: syntax highlighting, language server, formatter, linter.",
   "version": "1.0.0",
-  "publisher": "Fliczo",
+  "publisher": "NotY215",
   "engines": { "vscode": "^1.75.0" },
   "categories": [ "Programming Languages" ],
   "icon": "Vayu_logo.png",
