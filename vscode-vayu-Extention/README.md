@@ -57,7 +57,7 @@ This is a normal VS Code extension and uses `@vscode/vsce`:
     cd vscode-vayu-Extention
     vsce package
 
-The current package version is `1.0.0` and the Marketplace publisher is `Fliczo`.
+The current package version is `1.0.0` and the Marketplace publisher is `NotY215`.
 
 ## Repository
 
