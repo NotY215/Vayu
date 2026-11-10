@@ -15,7 +15,7 @@
   <a href="https://vayu.gt.tc/faq"><img src="https://img.shields.io/badge/FAQ-vayu.gt.tc/faq-111827?style=for-the-badge" alt="Vayu FAQ"></a>
   <a href="docs/syntax.md"><img src="https://img.shields.io/badge/Syntax-.vyu-111827?style=for-the-badge" alt="Vayu Syntax"></a>
   <a href="https://vayu.gt.tc/speed"><img src="https://img.shields.io/badge/Benchmarks-View-111827?style=for-the-badge" alt="Vayu Benchmarks"></a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu"><img src="https://img.shields.io/badge/VS%20Code-Extension-111827?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Vayu VS Code Extension"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=NotY215.vayu"><img src="https://img.shields.io/badge/VS%20Code-Extension-111827?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Vayu VS Code Extension"></a>
 </p>
 
 <p>
@@ -43,7 +43,7 @@
 
 **Vayu** brings together Python-inspired readability, native-performance goals, low-level control, modern typing, AI/ML ambitions, and application-development capabilities in one language.
 
-**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🖼️ Icon Support](docs/icons.md) · [🧭 Roadmap](Roadmap.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+**[🌐 Official Website](https://vayu.gt.tc) · [📖 Syntax](docs/syntax.md) · [🤖 AI & ML](docs/ai.md) · [📦 Packages](docs/package.md) · [🖼️ Icon Support](docs/icons.md) · [🧭 Roadmap](Roadmap.md) · [📊 Benchmarks](https://vayu.gt.tc) · [🧩 VS Code](https://marketplace.visualstudio.com/items?itemName=NotY215.vayu)**
 
 </div>
 
@@ -71,11 +71,11 @@ Vayu includes benchmarking as part of its development and performance evaluation
 
 Vayu has editor tooling for `.vyu` source files through the VS Code extension and a native Visual Studio Community TextMate/VSIX extension.
 
-**[🛒 Install Vayu from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu)**
+**[🛒 Install Vayu from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=NotY215.vayu)**
 
 **Visual Studio Community:** build `vscommunity-vayu-Extention` with its `build.ps1` script and install the generated `vayu-lang-support-1.0.0.vsix`.
 
-**[⚡ Install directly in VS Code](vscode:extension/Fliczo.vayu)**
+**[⚡ Install directly in VS Code](vscode:extension/NotY215.vayu)**
 
 The extension provides editor-side integration for Vayu, including:
 
