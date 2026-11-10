@@ -681,11 +681,11 @@ vlint   Vayu linter
 
 The official VS Code extension integrates `.vyu` files with the language server and exposes editor-side language features including syntax highlighting, diagnostics, hover, completion, go-to-definition, references, rename, signature help, formatting, and linting.
 
-VS Code extension: https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu
+VS Code extension: https://marketplace.visualstudio.com/items?itemName=NotY215.vayu
 
 Visual Studio Community support is provided by `vscommunity-vayu-Extention` as a native VSIX/TextMate package.
 
-Direct VS Code installation URI: `vscode:extension/Fliczo.vayu`
+Direct VS Code installation URI: `vscode:extension/NotY215.vayu`
 
 ## Compiler CLI
 
