@@ -130,4 +130,4 @@ The future package system must also account for native dependencies, compiler ve
 
 ## VS Code and Developer Tooling
 
-The official [Vayu VS Code extension](https://marketplace.visualstudio.com/items?itemName=Fliczo.vayu) is part of the current developer ecosystem. Package-aware editor features can build on the existing LSP and configuration infrastructure as the package system matures.
+The official [Vayu VS Code extension](https://marketplace.visualstudio.com/items?itemName=NotY215.vayu) is part of the current developer ecosystem. Package-aware editor features can build on the existing LSP and configuration infrastructure as the package system matures.
