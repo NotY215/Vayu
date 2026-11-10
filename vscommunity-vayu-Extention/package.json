@@ -3,7 +3,7 @@
   "displayName": "Vayu for Visual Studio Community",
   "description": "Syntax highlighting for Vayu (.vyu) in Visual Studio 2022 Community.",
   "version": "1.0.0",
-  "publisher": "Fliczo",
+  "publisher": "NotY215",
   "engines": { "vscode": "^1.75.0" },
   "categories": [ "Programming Languages" ],
   "icon": "Vayu_logo.png",
