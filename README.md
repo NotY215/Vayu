@@ -77,6 +77,8 @@ Vayu has editor tooling for `.vyu` source files through the VS Code extension an
 
 **[⚡ Install directly in VS Code](vscode:extension/NotY215.vayu)**
 
+> **Marketplace migration:** the repository now uses the `NotY215.vayu` publisher ID. The new Marketplace listing still needs to be published under that publisher; changing repository metadata does not transfer an existing Marketplace listing. Until publication is verified, use a locally packaged `.vsix`.
+
 The extension provides editor-side integration for Vayu, including:
 
 - `.vyu` language support
